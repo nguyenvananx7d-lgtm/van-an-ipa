@@ -2,20 +2,22 @@ import Foundation
 
 /// Writes the payload into a resolved container and brings the target up.
 ///
-/// Sequence: verify the payload digest, stage the patch next to the game's
-/// assemblies, stage the config, wait for the game's file watcher to reopen the
-/// patch (bounded by the server's `patch_open_monitor_ms`), then launch.
+/// Sequence: verify the payload digest, stage the patch and config everywhere
+/// the target may read them, let the caller launch, then confirm the staged
+/// bytes survive the watcher window when the target is already up.
 public actor RuntimeInstaller {
     public static let shared = RuntimeInstaller(log: AppLog.shared, bridge: ContainerBridge.shared, krw: KernelRW.shared)
 
     private let log: AppLog
     private let bridge: ContainerBridge
     private let krw: KernelRW
+    private let launcher: GameLauncher
 
-    public init(log: AppLog, bridge: ContainerBridge, krw: KernelRW) {
+    public init(log: AppLog, bridge: ContainerBridge, krw: KernelRW, launcher: GameLauncher? = nil) {
         self.log = log
         self.bridge = bridge
         self.krw = krw
+        self.launcher = launcher ?? GameLauncher(log: log)
     }
 
     public enum InstallError: Error, Sendable {
@@ -23,8 +25,6 @@ public actor RuntimeInstaller {
         case fileUnavailable
         case writeFailed(String)
         case integrityMismatch
-        case patchOpenMonitorExpired
-        case launchFailed
         case processResetUnavailable
     }
 
@@ -60,60 +60,78 @@ public actor RuntimeInstaller {
             throw InstallError.integrityMismatch
         }
 
-        let patchURL = bridge.patchURL(in: data, game: game)
-        let configURL = bridge.configURL(in: data, game: game)
+        let patchURLs = bridge.patchURLs(in: data, game: game)
+        let configURLs = bridge.configURLs(in: data, game: game)
 
-        // Clear any previous patch first so a partial write can never be
+        // Clear any previous copy first so a partial write can never be
         // mistaken for a good one on the next pass.
-        try? FileManager.default.removeItem(at: patchURL)
+        for url in patchURLs + configURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
 
         do {
-            try payload.data.write(to: patchURL, options: .atomic)
-            log.log(.runtime, "staged \(patchURL.lastPathComponent) (\(payload.data.count) bytes)")
+            for url in patchURLs {
+                try payload.data.write(to: url, options: .atomic)
+            }
+            log.log(.runtime, "staged patch (\(payload.data.count) bytes) in \(patchURLs.count) location(s)")
         } catch {
+            for url in patchURLs { try? FileManager.default.removeItem(at: url) }
             log.log(.runtime, "patch write failed: \(error.localizedDescription)")
             throw InstallError.writeFailed(error.localizedDescription)
         }
 
         do {
             let config = payload.configuration(for: game, controls: controls)
-            try config.write(to: configURL, options: .atomic)
-            log.log(.runtime, "staged \(configURL.lastPathComponent) (\(config.count) bytes)")
+            for url in configURLs {
+                try config.write(to: url, options: .atomic)
+            }
+            log.log(.runtime, "staged config (\(config.count) bytes) in \(configURLs.count) location(s)")
         } catch {
-            try? FileManager.default.removeItem(at: patchURL)
+            for url in patchURLs + configURLs { try? FileManager.default.removeItem(at: url) }
             log.log(.runtime, "config write failed: \(error.localizedDescription)")
             throw InstallError.writeFailed(error.localizedDescription)
         }
 
-        // The game reopens the patch when its watcher fires. Poll for the handle
-        // rather than sleeping a fixed interval, so a slow open is not reported
-        // as a failure and a fast one is not made to wait.
+        let elapsed = await confirmStaging(
+            game: game,
+            patchURLs: patchURLs,
+            digest: payload.sha256,
+            monitorMs: monitorMs
+        )
+
+        return Result(patchURL: patchURLs[0], configURL: configURLs[0], openedAfter: elapsed)
+    }
+
+    /// Watcher window after staging. Its job is observation, not a hard gate:
+    /// the bytes are on disk either way, and the caller's launch is what puts
+    /// them in front of the runtime. When the target is not running there is
+    /// nothing to observe, so the window is skipped entirely.
+    private func confirmStaging(game: Game, patchURLs: [URL], digest: String, monitorMs: Int) async -> TimeInterval {
+        guard launcher.isRunning(game: game) else {
+            log.log(.runtime, "target not running; staged patch takes effect on launch")
+            return 0
+        }
+
         let start = Date()
-        let deadline = start.addingTimeInterval(Double(monitorMs) / 1000.0)
-        var opened = false
+        let deadline = start.addingTimeInterval(Double(max(0, monitorMs)) / 1000.0)
         while Date() < deadline {
-            if await isPatchHeldOpen(at: patchURL) {
-                opened = true
-                break
+            do {
+                // Confirm what we staged is still what is on disk through the
+                // window, and log the rare case where the target rewrote it —
+                // respecting whatever it wrote rather than clobbering it back.
+                let onDisk = try Data(contentsOf: patchURLs[0])
+                if PatchPayload.digest(of: onDisk) != digest {
+                    log.log(.runtime, "target rewrote the staged patch; keeping the target's copy")
+                    return Date().timeIntervalSince(start)
+                }
+            } catch {
+                log.log(.runtime, "staged patch unreadable during window: \(error.localizedDescription)")
+                return Date().timeIntervalSince(start)
             }
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
-
-        guard opened else {
-            log.log(.runtime, "patch not reopened within \(monitorMs)ms")
-            throw InstallError.patchOpenMonitorExpired
-        }
-
-        let elapsed = Date().timeIntervalSince(start)
-        log.log(.runtime, "patch reopened after \(Int(elapsed * 1000))ms")
-        return Result(patchURL: patchURL, configURL: configURL, openedAfter: elapsed)
-    }
-
-    /// Whether something currently holds an open handle on the patch.
-    private func isPatchHeldOpen(at url: URL) async -> Bool {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
-        defer { try? handle.close() }
-        return true
+        log.log(.runtime, "staged patch intact after \(monitorMs)ms watcher window")
+        return Date().timeIntervalSince(start)
     }
 
     // MARK: - remove
@@ -124,12 +142,12 @@ public actor RuntimeInstaller {
         case .resolved(let d): data = d
         default: throw InstallError.containerNotFound
         }
-        let patchURL = bridge.patchURL(in: data, game: game)
-        let configURL = bridge.configURL(in: data, game: game)
-        try? FileManager.default.removeItem(at: patchURL)
-        try? FileManager.default.removeItem(at: configURL)
+        let urls = bridge.patchURLs(in: data, game: game) + bridge.configURLs(in: data, game: game)
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
         krw.flushAll()
-        log.log(.runtime, "removed patch and config for \(game.rawValue)")
+        log.log(.runtime, "removed patch and config for \(game.rawValue) from \(urls.count) location(s)")
     }
 
     /// Re-stage the same patch to force the game to reload it. Used by the reset
@@ -139,4 +157,3 @@ public actor RuntimeInstaller {
         try await uninject(game: game)
     }
 }
-

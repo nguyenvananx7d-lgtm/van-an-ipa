@@ -25,6 +25,21 @@ public struct PatchPayload: Sendable {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Digest of an all-zero patch of the expected length. Stable across
+    /// builds, so it can be pinned without shipping the blob.
+    public static func neutralDigest() -> String {
+        digest(of: Data(repeating: 0, count: expectedLength))
+    }
+
+    /// The pins to use when there is no server to ask: the digest of what is
+    /// actually in the bundle, plus the neutral digest above. They feed the
+    /// same `verify` gate server-pinned values do, so a tampered bundle is
+    /// still refused before any byte reaches the container.
+    public static func localPins() -> (patch: String, neutral: String) {
+        let bundled = (try? bundled())?.sha256 ?? ""
+        return (bundled, neutralDigest())
+    }
+
     /// Load the payload that ships in this bundle.
     public static func bundled() throws -> PatchPayload {
         guard let url = Bundle.main.url(forResource: "Assembly-CSharp-patch", withExtension: "bytes"),

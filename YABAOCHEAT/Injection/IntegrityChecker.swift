@@ -120,10 +120,9 @@ public struct IntegrityChecker: Sendable {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Digest of an all-zero patch of the expected length. Stable across builds,
-    /// so the server can pin it without shipping the blob.
+    /// Digest of an all-zero patch of the expected length. Stable across
+    /// builds, so the server can pin it without shipping the blob.
     private func neutralDigest() -> String {
-        let neutral = Data(repeating: 0, count: PatchPayload.expectedLength)
-        return SHA256.hash(data: neutral).map { String(format: "%02x", $0) }.joined()
+        PatchPayload.neutralDigest()
     }
 }

@@ -12,6 +12,12 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Lint localization strings
+        shell: bash
+        run: |
+          set -eo pipefail
+          plutil -lint YABAOCHEAT/Resources/Localizable.strings
+
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml --project .
 
@@ -21,6 +27,24 @@ jobs:
           set -eo pipefail
           mkdir -p build
           xcodebuild -project DeltaClient.xcodeproj -scheme YABAOCHEAT -configuration Release -sdk iphoneos -archivePath build/DeltaClient.xcarchive archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify bundle contents
+        shell: bash
+        run: |
+          set -eo pipefail
+          APP=build/DeltaClient.xcarchive/Products/Applications/YABAOCHEAT.app
+          for f in Localizable.strings Assembly-CSharp-patch.bytes client_public_key.der; do
+            if [ ! -f "$APP/$f" ]; then
+              echo "::error::required resource missing from bundle: $f"
+              exit 1
+            fi
+            echo "ok $f"
+          done
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -eo pipefail
           mkdir -p build/Payload
           cp -R build/DeltaClient.xcarchive/Products/Applications/YABAOCHEAT.app build/Payload/
           cd build

@@ -28,7 +28,7 @@ public struct WipeRoutine: Sendable {
     /// Files we are willing to delete. Anything not on this list is left alone
     /// even if it looks like ours.
     static let ownedNames: Set<String> = [
-        "Assembly-CSharp-patch.bytes",
+        ContainerBridge.patchName,
         "localConfig.json",
         ".ffxc_access_probe",
     ]
@@ -52,19 +52,23 @@ public struct WipeRoutine: Sendable {
         krw.flushAll()
         log.log(.wipe, "flushed page cache before wipe")
 
-        var removed: [String] = []
+        var removed: Set<String> = []
         var retained: [String] = []
 
-        for name in WipeRoutine.ownedNames.sorted() {
-            let url = data.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            do {
-                try FileManager.default.removeItem(at: url)
-                removed.append(name)
-                log.log(.wipe, "removed \(name)")
-            } catch {
-                retained.append(name)
-                log.log(.wipe, "could not remove \(name): \(error.localizedDescription)")
+        // The patch is staged in more than one directory, so every payload
+        // directory is swept, not just the resolved one.
+        for dir in bridge.payloadDirectories(in: data) {
+            for name in WipeRoutine.ownedNames.sorted() {
+                let url = dir.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                do {
+                    try FileManager.default.removeItem(at: url)
+                    removed.insert(name)
+                    log.log(.wipe, "removed \(name) from \(dir.lastPathComponent)")
+                } catch {
+                    retained.append("\(dir.lastPathComponent)/\(name)")
+                    log.log(.wipe, "could not remove \(name): \(error.localizedDescription)")
+                }
             }
         }
 
@@ -76,7 +80,7 @@ public struct WipeRoutine: Sendable {
             log.log(.wipe, "\(strays.count) unrecognised file(s) carry the injector signature")
         }
 
-        let report = Report(removed: removed, retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
+        let report = Report(removed: Array(removed), retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
         log.log(.wipe, "wipe finished: \(removed.count) removed, \(retained.count) retained")
         return report
     }

@@ -19,6 +19,10 @@ public final class AuthorizationStore: ObservableObject {
     /// Consecutive transport failures. Reset by any successful check.
     public private(set) var networkErrorCount: Int = 0
 
+    /// Set when a launch-time integrity check fails. Sticky for the run: it is
+    /// a property of the binary, so no later `.valid` may clear it.
+    private var integrityBlocked: Bool = false
+
     /// In-flight revalidation, so a manual refresh cannot stack up behind a
     /// scheduled one.
     public private(set) var revalidationTask: Task<Void, Never>?
@@ -47,9 +51,19 @@ public final class AuthorizationStore: ObservableObject {
 
     /// Validate a key the user typed. On success the key is persisted and the
     /// session starts.
+    ///
+    /// This build answers locally: no round trip, no server-pinned digests. The
+    /// pins therefore come from the bundle itself, and the heartbeat stays off —
+    /// polling the real endpoint with a session the server never issued would
+    /// only get the session dropped a few heartbeats in.
     public func submit(key: String) async {
         isRefreshing = true
         defer { isRefreshing = false }
+
+        let pins = PatchPayload.localPins()
+        expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
+        expectedNeutralSHA256 = pins.neutral
+
         let resp = LicenseResponse(
             status: "valid",
             message: nil,
@@ -65,7 +79,7 @@ public final class AuthorizationStore: ObservableObject {
             credential: nil,
             licenseLabel: key
         )
-        adopt(resp)
+        adopt(resp, startHeartbeat: false)
     }
 
     /// Re-check the stored key, if there is one. Called on launch and whenever
@@ -105,7 +119,7 @@ public final class AuthorizationStore: ObservableObject {
 
     // MARK: - adopting a response
 
-    private func adopt(_ response: LicenseResponse) {
+    private func adopt(_ response: LicenseResponse, startHeartbeat: Bool = true) {
         networkErrorCount = 0
         revocationMessage = nil
 
@@ -115,6 +129,17 @@ public final class AuthorizationStore: ObservableObject {
                 revocationMessage = response.message ?? code.localizedDescription
             }
             apply(.invalid(code))
+            return
+        }
+
+        // An integrity failure is a verdict on the binary, not on the key. It is
+        // recorded once per launch and must not lose a race against the
+        // foreground revalidation, which otherwise lands on top of it and
+        // reports a healthy session over a failed check.
+        if integrityBlocked {
+            revocationMessage = String(localized: "license_error.integrityFailed")
+            log.log(.auth, "integrity failure standing; session not adopted")
+            apply(.invalid(.integrityFailed))
             return
         }
 
@@ -144,14 +169,18 @@ public final class AuthorizationStore: ObservableObject {
 
         if let session = response.session, !session.isEmpty {
             sessionToken = session
-            let heartbeat = response.deployment?.heartbeatSeconds
-                ?? ProtocolConstants.Policy.fallback.heartbeatSeconds
-            let live = self.live
-            Task {
-                await live.start(session: session, interval: heartbeat) { [weak self] update in
-                    // Runs off the main actor; hop back before touching state.
-                    Task { await self?.acceptHeartbeat(update) }
+            if startHeartbeat {
+                let heartbeat = response.deployment?.heartbeatSeconds
+                    ?? ProtocolConstants.Policy.fallback.heartbeatSeconds
+                let live = self.live
+                Task {
+                    await live.start(session: session, interval: heartbeat) { [weak self] update in
+                        // Runs off the main actor; hop back before touching state.
+                        Task { await self?.acceptHeartbeat(update) }
+                    }
                 }
+            } else {
+                log.log(.auth, "local session; heartbeat not started")
             }
         }
 
@@ -206,7 +235,12 @@ public final class AuthorizationStore: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: Notifications.integrityFailed, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.apply(.invalid(.integrityFailed)) }
+            Task { @MainActor in
+                guard let self else { return }
+                self.integrityBlocked = true
+                self.revocationMessage = String(localized: "license_error.integrityFailed")
+                self.apply(.invalid(.integrityFailed))
+            }
         }
     }
 

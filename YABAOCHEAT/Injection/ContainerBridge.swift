@@ -20,6 +20,9 @@ public final class ContainerBridge: @unchecked Sendable {
     /// before the payload is installed.
     public static let accessProbe = ".ffxc_access_probe"
 
+    /// Staged patch filename, inside whichever payload directory is resolved.
+    public static let patchName = "Assembly-CSharp-patch.bytes"
+
     private let log: AppLog
     private let fm = FileManager.default
 
@@ -31,9 +34,10 @@ public final class ContainerBridge: @unchecked Sendable {
 
     /// Every installed container on the device, keyed by bundle id.
     public func installedContainers() -> [String: URL] {
-        let root = fm.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .deletingLastPathComponent()   // .../Documents/../Containers
-        guard let containers = root else { return [:] }
+        guard let containers = dataContainersRoot() else {
+            log.log(.mcm, "no data-containers root reachable from \(NSHomeDirectory())")
+            return [:]
+        }
 
         var out: [String: URL] = [:]
         let keys: [URLResourceKey] = [.isDirectoryKey]
@@ -41,13 +45,51 @@ public final class ContainerBridge: @unchecked Sendable {
             at: containers,
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles]
-        ) else { return out }
+        ) else {
+            log.log(.mcm, "cannot list \(containers.path)")
+            return out
+        }
 
         for entry in entries {
             guard let id = containerIdentifier(at: entry) else { continue }
             out[id] = entry
         }
+        log.log(.mcm, "found \(out.count) container(s) under \(containers.path)")
         return out
+    }
+
+    /// `/var/mobile/Containers/Data/Application`, walked up to rather than
+    /// assumed: `Documents` sits inside the app's own container, which is one
+    /// level below the shared `Application` directory, so a single
+    /// `deletingLastPathComponent` lands on our own container and enumerates
+    /// nothing useful. Each component is matched so an unexpected depth fails
+    /// loudly instead of silently listing the wrong directory.
+    private func dataContainersRoot() -> URL? {
+        guard var url = fm.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .deletingLastPathComponent() else { return nil }
+
+        for _ in 0..<8 {
+            let parent = url.deletingLastPathComponent()
+            if url.lastPathComponent == "Application",
+               parent.lastPathComponent == "Data",
+               parent.deletingLastPathComponent().lastPathComponent == "Containers" {
+                return url
+            }
+            url = parent
+        }
+        return nil
+    }
+
+    /// The directory the target's writable files live in. The container root is
+    /// the data directory itself; a nested `data` folder is only present in
+    /// layouts that keep one, so it wins when it exists.
+    private func dataDirectory(in container: URL) -> URL {
+        let nested = container.appendingPathComponent("data")
+        var isDirectory: ObjCBool = false
+        if fm.fileExists(atPath: nested.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            return nested
+        }
+        return container
     }
 
     /// Read the `MCMMetadataIdentifier` out of a container's metadata plist.
@@ -91,7 +133,7 @@ public final class ContainerBridge: @unchecked Sendable {
             return .notFound
         }
 
-        let data = container.appendingPathComponent("data")
+        let data = dataDirectory(in: container)
         guard fm.fileExists(atPath: data.path) else {
             log.log(.mcm, "container \(game.bundleIdentifier) has no data directory")
             return .accessDenied
@@ -101,10 +143,10 @@ public final class ContainerBridge: @unchecked Sendable {
         do {
             try Data("ffxc".utf8).write(to: probe)
             try fm.removeItem(at: probe)
-            log.log(.mcm, "container for \(game.bundleIdentifier) writable")
+            log.log(.mcm, "container for \(game.bundleIdentifier) writable at \(data.path)")
             return .resolved(data)
         } catch {
-            log.log(.mcm, "container for \(game.bundleIdentifier) not writable: \(error.localizedDescription)")
+            log.log(.mcm, "container for \(game.bundleIdentifier) not writable at \(data.path): \(error.localizedDescription)")
             return .accessDenied
         }
         #endif
@@ -112,15 +154,28 @@ public final class ContainerBridge: @unchecked Sendable {
 
     // MARK: - paths inside a resolved container
 
-    /// Where the IL2CPP metadata patch is written.
-    public func patchURL(in data: URL, game: Game) -> URL {
-        data
-            .appendingPathComponent("Assembly-CSharp-patch.bytes")
+    /// Every directory the target may read a staged file from: the resolved
+    /// data directory plus its `Documents` child, which is where
+    /// `persistentDataPath` points. A target reads whichever it was built
+    /// against, so both are staged rather than guessing.
+    public func payloadDirectories(in data: URL) -> [URL] {
+        var dirs = [data]
+        let documents = data.appendingPathComponent("Documents")
+        var isDirectory: ObjCBool = false
+        if fm.fileExists(atPath: documents.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            dirs.append(documents)
+        }
+        return dirs
+    }
+
+    /// Where the IL2CPP metadata patch is written. First entry is the primary.
+    public func patchURLs(in data: URL, game: Game) -> [URL] {
+        payloadDirectories(in: data).map { $0.appendingPathComponent(ContainerBridge.patchName) }
     }
 
     /// Where the runtime config the payload reads at startup is written.
-    public func configURL(in data: URL, game: Game) -> URL {
-        data.appendingPathComponent(game.configFileName)
+    public func configURLs(in data: URL, game: Game) -> [URL] {
+        payloadDirectories(in: data).map { $0.appendingPathComponent(game.configFileName) }
     }
 }
 
