@@ -16,10 +16,12 @@ import os
 ///
 /// Fallbacks when the daemon refuses on a given build (e.g. iOS 18.1.x):
 /// a filesystem scan of `/var/mobile/Containers/Data/Application` using the
-/// Geod-MCM partDomain traversal (`bad_query`, iOS 26+) to get an extension
-/// over the root when direct listing is denied, plus an inode walk
+/// Geod-MCM partDomain traversal (`bad_query`, iOS 26+) to get a sandbox
+/// extension over the root — and, when the MCM token comes back read-only,
+/// over the exact target container — plus an inode walk
 /// (`fsgetpath`, `bad_query_list`) to enumerate container UUIDs as a last
-/// resort.
+/// resort. The partDomain grant is a userspace sandbox grant of its own; it
+/// does not require the kernel exploit.
 public final class ContainerBridge: @unchecked Sendable {
     public static let shared = ContainerBridge(log: AppLog.shared)
 
@@ -39,6 +41,11 @@ public final class ContainerBridge: @unchecked Sendable {
 
     /// MCM container class 2 = app data container.
     private let mcmDataClass: UInt64 = 2
+
+    /// Root a `bad_query` traversal grant is requested on before a filesystem
+    /// scan, so the returned token covers the whole data-container tree. Same
+    /// spelling the upstream 3105 project uses.
+    private static let scanRootPath = "/var/mobile/Containers/Data/Application"
 
     private let log: AppLog
     private let fm = FileManager.default
@@ -108,20 +115,17 @@ public final class ContainerBridge: @unchecked Sendable {
             log.log(.mcm, "MCM enumeration unavailable: \(enumerationError)")
         }
 
-        // 2) Filesystem scan fallback. On iOS 26+ the scan only answers once the
-        //    kernel exploit has escaped the sandbox; skip it (and the inode walk)
-        //    so the scan does not burn time on a sealed root.
-        if KernelExploit.requiresSandboxEscape, !KernelExploit.hasSandboxAccess() {
-            log.log(.mcm, "filesystem scan skipped: sandbox escape required on iOS 26+ but not active (run the exploit first)")
-            return out
-        }
+        // 2) Filesystem scan fallback. The Geod-MCM partDomain traversal is a
+        //    sandbox grant in its own right on iOS 26+ and does not require the
+        //    kernel exploit, so it is attempted on the root before giving up;
+        //    the exploit is only a last resort if the daemon refuses it.
+        let handle = grantTraversal(ContainerBridge.scanRootPath)
+        defer { releaseTraversal(handle) }
         guard let containers = dataContainersRoot() else {
             log.log(.mcm, "no data-containers root reachable from \(NSHomeDirectory())")
             return [:]
         }
         let rootPath = containers.path
-        let handle = grantTraversal(rootPath)
-        defer { releaseTraversal(handle) }
 
         let keys: [URLResourceKey] = [.isDirectoryKey]
         let entries: [URL]
@@ -274,10 +278,13 @@ public final class ContainerBridge: @unchecked Sendable {
     /// 1. MCM daemon token (identity-trust). This is the route that works on a
     ///    stock, non-jailbroken device when the app is enterprise-signed as
     ///    `com.apple.mobile.MobileHouseArrest`.
-    /// 2. Filesystem scan of the data-container root. The root only lists when a
-    ///    `no-sandbox` exemption is honoured *or* a `bad_query` traversal grant
-    ///    is accepted; otherwise the scan reports `.accessDenied` and the
-    ///    concrete daemon error is kept in `lastAccessError`.
+    /// 2. Geod-MCM partDomain grant (`bad_query`, iOS 26+) on the exact
+    ///    container when the MCM token itself comes back read-only. This is the
+    ///    same fallback upstream 3105 relies on to patch on iOS 26 without the
+    ///    kernel exploit.
+    /// 3. Filesystem scan of the data-container root under a `bad_query`
+    ///    traversal grant; when the grant is refused the scan reports
+    ///    `.accessDenied` and the concrete error is kept in `lastAccessError`.
     ///
     /// The probe file is the only reliable way to distinguish "container exists
     /// but is sealed" from "container exists": both report success from the
@@ -295,7 +302,15 @@ public final class ContainerBridge: @unchecked Sendable {
                 log.log(.mcm, "container for \(game.bundleIdentifier) writable at \(data.path) (MCM token)")
                 return .resolved(data)
             }
-            log.log(.mcm, "MCM resolved \(game.bundleIdentifier) but container not writable at \(data.path): \(lastAccessError ?? "unknown")")
+            log.log(.mcm, "MCM resolved \(game.bundleIdentifier) but token write denied at \(data.path): \(lastAccessError ?? "unknown")")
+            // The MCM token can come back read-only on some 26.x builds even
+            // though the container path resolves. Fall back to the Geod-MCM
+            // partDomain grant on the exact container we already located — a
+            // userspace sandbox grant that needs no kernel exploit.
+            if let granted = grantAndProbe(data) ?? grantAndProbe(container) {
+                log.log(.mcm, "container for \(game.bundleIdentifier) writable at \(granted.path) (bad_query grant)")
+                return .resolved(granted)
+            }
             return .accessDenied
         case .denied(let detail):
             lastAccessError = detail
@@ -304,23 +319,17 @@ public final class ContainerBridge: @unchecked Sendable {
             lastAccessError = "MCM bridge unavailable"
         }
 
-        // 2) Filesystem scan fallback.
-        //    On iOS 26+ the scan only answers after a live sandbox escape; before
-        //    that the root is sealed and the scan would only ever report access
-        //    denied, so report that eagerly with the run-exploit hint.
-        if KernelExploit.requiresSandboxEscape, !KernelExploit.hasSandboxAccess() {
-            let hint = "sandbox escape required (iOS 26+) but not active — run the exploit first"
-            lastAccessError = hint
-            log.log(.mcm, "resolve(\(game.bundleIdentifier)): filesystem scan skipped — \(hint)")
-            return .accessDenied
-        }
+        // 2) Filesystem scan fallback. The Geod-MCM partDomain traversal is a
+        //    sandbox grant in its own right on iOS 26+ and does not require the
+        //    kernel exploit, so it is attempted before giving up; the exploit
+        //    stays a last resort when the daemon refuses the grant.
+        let handle = grantTraversal(ContainerBridge.scanRootPath)
+        defer { releaseTraversal(handle) }
         guard let containers = dataContainersRoot() else {
             log.log(.mcm, "no data-containers root from \(NSHomeDirectory())")
             lastAccessError = lastAccessError ?? "no data-containers root"
             return .bridgeUnavailable
         }
-        let handle = grantTraversal(containers.path)
-        defer { releaseTraversal(handle) }
 
         var found: URL?
         let keys: [URLResourceKey] = [.isDirectoryKey]
@@ -355,7 +364,14 @@ public final class ContainerBridge: @unchecked Sendable {
             return .accessDenied
         }
 
-        return probeWritable(data) ? .resolved(data) : .accessDenied
+        // Probe under the root traversal grant first; if the root token covers
+        // reads but the write is still denied, request a grant on the exact
+        // container (non-nil `grantAndProbe` means the write worked).
+        if probeWritable(data) || grantAndProbe(data) != nil {
+            return .resolved(data)
+        }
+        log.log(.mcm, "container for \(game.bundleIdentifier) found but not writable at \(data.path): \(lastAccessError ?? "unknown")")
+        return .accessDenied
         #endif
     }
 
@@ -373,6 +389,24 @@ public final class ContainerBridge: @unchecked Sendable {
             log.log(.mcm, "probe write failed at \(data.path): \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Consume a Geod-MCM partDomain sandbox token covering `dir` (iOS 26+),
+    /// then re-run the write probe under that grant. Returns the directory when
+    /// the probe now succeeds, nil when the daemon refused or the write is still
+    /// denied. The kernel exploit is never required for this.
+    private func grantAndProbe(_ dir: URL) -> URL? {
+        guard shouldUseBadQuery else { return nil }
+        let clean = dir.path.hasSuffix("/") ? String(dir.path.dropLast()) : dir.path
+        guard clean.hasPrefix("/") else { return nil }
+        var pathC = clean.utf8CString.map { Int8($0) }
+        let handle = bad_query(&pathC, true, nil, false)
+        defer { releaseTraversal(handle) }
+        guard handle >= 0 else {
+            log.log(.mcm, "bad_query grant refused at \(dir.path) -> \(handle)")
+            return nil
+        }
+        return probeWritable(dir) ? dir : nil
     }
 
     // MARK: - sandbox extension grants
