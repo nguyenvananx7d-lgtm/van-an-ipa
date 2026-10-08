@@ -9,7 +9,7 @@ settings:
   base:
     INFOPLIST_FILE: YABAOCHEAT/Info.plist
     PRODUCT_NAME: YABAOCHEAT
-    PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.mobilehousearrest
+    PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.MobileHouseArrest
     CODE_SIGN_STYLE: Manual
     SWIFT_VERSION: 5.9
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
@@ -32,19 +32,14 @@ targets:
           - "Info.plist"
       - path: YABAOCHEAT/Resources
         buildPhase: resources
-    entitlements:
-      path: YABAOCHEAT.entitlements
-      properties:
-        com.apple.security.application-groups: []
-        get-task-allow: true
-        com.apple.private.security.container-manager: true
-        com.apple.private.security.no-sandbox: true
     settings:
       base:
         MARKETING_VERSION: 1.0.0
         CURRENT_PROJECT_VERSION: 1
         EXECUTABLE_NAME: YABAOCHEAT
         DISPLAY_NAME: Delta Client
+        SWIFT_OBJC_BRIDGING_HEADER: YABAOCHEAT/YABAOCHEAT-Bridging-Header.h
+        CLANG_ENABLE_OBJC_ARC: true
 
 schemes:
   YABAOCHEAT:
