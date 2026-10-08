@@ -5,7 +5,7 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Delta Client</string>
+  <string>Vortex Arena</string>
   <key>CFBundleExecutable</key>
   <string>YABAOCHEAT</string>
   <key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>DeltaClient</string>
+  <string>VortexArena</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

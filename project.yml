@@ -1,4 +1,4 @@
-﻿name: DeltaClient
+﻿name: VortexArena
 options:
   deploymentTarget:
     iOS: 16.0
@@ -37,7 +37,7 @@ targets:
         MARKETING_VERSION: 1.0.0
         CURRENT_PROJECT_VERSION: 1
         EXECUTABLE_NAME: YABAOCHEAT
-        DISPLAY_NAME: Delta Client
+        DISPLAY_NAME: Vortex Arena
         SWIFT_OBJC_BRIDGING_HEADER: YABAOCHEAT/YABAOCHEAT-Bridging-Header.h
         CLANG_ENABLE_OBJC_ARC: true
 

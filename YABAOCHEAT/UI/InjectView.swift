@@ -70,7 +70,7 @@ struct InjectView: View {
         }
     }
 
-    /// The opt-in kernel-exploit block (Delta-specific: 3105 auto-runs, Delta
+    /// The opt-in kernel-exploit block (Vortex Arena-specific: 3105 auto-runs, Vortex Arena
     /// keeps the chain behind an explicit button). `.unsupported` is rendered
     /// by the unsupported-OS banner instead; every other status gets a row with
     /// status text and a Run / Run-again button.

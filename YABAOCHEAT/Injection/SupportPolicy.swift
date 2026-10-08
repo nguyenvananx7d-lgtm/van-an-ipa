@@ -32,7 +32,7 @@ public enum DeviceOS {
     public static var displayString: String { "iOS \(versionString) (\(build))" }
 }
 
-/// Exploit support table, ported from 3105 so Delta accepts exactly the same
+/// Exploit support table, ported from 3105 so Vortex Arena accepts exactly the same
 /// OS range and rejects everything else:
 ///
 /// - iOS 17.0–17.7.x            → kernel exploit
