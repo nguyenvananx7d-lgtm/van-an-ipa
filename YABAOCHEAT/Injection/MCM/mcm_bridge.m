@@ -3,8 +3,20 @@
 #import <fcntl.h>
 #import <stdlib.h>
 #import <unistd.h>
-#import <Security/Security.h>
 #import <xpc/xpc.h>
+
+// SecTask is private SPI: since iOS 16 the declarations were taken out of the
+// public Security headers, so no SDK exposes them (neither to C nor Swift).
+// Both entry points are still exported by libSecurity at runtime; the externs
+// below are what lets MCMHasEntitlement() use them for diagnostics. Weak
+// linkage keeps the build and the launch intact on a build where they are
+// gone — callers must NULL-check before calling.
+extern CFTypeRef SecTaskCreateFromSelf(CFAllocatorRef allocator) __attribute__((weak));
+extern CFTypeRef SecTaskCopyValueForEntitlement(
+    CFTypeRef task,
+    CFStringRef entitlement,
+    CFErrorRef * _Nullable error
+) __attribute__((weak));
 
 typedef void *(*MCMQueryCreate)(void);
 typedef void (*MCMQuerySetU64)(void *, uint64_t);
@@ -339,11 +351,15 @@ BOOL MCMHasEntitlement(const char *entitlementC) {
         kCFAllocatorDefault, entitlementC, kCFStringEncodingUTF8
     );
     if (!entitlement) return NO;
+    if (SecTaskCreateFromSelf == NULL) {  // weak symbol absent on this build
+        CFRelease(entitlement);
+        return NO;
+    }
 
     BOOL result = NO;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    SecTaskRef task = SecTaskCreateFromSelf(NULL);
+    CFTypeRef task = SecTaskCreateFromSelf(NULL);
     if (task) {
         CFErrorRef error = NULL;
         CFTypeRef value = SecTaskCopyValueForEntitlement(task, entitlement, &error);
@@ -352,7 +368,8 @@ BOOL MCMHasEntitlement(const char *entitlementC) {
             if (type == CFBooleanGetTypeID()) {
                 result = CFBooleanGetValue(value);
             } else if (type == CFNumberGetTypeID()) {
-                result = CFNumberGetIntValue((CFNumberRef)value, kCFNumberIntType) != 0;
+                int32_t number = 0;
+                result = CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &number) && number != 0;
             } else if (type == CFStringGetTypeID()) {
                 CFStringRef str = (CFStringRef)value;
                 result = CFStringCompare(str, CFSTR("true"), 0) == kCFCompareEqualTo ||

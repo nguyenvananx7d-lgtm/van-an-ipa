@@ -136,3 +136,14 @@
 "license_error.unsupportedOS" = "Unsupported OS";
 "license_error.unsupportedHardware" = "Unsupported hardware";
 "license_error.simulator" = "Simulator not supported";
+
+/* Kernel exploit (opt-in) */
+"ios_not_supported" = "This iOS build is not supported";
+"exploit_status_not_started" = "Kernel exploit";
+"exploit_status_running" = "Running kernel exploit… (10–30 s, device may briefly freeze)";
+"exploit_status_success" = "Kernel exploit active";
+"exploit_status_failed" = "Kernel exploit failed — check the log";
+"run_exploit" = "Run";
+"retry_exploit" = "Run again";
+"exploit_needs_sandbox" = "Required on this iOS — unlocks the sandbox so the game container can be scanned";
+"exploit_optional_hint" = "Optional on this iOS — injection works via the MCM token without it";

@@ -108,7 +108,13 @@ public final class ContainerBridge: @unchecked Sendable {
             log.log(.mcm, "MCM enumeration unavailable: \(enumerationError)")
         }
 
-        // 2) Filesystem scan fallback.
+        // 2) Filesystem scan fallback. On iOS 26+ the scan only answers once the
+        //    kernel exploit has escaped the sandbox; skip it (and the inode walk)
+        //    so the scan does not burn time on a sealed root.
+        if KernelExploit.requiresSandboxEscape, !KernelExploit.hasSandboxAccess() {
+            log.log(.mcm, "filesystem scan skipped: sandbox escape required on iOS 26+ but not active (run the exploit first)")
+            return out
+        }
         guard let containers = dataContainersRoot() else {
             log.log(.mcm, "no data-containers root reachable from \(NSHomeDirectory())")
             return [:]
@@ -299,6 +305,15 @@ public final class ContainerBridge: @unchecked Sendable {
         }
 
         // 2) Filesystem scan fallback.
+        //    On iOS 26+ the scan only answers after a live sandbox escape; before
+        //    that the root is sealed and the scan would only ever report access
+        //    denied, so report that eagerly with the run-exploit hint.
+        if KernelExploit.requiresSandboxEscape, !KernelExploit.hasSandboxAccess() {
+            let hint = "sandbox escape required (iOS 26+) but not active — run the exploit first"
+            lastAccessError = hint
+            log.log(.mcm, "resolve(\(game.bundleIdentifier)): filesystem scan skipped — \(hint)")
+            return .accessDenied
+        }
         guard let containers = dataContainersRoot() else {
             log.log(.mcm, "no data-containers root from \(NSHomeDirectory())")
             lastAccessError = lastAccessError ?? "no data-containers root"
@@ -362,11 +377,20 @@ public final class ContainerBridge: @unchecked Sendable {
 
     // MARK: - sandbox extension grants
 
+    /// Whether the Geod-MCM partDomain traversal is expected to answer on this
+    /// build. The partDomain grant is an iOS 26+ API; on older releases the
+    /// kernel-exploit path covers container access, so the grant is never even
+    /// attempted there.
+    private var shouldUseBadQuery: Bool {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+    }
+
     /// Geod-MCM partDomain traversal: ask the daemon for a sandbox extension
     /// covering `containerPath` (iOS 26+). Returns a handle to release later, or
-    /// a negative value when the daemon refused. After a successful grant the
-    /// subtree becomes visible to `FileManager`.
+    /// a negative value when the daemon refused or the build predates the API.
+    /// After a successful grant the subtree becomes visible to `FileManager`.
     private func grantTraversal(_ containerPath: String) -> Int64 {
+        guard shouldUseBadQuery else { return -1 }
         let clean = containerPath.hasSuffix("/") ? String(containerPath.dropLast()) : containerPath
         guard clean.hasPrefix("/") else { return -1 }
         var pathC = clean.utf8CString.map { Int8($0) }

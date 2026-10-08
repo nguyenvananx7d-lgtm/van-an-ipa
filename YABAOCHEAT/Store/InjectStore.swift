@@ -20,6 +20,15 @@ public final class InjectStore: ObservableObject {
         return nil
     }
 
+    /// Whether the running iOS needs the sandbox escape before the container
+    /// scan can answer (iOS 26+). On older builds the exploit is optional.
+    public var requiresSandboxEscape: Bool { KernelExploit.requiresSandboxEscape }
+
+    /// Localization key explaining whether the exploit is required or optional.
+    public var exploitHintKey: String {
+        requiresSandboxEscape ? "exploit_needs_sandbox" : "exploit_optional_hint"
+    }
+
     /// A session is active and the payload is mapped in the running target.
     @Published public var isActive: Bool = false
 
@@ -34,6 +43,14 @@ public final class InjectStore: ObservableObject {
     @Published public var lastInstall: RuntimeInstaller.Result?
 
     @Published public var wipeReport: WipeRoutine.Report?
+
+    /// Where the (opt-in) kernel-exploit chain stands. Always `notStarted`
+    /// until the user presses the run button; iOS 26+ refuses the filesystem
+    /// scan without it, iOS 17/18 work regardless via the MCM token.
+    @Published public var exploitStatus: ExploitStatus = .notStarted
+
+    /// A run of `KernelExploit.run()` is in flight (drives the spinner).
+    @Published public var isRunningExploit: Bool = false
 
     private let log: AppLog
     private let menu: MenuStore
@@ -67,10 +84,16 @@ public final class InjectStore: ObservableObject {
             set(.simulator, "Simulator detected")
             return
         }
-        if ProcessInfo.processInfo.isOperatingSystemAtLeast(
-            OperatingSystemVersion(majorVersion: 16, minorVersion: 0, patchVersion: 0)
-        ) == false {
-            set(.unsupportedOS, "iOS 16.0 or newer is required")
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let osSupported = ExploitSupportPolicy.isSupported(
+            major: os.majorVersion,
+            minor: os.minorVersion,
+            patch: os.patchVersion,
+            build: DeviceOS.build
+        )
+        refreshExploitStatus()
+        guard osSupported else {
+            set(.unsupportedOS, "Unsupported iOS \(DeviceOS.displayString)")
             return
         }
         if false {
@@ -102,6 +125,65 @@ public final class InjectStore: ObservableObject {
         case .bridgeUnavailable:
             menu.resolutions[game] = .bridgeUnavailable
             set(.containerBridgeUnavailable, "The container bridge is unavailable")
+        }
+    }
+
+    // MARK: - kernel exploit (opt-in)
+
+    /// Refresh the exploit state without touching the result of a previous run:
+    /// unsupported builds flip to `.unsupported`, and an already-active sandbox
+    /// escape (e.g. from a jailbreak or an earlier run) is reported as success.
+    /// Cheap — safe to call on every screen appearance.
+    public func refreshExploitStatus() {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let supported = ExploitSupportPolicy.isSupported(
+            major: os.majorVersion,
+            minor: os.minorVersion,
+            patch: os.patchVersion,
+            build: DeviceOS.build
+        )
+        guard supported else {
+            exploitStatus = .unsupported(DeviceOS.displayString)
+            return
+        }
+        if case .notStarted = exploitStatus, KernelExploit.hasSandboxAccess() {
+            exploitStatus = .success(method: "sandbox")
+        }
+    }
+
+    /// Opt-in run of the kernel-exploit chain. The chain blocks for up to ~30 s
+    /// (and may briefly freeze the device), so it runs on a background thread;
+    /// on completion it writes the outcome and re-evaluates the inject screen.
+    public func runExploit() {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let supported = ExploitSupportPolicy.isSupported(
+            major: os.majorVersion,
+            minor: os.minorVersion,
+            patch: os.patchVersion,
+            build: DeviceOS.build
+        )
+        guard supported else {
+            exploitStatus = .unsupported(DeviceOS.displayString)
+            return
+        }
+        guard !isRunningExploit else { return }
+        isRunningExploit = true
+        status = "Running kernel exploit…"
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let ok = KernelExploit.run()
+            await MainActor.run {
+                guard let self else { return }
+                self.isRunningExploit = false
+                let kind = KernelExploit.requiresSandboxEscape ? "sandbox" : "kernel"
+                if ok {
+                    self.exploitStatus = .success(method: kind)
+                } else {
+                    self.exploitStatus = .failed(method: kind, code: -1)
+                }
+                self.status = ok ? "Exploit succeeded" : "Exploit failed"
+                self.evaluate()
+            }
         }
     }
 

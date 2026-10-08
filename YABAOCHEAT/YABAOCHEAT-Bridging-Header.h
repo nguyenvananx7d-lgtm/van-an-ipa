@@ -1,2 +1,5 @@
 #import "Injection/MCM/mcm_bridge.h"
 #import "Injection/MCM/bad_query.h"
+#import "Injection/kexploit/kexploit_opa334.h"
+#import "Injection/kexploit/sandbox_escape.h"
+#import "Injection/kexploit/kutils.h"

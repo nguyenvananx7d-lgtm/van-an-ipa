@@ -12,6 +12,12 @@ struct InjectView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
 
+                exploitSection
+
+                if menu.injectStates[inject.game] == .unsupportedOS {
+                    banner(.error, String(localized: "ios_not_supported"))
+                }
+
                 if let resolution = menu.resolutions[inject.game] {
                     resolutionBanner(resolution)
                 }
@@ -61,6 +67,75 @@ struct InjectView: View {
             Text(inject.game.bundleIdentifier)
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The opt-in kernel-exploit block (Delta-specific: 3105 auto-runs, Delta
+    /// keeps the chain behind an explicit button). `.unsupported` is rendered
+    /// by the unsupported-OS banner instead; every other status gets a row with
+    /// status text and a Run / Run-again button.
+    @ViewBuilder
+    private var exploitSection: some View {
+        if inject.isRunningExploit {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("exploit_status_running")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.vertical, 2)
+        } else {
+            switch inject.exploitStatus {
+            case .success:
+                statusRow(
+                    icon: "checkmark.seal.fill",
+                    tint: .green,
+                    titleKey: "exploit_status_success",
+                    buttonKey: "retry_exploit"
+                )
+            case .failed:
+                VStack(alignment: .leading, spacing: 8) {
+                    banner(.error, String(localized: "exploit_status_failed"))
+                    Button("retry_exploit") { inject.runExploit() }
+                        .font(.footnote)
+                }
+            case .notStarted:
+                HStack(spacing: 10) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .foregroundStyle(inject.requiresSandboxEscape ? Color.orange : Color.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("exploit_status_not_started")
+                            .font(.footnote.weight(.semibold))
+                        Text(String(localized: inject.exploitHintKey))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("run_exploit") { inject.runExploit() }
+                        .font(.footnote)
+                        .buttonStyle(.bordered)
+                }
+            case .unsupported:
+                EmptyView()
+            }
+        }
+    }
+
+    private func statusRow(
+        icon: String,
+        tint: Color,
+        titleKey: LocalizedStringKey,
+        buttonKey: LocalizedStringKey
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+            Text(titleKey)
+                .font(.footnote)
+            Spacer()
+            Button(buttonKey) { inject.runExploit() }
+                .font(.footnote)
         }
     }
 
