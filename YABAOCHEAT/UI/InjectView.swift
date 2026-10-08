@@ -107,7 +107,7 @@ struct InjectView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("exploit_status_not_started")
                             .font(.footnote.weight(.semibold))
-                        Text(String(localized: inject.exploitHintKey))
+                        Text(NSLocalizedString(inject.exploitHintKey, comment: ""))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
