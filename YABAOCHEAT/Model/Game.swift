@@ -23,6 +23,15 @@ public enum Game: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// On-screen name, so the two titles are never confused in the picker or
+    /// in status messages. Brand names stay untranslated in every language.
+    public var displayName: String {
+        switch self {
+        case .freeFire:    return "Free Fire"
+        case .freeFireMax: return "Free Fire Max"
+        }
+    }
+
     /// Filename of the IL2CPP metadata patch dropped into the target's bundle.
     public var payloadName: String { "Assembly-CSharp-patch" }
 

@@ -13,7 +13,10 @@ public final class ContainerBridge: @unchecked Sendable {
     public static let shared = ContainerBridge(log: AppLog.shared)
 
     /// `mobile_container_manager` metadata, read to turn a bundle id into a path.
+    /// iOS alternates between a leading dot and a leading underscore depending
+    /// on version, so both forms are probed and the first one that parses wins.
     public static let mcmMetadataPlist = ".com.apple.mobile_container_manager.metadata.plist"
+    public static let mcmMetadataPlistWithUnderscore = "_com.apple.mobile_container_manager.metadata.plist"
     public static let mcmIdentifierKey = "MCMMetadataIdentifier"
 
     /// Dropped into the target container to prove the path is genuinely writable
@@ -33,6 +36,13 @@ public final class ContainerBridge: @unchecked Sendable {
     // MARK: - discovery
 
     /// Every installed container on the device, keyed by bundle id.
+    ///
+    /// The underlying `/var/mobile/Containers/Data/Application` directory is
+    /// where every app's data container lives, regardless of which app we are.
+    /// A caller needs read access there (a sandbox exemption ran through the
+    /// `com.apple.private.security.container-manager` entitlement, or root) for
+    /// this to return anything; failures are logged with the concrete POSIX
+    /// error so a `notFound` result is distinguishable from "no permission".
     public func installedContainers() -> [String: URL] {
         guard let containers = dataContainersRoot() else {
             log.log(.mcm, "no data-containers root reachable from \(NSHomeDirectory())")
@@ -41,43 +51,67 @@ public final class ContainerBridge: @unchecked Sendable {
 
         var out: [String: URL] = [:]
         let keys: [URLResourceKey] = [.isDirectoryKey]
-        guard let entries = try? fm.contentsOfDirectory(
-            at: containers,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        ) else {
-            log.log(.mcm, "cannot list \(containers.path)")
-            return out
+        do {
+            let entries = try fm.contentsOfDirectory(
+                at: containers,
+                includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles]
+            )
+            for entry in entries {
+                guard let id = containerIdentifier(at: entry) else { continue }
+                out[id] = entry
+            }
+            log.log(.mcm, "found \(out.count) container(s) under \(containers.path)")
+        } catch {
+            let ns = error as NSError
+            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription))")
         }
-
-        for entry in entries {
-            guard let id = containerIdentifier(at: entry) else { continue }
-            out[id] = entry
-        }
-        log.log(.mcm, "found \(out.count) container(s) under \(containers.path)")
         return out
     }
 
-    /// `/var/mobile/Containers/Data/Application`, walked up to rather than
-    /// assumed: `Documents` sits inside the app's own container, which is one
-    /// level below the shared `Application` directory, so a single
-    /// `deletingLastPathComponent` lands on our own container and enumerates
-    /// nothing useful. Each component is matched so an unexpected depth fails
-    /// loudly instead of silently listing the wrong directory.
+    /// `/var/mobile/Containers/Data/Application`, located by walking up from
+    /// our own `Documents` until the `Containers/Data/Application` chain is
+    /// found, with the canonical absolute path as a fallback for non-standard
+    /// container roots. Each component is matched so an unexpected depth fails
+    /// loudly instead of silently enumerating the wrong directory.
     private func dataContainersRoot() -> URL? {
-        guard var url = fm.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .deletingLastPathComponent() else { return nil }
+        let candidates = canonicalRoots() + walkedUpRoots()
+        for url in candidates {
+            var isDirectory: ObjCBool = false
+            if fm.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return url
+            }
+        }
+        return nil
+    }
 
+    /// The well-known container root, in the two spellings the filesystem
+    /// accepts (`/var` is a symlink to `/private/var`).
+    private func canonicalRoots() -> [URL] {
+        [
+            URL(fileURLWithPath: "/var/mobile/Containers/Data/Application", isDirectory: true),
+            URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application", isDirectory: true),
+        ]
+    }
+
+    /// Walk up from `Documents`, matching each path component so the loop stops
+    /// exactly on the shared `Application` directory and never one level early
+    /// (which lands on our own container and enumerates nothing useful).
+    private func walkedUpRoots() -> [URL] {
+        guard var url = fm.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .deletingLastPathComponent() else { return [] }
+
+        var matches: [URL] = []
         for _ in 0..<8 {
             let parent = url.deletingLastPathComponent()
             if url.lastPathComponent == "Application",
                parent.lastPathComponent == "Data",
                parent.deletingLastPathComponent().lastPathComponent == "Containers" {
-                return url
+                matches.append(url)
             }
             url = parent
         }
-        return nil
+        return matches
     }
 
     /// The directory the target's writable files live in. The container root is
@@ -94,17 +128,19 @@ public final class ContainerBridge: @unchecked Sendable {
 
     /// Read the `MCMMetadataIdentifier` out of a container's metadata plist.
     public func containerIdentifier(at container: URL) -> String? {
-        let plist = container.appendingPathComponent(ContainerBridge.mcmMetadataPlist)
-        guard let data = try? Data(contentsOf: plist) else { return nil }
-        guard let object = try? PropertyListSerialization.propertyList(
-            from: data, options: [], format: nil
-        ) as? [String: Any] else { return nil }
+        for name in [ContainerBridge.mcmMetadataPlist, ContainerBridge.mcmMetadataPlistWithUnderscore] {
+            let plist = container.appendingPathComponent(name)
+            guard let data = try? Data(contentsOf: plist) else { continue }
+            guard let object = try? PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil
+            ) as? [String: Any] else { continue }
 
-        if let ident = object[ContainerBridge.mcmIdentifierKey] as? String { return ident }
-        // Some builds nest it under "Metadata".
-        if let nested = object["Metadata"] as? [String: Any],
-           let ident = nested[ContainerBridge.mcmIdentifierKey] as? String {
-            return ident
+            if let ident = object[ContainerBridge.mcmIdentifierKey] as? String { return ident }
+            // Some builds nest it under "Metadata".
+            if let nested = object["Metadata"] as? [String: Any],
+               let ident = nested[ContainerBridge.mcmIdentifierKey] as? String {
+                return ident
+            }
         }
         return nil
     }
@@ -123,13 +159,43 @@ public final class ContainerBridge: @unchecked Sendable {
     /// The probe file is the only reliable way to distinguish "container exists
     /// but is sealed" from "container exists": both report success from the
     /// metadata lookup alone.
+    ///
+    /// A `notFound` result is only produced when the container root was readable
+    /// and the bundle id was genuinely absent from it. If the root itself cannot
+    /// be listed — e.g. the sandbox exemption was not honoured — we return
+    /// `accessDenied`, logged with the underlying error, rather than lying about
+    /// the game's install state.
     public func resolve(game: Game) -> Resolution {
         #if targetEnvironment(simulator)
         log.log(.mcm, "simulator detected; container bridge unavailable")
         return .bridgeUnavailable
         #else
-        guard let container = installedContainers()[game.bundleIdentifier] else {
-            log.log(.mcm, "no container for \(game.bundleIdentifier)")
+        guard let containers = dataContainersRoot() else {
+            log.log(.mcm, "no data-containers root from \(NSHomeDirectory())")
+            return .bridgeUnavailable
+        }
+
+        var found: URL?
+        let keys: [URLResourceKey] = [.isDirectoryKey]
+        do {
+            let entries = try fm.contentsOfDirectory(
+                at: containers,
+                includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles]
+            )
+            for entry in entries {
+                guard containerIdentifier(at: entry) == game.bundleIdentifier else { continue }
+                found = entry
+                break
+            }
+        } catch {
+            let ns = error as NSError
+            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription)); container lookup for \(game.bundleIdentifier) failed - access denied, not absent")
+            return .accessDenied
+        }
+
+        guard let container = found else {
+            log.log(.mcm, "no container for \(game.bundleIdentifier) under \(containers.path)")
             return .notFound
         }
 
@@ -178,4 +244,3 @@ public final class ContainerBridge: @unchecked Sendable {
         payloadDirectories(in: data).map { $0.appendingPathComponent(game.configFileName) }
     }
 }
-

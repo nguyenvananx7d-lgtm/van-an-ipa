@@ -24,6 +24,11 @@
   <true/>
   <key>MinimumOSVersion</key>
   <string>16.0</string>
+  <key>LSApplicationQueriesSchemes</key>
+  <array>
+    <string>com.dts.freefireth</string>
+    <string>com.dts.freefiremax</string>
+  </array>
   <key>UILaunchScreen</key>
   <dict/>
   <key>UIRequiredDeviceCapabilities</key>

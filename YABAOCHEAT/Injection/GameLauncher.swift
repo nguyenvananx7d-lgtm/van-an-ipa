@@ -18,16 +18,14 @@ public struct GameLauncher: Sendable {
     ///
     /// `terminateFirst` matters: a warm start keeps the old runtime mapped, so a
     /// fresh patch would be loaded by nobody.
+    ///
+    /// Launch tries the URL-scheme path first and falls back to asking the app
+    /// workspace to launch by bundle id. A `canOpenURL` refusal is not proof the
+    /// game is absent — some titles register no launchable scheme, so a fallback
+    /// that does not depend on scheme registration is required before reporting
+    /// the game as not installed.
     @MainActor
     public func launch(game: Game, terminateFirst: Bool = true) throws {
-        guard let url = URL(string: "\(game.bundleIdentifier)://") else {
-            throw LaunchError.gameNotInstalled
-        }
-        guard UIApplication.shared.canOpenURL(url) else {
-            log.log(.launch, "\(game.bundleIdentifier) not installed")
-            throw LaunchError.gameNotInstalled
-        }
-
         if terminateFirst, let running = runningPID(for: game) {
             log.log(.launch, "terminating \(game.bundleIdentifier) (pid \(running))")
             kill(running, SIGKILL)
@@ -36,18 +34,50 @@ public struct GameLauncher: Sendable {
             Thread.sleep(forTimeInterval: 0.6)
         }
 
-        UIApplication.shared.open(url, options: [:]) { [log] ok in
-            if ok {
-                log.log(.launch, "launched \(game.bundleIdentifier)")
-            } else {
-                log.log(.launch, "launch refused for \(game.bundleIdentifier)")
+        let url = URL(string: "\(game.bundleIdentifier)://")!
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url, options: [:]) { [log] ok in
+                if ok {
+                    log.log(.launch, "launched \(game.bundleIdentifier)")
+                } else {
+                    log.log(.launch, "launch refused for \(game.bundleIdentifier)")
+                }
             }
+            return
         }
+
+        // No URL scheme: some titles (or some sideload setups) never register
+        // one. Ask the workspace to open by bundle id instead. The app is only
+        // reported missing if that also fails.
+        if openViaWorkspace(game) {
+            log.log(.launch, "launched \(game.bundleIdentifier) via workspace")
+            return
+        }
+
+        log.log(.launch, "\(game.bundleIdentifier) not installed or not launchable")
+        throw LaunchError.gameNotInstalled
     }
 
     /// Whether the target is currently running.
     public func isRunning(game: Game) -> Bool {
         runningPID(for: game) != nil
+    }
+
+    /// Launch by bundle id through `LSApplicationWorkspace`. Private API, so it
+    /// is reached via the Objective-C runtime and only as a last resort; it
+    /// needs the sender to be able to see the target's install (workspace
+    /// entitlement or an unsandboxed process — which this build already relies
+    /// on for container access).
+    @MainActor
+    private func openViaWorkspace(_ game: Game) -> Bool {
+        guard let cls = NSClassFromString("LSApplicationWorkspace"),
+              let workspace = cls.value(forKey: "defaultWorkspace") as? NSObject else {
+            return false
+        }
+        let selector = NSSelectorFromString("openApplicationWithBundleID:")
+        guard workspace.responds(to: selector) else { return false }
+        let opened = workspace.perform(selector, with: game.bundleIdentifier)
+        return opened != nil
     }
 
     // MARK: - process lookup
@@ -137,4 +167,3 @@ public struct GameLauncher: Sendable {
         return String(decoding: path, as: UTF8.self)
     }
 }
-

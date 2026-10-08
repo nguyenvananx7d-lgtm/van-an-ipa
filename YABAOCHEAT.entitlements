@@ -6,5 +6,9 @@
   <array/>
   <key>get-task-allow</key>
   <true/>
+  <key>com.apple.private.security.container-manager</key>
+  <true/>
+  <key>com.apple.private.security.no-sandbox</key>
+  <true/>
 </dict>
 </plist>

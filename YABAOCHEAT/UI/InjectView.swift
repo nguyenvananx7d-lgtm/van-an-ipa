@@ -53,23 +53,27 @@ struct InjectView: View {
 
             Picker("", selection: $menu.selectedGame) {
                 ForEach(Game.allCases, id: \.self) { game in
-                    Text(game.rawValue).tag(game)
+                    Text(game.displayName).tag(game)
                 }
             }
             .pickerStyle(.segmented)
+
+            Text(inject.game.bundleIdentifier)
+                .font(.caption2.monospaced())
+                .foregroundStyle(.secondary)
         }
     }
 
     private func resolutionBanner(_ resolution: ContainerResolution) -> some View {
         switch resolution {
         case .resolved:
-            return Banner(kind: .info, message: "container_resolved")
+            return Banner(kind: .info, message: String(localized: "container_resolved"))
         case .notFound:
-            return Banner(kind: .error, message: "game_not_installed")
+            return Banner(kind: .error, message: String(localized: "game_not_installed"))
         case .accessDenied:
-            return Banner(kind: .error, message: "container_access_denied")
+            return Banner(kind: .error, message: String(localized: "container_access_denied"))
         case .bridgeUnavailable:
-            return Banner(kind: .warning, message: "container_bridge_unavailable")
+            return Banner(kind: .warning, message: String(localized: "container_bridge_unavailable"))
         }
     }
 

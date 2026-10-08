@@ -11,7 +11,7 @@ public final class InjectStore: ObservableObject {
     public static let shared = InjectStore()
 
     /// The game this store is currently acting on.
-    @Published public var game: Game
+    public var game: Game { menu.selectedGame }
 
     /// A session is active and the payload is mapped in the running target.
     @Published public var isActive: Bool = false
@@ -46,7 +46,7 @@ public final class InjectStore: ObservableObject {
         self.installer = RuntimeInstaller(log: log, bridge: self.bridge, krw: .shared)
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
-        self.game = menu.selectedGame
+        
     }
 
     // MARK: - capability gate
@@ -78,7 +78,17 @@ public final class InjectStore: ObservableObject {
             set(.ready, nil)
         case .notFound:
             menu.resolutions[game] = .notFound
-            set(.gameNotInstalled, "\(game.bundleIdentifier) is not installed")
+            // The selected title may not be the one that is installed. If the
+            // other title resolves, switch selection to the game actually
+            // present on the device.
+            let other: Game = game == .freeFire ? .freeFireMax : .freeFire
+            if case .resolved = bridge.resolve(game: other) {
+                log.log(.mcm, "\(game.displayName) not installed; switching to \(other.displayName)")
+                menu.selectedGame = other
+                // InjectView re-runs evaluate() via onChange(of: selectedGame).
+                return
+            }
+            set(.gameNotInstalled, "\(game.displayName) (\(game.bundleIdentifier)) is not installed")
         case .accessDenied:
             menu.resolutions[game] = .accessDenied
             set(.containerAccessDenied, "The app container is sealed")

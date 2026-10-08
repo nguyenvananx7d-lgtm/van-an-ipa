@@ -38,6 +38,7 @@ targets:
         com.apple.security.application-groups: []
         get-task-allow: true
         com.apple.private.security.container-manager: true
+        com.apple.private.security.no-sandbox: true
     settings:
       base:
         MARKETING_VERSION: 1.0.0
