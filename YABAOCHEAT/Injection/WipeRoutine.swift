@@ -94,7 +94,7 @@ public struct WipeRoutine: Sendable {
         var hits: [String] = []
         while let url = walker.nextObject() as? URL {
             guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                  size != nil, (size ?? 0) < 4 * 1024 * 1024,
+                  size < 4 * 1024 * 1024,
                   let blob = try? Data(contentsOf: url)
             else { continue }
             if blob.range(of: needle) != nil {

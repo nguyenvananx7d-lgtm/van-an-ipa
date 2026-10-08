@@ -76,6 +76,26 @@ public enum ProtocolConstants {
             clientPublicKey: nil
         )
 
+        public init(
+            protocolVersion: Int,
+            heartbeatSeconds: Int,
+            maxNetworkErrors: Int,
+            receiptTimeout: Int,
+            receiptRetention: Int,
+            patchOpenMonitorMs: Int,
+            secureTransportRequired: Bool,
+            clientPublicKey: Data?
+        ) {
+            self.protocolVersion = protocolVersion
+            self.heartbeatSeconds = heartbeatSeconds
+            self.maxNetworkErrors = maxNetworkErrors
+            self.receiptTimeout = receiptTimeout
+            self.receiptRetention = receiptRetention
+            self.patchOpenMonitorMs = patchOpenMonitorMs
+            self.secureTransportRequired = secureTransportRequired
+            self.clientPublicKey = clientPublicKey
+        }
+
         /// Parse the policy block the server sends alongside the first response.
         public init(from json: [String: Any]) {
             func int(_ k: String, _ fallback: Int) -> Int {

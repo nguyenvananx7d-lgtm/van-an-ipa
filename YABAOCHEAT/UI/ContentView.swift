@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Main content view: a tabbed shell with status, controls and log.
+/// Main shell: license gate until the session is valid, then the branded
+/// header with the four tab pages from the mockup.
 struct ContentView: View {
     @StateObject private var language = LanguageStore.shared
     @StateObject private var menu = MenuStore.shared
@@ -8,133 +9,107 @@ struct ContentView: View {
     @StateObject private var inject = InjectStore.shared
 
     @State private var selectedTab: Int = 0
-    @State private var showLogout: Bool = false
 
     var body: some View {
-        if !language.hasChosen {
-            LanguagePickerView(store: language)
-                .transition(.opacity)
-        } else {
-            TabView(selection: $selectedTab) {
-                statusTab
-                    .tabItem { Label("status", systemImage: "bolt.shield.fill") }
-                    .tag(0)
-
-                controlsTab
-                    .tabItem { Label("controls", systemImage: "slider.horizontal.3") }
-                    .tag(1)
-
-                logTab
-                    .tabItem { Label("log", systemImage: "text.alignleft") }
-                    .tag(2)
-            }
-            .environmentObject(menu)
-            .environmentObject(auth)
-            .environmentObject(inject)
-            .task { await inject.evaluate() }
-            .alert("logout_confirm_title", isPresented: $showLogout) {
-                Button("logout_confirm_yes", role: .destructive) { auth.logout() }
-                Button("logout_confirm_cancel", role: .cancel) {}
-            } message: {
-                Text("logout_confirm_msg")
-            }
-            .onChange(of: language.selected) { _ in
-                // No-op; translation layer would swap strings here.
+        Group {
+            if !language.hasChosen {
+                LanguagePickerView(store: language)
+            } else if !auth.status.isOnline {
+                LicenseView()
+            } else {
+                shell
             }
         }
+        .environmentObject(menu)
+        .environmentObject(auth)
+        .environmentObject(inject)
+        .environmentObject(language)
+        .animation(.easeInOut(duration: 0.2), value: auth.status.isOnline)
+        .tint(.purple)
     }
 
-    // MARK: tabs
+    // MARK: - shell
 
-    private var statusTab: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
+    private var shell: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header
 
-                    if let msg = auth.revocationMessage {
-                        Banner(kind: .error, message: msg)
-                    }
-
-                    InjectView()
-
-                    if auth.status.isOnline {
-                        LicenseView()
-                    } else {
-                        LicenseView()
-                    }
-
-                    Spacer(minLength: 32)
+                if let msg = auth.revocationMessage {
+                    Banner(kind: .error, message: msg)
                 }
-                .padding(16)
-            }
-            .navigationTitle("status")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if auth.status.isOnline {
-                        Button("logout") {
-                            showLogout = true
-                        }
-                        .font(.callout)
-                    } else {
-                        EmptyView()
-                    }
+
+                tabPicker
+
+                switch selectedTab {
+                case 0:  AimbotView()
+                case 1:  VisualView()
+                case 2:  MiscView()
+                default: SettingView()
                 }
+
+                Spacer(minLength: 24)
             }
+            .padding(16)
         }
-        .navigationViewStyle(.stack)
+        .background(Color(.systemGroupedBackground))
+        .task { await inject.evaluate() }
     }
 
-    private var controlsTab: some View {
-        NavigationView {
-            ControlsView()
-                .navigationTitle("controls")
+    private var tabPicker: some View {
+        Picker("", selection: $selectedTab) {
+            Text("tab_aimbot").tag(0)
+            Text("tab_visual").tag(1)
+            Text("tab_misc").tag(2)
+            Text("tab_setting").tag(3)
         }
-        .navigationViewStyle(.stack)
+        .pickerStyle(.segmented)
     }
 
-    private var logTab: some View {
-        NavigationView {
-            LogView()
-                .navigationTitle("log")
-        }
-        .navigationViewStyle(.stack)
-    }
-
-    // MARK: header
+    // MARK: - header
 
     private var header: some View {
         Card {
-            HStack(alignment: .top, spacing: 14) {
-                Mark(size: 56)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 14) {
+                    Mark(size: 52)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("app_title")
-                        .font(.title3.weight(.semibold))
-                    HStack(spacing: 4) {
-                        Text("version")
-                        Text("3.7.33")
-                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("app_title")
+                            .font(.title3.weight(.bold))
+                        HStack(spacing: 4) {
+                            Text("version")
+                            Text("3.7.33")
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    HStack(spacing: 6) {
                         statusBadge
                     }
-                    .padding(.top, 4)
-                }
-                Spacer(minLength: 0)
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(auth.status.plan ?? "offline")
-                        .font(.caption.weight(.semibold))
-                    Text(auth.status.displayKey ?? "—")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    Spacer(minLength: 0)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(auth.status.plan ?? "offline")
+                            .font(.caption.weight(.semibold))
+                        Text(auth.status.displayKey ?? "—")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+
+                Text(welcomeLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var welcomeLine: String {
+        String(
+            format: String(localized: "welcome_back"),
+            auth.status.displayKey ?? "—"
+        )
     }
 
     private var statusBadge: some View {
@@ -151,4 +126,3 @@ struct ContentView: View {
         return StateBadge(text: String(localized: "unlicensed"), tone: .neutral)
     }
 }
-

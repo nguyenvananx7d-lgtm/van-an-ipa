@@ -1,38 +1,34 @@
 import SwiftUI
 
-/// Render the server-sent control catalog by section.
-struct ControlsView: View {
+/// The catalog sections on their own, for embedding in a tab that already
+/// provides its own scroll container.
+struct CatalogSections: View {
     @EnvironmentObject var menu: MenuStore
-    @EnvironmentObject var auth: AuthorizationStore
 
     var body: some View {
-        ScrollView {
+        if menu.catalog.isEmpty {
+            Card {
+                VStack(spacing: 8) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary)
+                    Text("controls_unavailable")
+                        .font(.headline)
+                    Text("controls_unavailable_hint")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(20)
+            }
+        } else {
             VStack(alignment: .leading, spacing: 16) {
-                if menu.catalog.isEmpty {
-                    Card {
-                        VStack(spacing: 8) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.secondary)
-                            Text("controls_unavailable")
-                                .font(.headline)
-                            Text("controls_unavailable_hint")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(20)
-                    }
-                } else {
-                    ForEach(menu.sections, id: \.self) { section in
-                        sectionView(section)
-                    }
+                ForEach(menu.sections, id: \.self) { section in
+                    sectionView(section)
                 }
             }
-            .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
     }
 
     private func sectionView(_ section: String) -> some View {
@@ -115,5 +111,16 @@ struct ControlsView: View {
 
     private func optionValue(_ option: String) -> String {
         option.split(separator: "|").last.map(String.init) ?? option
+    }
+}
+
+/// Standalone screen: the catalog in its own scroll container.
+struct ControlsView: View {
+    var body: some View {
+        ScrollView {
+            CatalogSections()
+                .padding(16)
+        }
+        .background(Color(.systemGroupedBackground))
     }
 }

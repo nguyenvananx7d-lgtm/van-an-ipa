@@ -110,6 +110,32 @@ public final class MenuStore: ObservableObject {
         )
     }
 
+    /// Direct binding into the current game's feature controls, so the static
+    /// panel rows read and write the same store the catalog rows use.
+    public func feature<T>(_ keyPath: WritableKeyPath<FeatureControls, T>) -> Binding<T> {
+        Binding(
+            get: { self.controls[keyPath: keyPath] },
+            set: { new in
+                var current = self.controls
+                current[keyPath: keyPath] = new
+                self.controls = current
+            }
+        )
+    }
+
+    /// Numeric controls read as `Double` for `Slider` without giving up the
+    /// `Int` the payload expects.
+    public func feature(_ keyPath: WritableKeyPath<FeatureControls, Int>) -> Binding<Double> {
+        Binding(
+            get: { Double(self.controls[keyPath: keyPath]) },
+            set: { new in
+                var current = self.controls
+                current[keyPath: keyPath] = Int(new.rounded())
+                self.controls = current
+            }
+        )
+    }
+
     public func toggle(for descriptor: ControlDescriptor) -> Binding<Bool> {
         Binding(
             get: { self.value(of: descriptor) >= 0.5 },

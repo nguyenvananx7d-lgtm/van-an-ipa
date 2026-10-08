@@ -33,12 +33,7 @@ public actor LiveUpdate {
                 try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
                 guard let self, !Task.isCancelled else { return }
                 do {
-                    let response = try await LicensingClient.shared.heartbeat(
-                        session: session, sequence: self.sequence
-                    )
-                    self.sequence += 1
-                    self.consecutiveErrors = 0
-                    onUpdate(response)
+                    onUpdate(try await self.poll(session: session))
                 } catch let error as LicenseError {
                     await self.handle(error)
                 } catch {
@@ -46,6 +41,16 @@ public actor LiveUpdate {
                 }
             }
         }
+    }
+
+    /// One heartbeat round trip, with the sequence bookkeeping kept on the actor.
+    private func poll(session: String) async throws -> LicenseResponse {
+        let response = try await LicensingClient.shared.heartbeat(
+            session: session, sequence: sequence
+        )
+        sequence += 1
+        consecutiveErrors = 0
+        return response
     }
 
     public func stop() {

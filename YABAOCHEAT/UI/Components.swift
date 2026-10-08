@@ -135,6 +135,100 @@ struct Banner: View {
     }
 }
 
+// MARK: - panel rows
+
+/// Titled group the panel tabs are built from: caption header over one card.
+struct SectionGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.leading, 4)
+            Card(padding: 6, radius: 16) {
+                VStack(alignment: .leading, spacing: 0) { content }
+            }
+        }
+    }
+}
+
+struct ToggleRow: View {
+    let label: String
+    var detail: String?
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.body.weight(.medium))
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
+struct SliderRow: View {
+    let label: String
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...100
+    var step: Double = 1
+    var unit: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.body.weight(.medium))
+                Spacer(minLength: 8)
+                Text("\(Int(value.rounded()))\(unit)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: $value, in: range, step: step)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
+struct SegmentOption: Identifiable, Hashable, Sendable {
+    let value: String
+    let title: String
+    var id: String { value }
+}
+
+struct SegmentRow: View {
+    let label: String
+    @Binding var selection: String
+    let options: [SegmentOption]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.body.weight(.medium))
+            Picker("", selection: $selection) {
+                ForEach(options) { option in
+                    Text(option.title).tag(option.value)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
 // MARK: - logo
 
 struct Mark: View {

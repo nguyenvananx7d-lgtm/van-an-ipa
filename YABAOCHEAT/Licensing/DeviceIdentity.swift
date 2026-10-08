@@ -28,7 +28,7 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
     public static let hwidDefaultsKey = "ffxt_hwid"
     public static let hwidSchemaMarker = "device-id-v2"
 
-    private override init() {
+    private init() {
         cache = NSCache()
         cache.countLimit = 32
     }
@@ -186,7 +186,8 @@ public enum SecureStore {
         q[kSecValueData as String] = data
         q[kSecAttrAccount as String] = account
 
-        SecItemDelete(query.merging([kSecAttrAccount as String: account]) { current, _ in current })
+        let target = query.merging([kSecAttrAccount as String: account]) { current, _ in current }
+        SecItemDelete(target as CFDictionary)
 
         var status = SecItemAdd(q as CFDictionary, nil)
         if status == errSecDuplicateItem {

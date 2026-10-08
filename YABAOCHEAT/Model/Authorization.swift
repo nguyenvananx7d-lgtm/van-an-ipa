@@ -59,6 +59,13 @@ public enum LicenseErrorCode: String, CaseIterable, Sendable {
     }
 }
 
+public extension LicenseErrorCode {
+    /// Wording for a bare code, from the same table `LicenseError` reads.
+    var localizedDescription: String {
+        String(localized: "license_error.\(rawValue)")
+    }
+}
+
 /// Error surfaced to the UI. Carries the code plus optional server detail so the
 /// license screen can show the server's own wording when it sends any.
 public struct LicenseError: Error, Sendable {

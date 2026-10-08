@@ -2,10 +2,15 @@ import Foundation
 
 /// The full set of runtime tweaks, as a value type.
 ///
-/// Field names here are exactly the ones the payload's property setters are
-/// generated against (`setEnabled`, `setAimbotRadius`, `setHeadshot`,
-/// `setAimTarget`, `setAimFovMode`, `setFastReloadPercent`, `setFastFireLevel`,
-/// `setEspColor`, `setEspThickness`), so renaming one breaks the wire contract.
+/// The original field names here are exactly the ones the payload's property
+/// setters are generated against (`setEnabled`, `setAimbotRadius`,
+/// `setHeadshot`, `setAimTarget`, `setAimFovMode`, `setFastReloadPercent`,
+/// `setFastFireLevel`, `setEspColor`, `setEspThickness`), so renaming one
+/// breaks the wire contract.
+///
+/// Fields from `aimbotType` on are the panel tabs the mockups show. They ride
+/// along in the serialized payload so a payload that learns them picks them up;
+/// the shipped blob reads the keys it knows and ignores the rest.
 public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: aimbot
 
@@ -21,6 +26,17 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var aimTarget: String
     public var aimFovMode: String
 
+    // MARK: panel — aimbot tab
+
+    public var aimbotType: String
+    public var silentAim: Bool
+    public var hitChance: Int
+    /// Maximum lock distance in metres.
+    public var aimDistance: Int
+    public var drawFov: Bool
+    public var ignoreKnocked: Bool
+    public var antiBan: Bool
+
     // MARK: weapon
 
     public var fastReloadPercent: Int
@@ -32,6 +48,25 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var espColor: Int
     public var espThickness: Int
 
+    // MARK: panel — visual tab
+
+    public var masterEsp: Bool
+    public var lineEsp: Bool
+    public var boxEsp: Bool
+    public var boxType: String
+    public var nameEsp: Bool
+    public var distanceEsp: Bool
+    public var healthEsp: Bool
+    public var healthType: String
+    public var skeletonEsp: Bool
+    public var drawEnemyCount: Bool
+    public var textSize: Int
+    public var espBounding: Int
+
+    // MARK: panel — setting tab
+
+    public var streamProof: Bool
+
     public init(
         isEnabled: Bool = false,
         radiusValue: Double = 0,
@@ -41,10 +76,30 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         headshotPolicy: ControlPolicy = .value,
         aimTarget: String = "head",
         aimFovMode: String = "strict",
+        aimbotType: String = "aimbot",
+        silentAim: Bool = false,
+        hitChance: Int = 85,
+        aimDistance: Int = 200,
+        drawFov: Bool = true,
+        ignoreKnocked: Bool = false,
+        antiBan: Bool = false,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
-        espThickness: Int = 1
+        espThickness: Int = 1,
+        masterEsp: Bool = false,
+        lineEsp: Bool = false,
+        boxEsp: Bool = false,
+        boxType: String = "corner",
+        nameEsp: Bool = false,
+        distanceEsp: Bool = false,
+        healthEsp: Bool = false,
+        healthType: String = "right",
+        skeletonEsp: Bool = false,
+        drawEnemyCount: Bool = false,
+        textSize: Int = 14,
+        espBounding: Int = 2,
+        streamProof: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.radiusValue = radiusValue
@@ -54,10 +109,30 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.headshotPolicy = headshotPolicy
         self.aimTarget = aimTarget
         self.aimFovMode = aimFovMode
+        self.aimbotType = aimbotType
+        self.silentAim = silentAim
+        self.hitChance = hitChance
+        self.aimDistance = aimDistance
+        self.drawFov = drawFov
+        self.ignoreKnocked = ignoreKnocked
+        self.antiBan = antiBan
         self.fastReloadPercent = fastReloadPercent
         self.fastFireLevel = fastFireLevel
         self.espColor = espColor
         self.espThickness = espThickness
+        self.masterEsp = masterEsp
+        self.lineEsp = lineEsp
+        self.boxEsp = boxEsp
+        self.boxType = boxType
+        self.nameEsp = nameEsp
+        self.distanceEsp = distanceEsp
+        self.healthEsp = healthEsp
+        self.healthType = healthType
+        self.skeletonEsp = skeletonEsp
+        self.drawEnemyCount = drawEnemyCount
+        self.textSize = textSize
+        self.espBounding = espBounding
+        self.streamProof = streamProof
     }
 
     // MARK: - persistence
@@ -78,6 +153,66 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public func save(for game: Game) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         UserDefaults.standard.set(data, forKey: FeatureControls.defaultsKey(for: game))
+    }
+
+    // MARK: - wire shape
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
+             headshotValue, headshotPolicy, aimTarget, aimFovMode,
+             aimbotType, silentAim, hitChance, aimDistance, drawFov,
+             ignoreKnocked, antiBan,
+             fastReloadPercent, fastFireLevel,
+             espColor, espThickness,
+             masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
+             healthEsp, healthType, skeletonEsp, drawEnemyCount, textSize,
+             espBounding,
+             streamProof
+    }
+
+    /// Profiles written by an older build decode field by field rather than
+    /// failing outright when a panel field is absent.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = FeatureControls()
+
+        isEnabled         = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? d.isEnabled
+        radiusValue       = try c.decodeIfPresent(Double.self, forKey: .radiusValue) ?? d.radiusValue
+        aimbotRadiusValue = try c.decodeIfPresent(Double.self, forKey: .aimbotRadiusValue) ?? d.aimbotRadiusValue
+        radiusPolicy      = try c.decodeIfPresent(ControlPolicy.self, forKey: .radiusPolicy) ?? d.radiusPolicy
+        headshotValue     = try c.decodeIfPresent(Bool.self, forKey: .headshotValue) ?? d.headshotValue
+        headshotPolicy    = try c.decodeIfPresent(ControlPolicy.self, forKey: .headshotPolicy) ?? d.headshotPolicy
+        aimTarget         = try c.decodeIfPresent(String.self, forKey: .aimTarget) ?? d.aimTarget
+        aimFovMode        = try c.decodeIfPresent(String.self, forKey: .aimFovMode) ?? d.aimFovMode
+
+        aimbotType        = try c.decodeIfPresent(String.self, forKey: .aimbotType) ?? d.aimbotType
+        silentAim         = try c.decodeIfPresent(Bool.self, forKey: .silentAim) ?? d.silentAim
+        hitChance         = try c.decodeIfPresent(Int.self, forKey: .hitChance) ?? d.hitChance
+        aimDistance       = try c.decodeIfPresent(Int.self, forKey: .aimDistance) ?? d.aimDistance
+        drawFov           = try c.decodeIfPresent(Bool.self, forKey: .drawFov) ?? d.drawFov
+        ignoreKnocked     = try c.decodeIfPresent(Bool.self, forKey: .ignoreKnocked) ?? d.ignoreKnocked
+        antiBan           = try c.decodeIfPresent(Bool.self, forKey: .antiBan) ?? d.antiBan
+
+        fastReloadPercent = try c.decodeIfPresent(Int.self, forKey: .fastReloadPercent) ?? d.fastReloadPercent
+        fastFireLevel     = try c.decodeIfPresent(Int.self, forKey: .fastFireLevel) ?? d.fastFireLevel
+
+        espColor          = try c.decodeIfPresent(Int.self, forKey: .espColor) ?? d.espColor
+        espThickness      = try c.decodeIfPresent(Int.self, forKey: .espThickness) ?? d.espThickness
+
+        masterEsp         = try c.decodeIfPresent(Bool.self, forKey: .masterEsp) ?? d.masterEsp
+        lineEsp           = try c.decodeIfPresent(Bool.self, forKey: .lineEsp) ?? d.lineEsp
+        boxEsp            = try c.decodeIfPresent(Bool.self, forKey: .boxEsp) ?? d.boxEsp
+        boxType           = try c.decodeIfPresent(String.self, forKey: .boxType) ?? d.boxType
+        nameEsp           = try c.decodeIfPresent(Bool.self, forKey: .nameEsp) ?? d.nameEsp
+        distanceEsp       = try c.decodeIfPresent(Bool.self, forKey: .distanceEsp) ?? d.distanceEsp
+        healthEsp         = try c.decodeIfPresent(Bool.self, forKey: .healthEsp) ?? d.healthEsp
+        healthType        = try c.decodeIfPresent(String.self, forKey: .healthType) ?? d.healthType
+        skeletonEsp       = try c.decodeIfPresent(Bool.self, forKey: .skeletonEsp) ?? d.skeletonEsp
+        drawEnemyCount    = try c.decodeIfPresent(Bool.self, forKey: .drawEnemyCount) ?? d.drawEnemyCount
+        textSize          = try c.decodeIfPresent(Int.self, forKey: .textSize) ?? d.textSize
+        espBounding       = try c.decodeIfPresent(Int.self, forKey: .espBounding) ?? d.espBounding
+
+        streamProof       = try c.decodeIfPresent(Bool.self, forKey: .streamProof) ?? d.streamProof
     }
 
     // MARK: - payload setters
@@ -108,6 +243,29 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "fastFireLevel": fastFireLevel,
             "espColor": espColor,
             "espThickness": espThickness,
+
+            "aimbotType": aimbotType,
+            "silentAim": silentAim,
+            "hitChance": hitChance,
+            "aimDistance": aimDistance,
+            "drawFov": drawFov,
+            "ignoreKnocked": ignoreKnocked,
+            "antiBan": antiBan,
+
+            "masterEsp": masterEsp,
+            "lineEsp": lineEsp,
+            "boxEsp": boxEsp,
+            "boxType": boxType,
+            "nameEsp": nameEsp,
+            "distanceEsp": distanceEsp,
+            "healthEsp": healthEsp,
+            "healthType": healthType,
+            "skeletonEsp": skeletonEsp,
+            "drawEnemyCount": drawEnemyCount,
+            "textSize": textSize,
+            "espBounding": espBounding,
+
+            "streamProof": streamProof,
         ]
     }
 }

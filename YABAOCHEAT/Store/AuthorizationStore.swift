@@ -136,7 +136,9 @@ public final class AuthorizationStore: ObservableObject {
             let sections = response.metadata?["sections"] ?? [:]
             menu.apply(
                 catalog: descriptors,
-                sections: sections.values.flatMap { $0.values }
+                sections: sections
+                    .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
+                    .map { $0.value }
             )
         }
 

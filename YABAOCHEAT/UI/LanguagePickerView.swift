@@ -12,7 +12,7 @@ struct LanguagePickerView: View {
                 Mark()
 
                 VStack(spacing: 6) {
-                    Text("Sophia Cheat")
+                    Text("app_title")
                         .font(.largeTitle.bold())
                     Text("select_your_language")
                         .font(.subheadline)

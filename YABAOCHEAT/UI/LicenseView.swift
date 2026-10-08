@@ -1,23 +1,47 @@
 import SwiftUI
 
+/// Full-screen license gate from the mockup: brand, hint, key field, submit,
+/// language chip. Shown whenever there is no valid session.
 struct LicenseView: View {
     @EnvironmentObject var auth: AuthorizationStore
+    @EnvironmentObject var language: LanguageStore
+
     @State private var key: String = ""
     @State private var reveal: Bool = false
 
     var body: some View {
-        Card(padding: 18, radius: 20) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("license")
-                    .font(.headline)
+        VStack(spacing: 18) {
+            Spacer(minLength: 32)
 
-                if auth.status.isOnline {
-                    online
-                } else {
-                    offline
-                }
+            Mark(size: 88)
+
+            VStack(spacing: 6) {
+                Text("app_title")
+                    .font(.largeTitle.weight(.bold))
+                Text("gate_hint")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            field
+                .padding(.top, 6)
+
+            submit
+
+            if let msg = auth.revocationMessage {
+                Banner(kind: .error, message: msg)
+            }
+
+            Spacer(minLength: 24)
+
+            HStack {
+                Spacer()
+                languageChip
             }
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
         .onAppear {
             if auth.status == .unknown {
                 auth.revalidate()
@@ -30,103 +54,73 @@ struct LicenseView: View {
         }
     }
 
-    private var offline: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("enter_license_key")
-                        .font(.subheadline.weight(.semibold))
-                    Text("license_key_hint")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    // MARK: - pieces
+
+    private var field: some View {
+        ZStack(alignment: .trailing) {
+            Group {
+                if reveal {
+                    TextField("key_placeholder", text: $key)
+                        .textInputAutocapitalization(.none)
+                        .autocorrectionDisabled(true)
+                } else {
+                    SecureField("key_placeholder", text: $key)
+                        .textInputAutocapitalization(.none)
+                        .autocorrectionDisabled(true)
                 }
-                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color(.separator), lineWidth: 0.5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+            )
+
+            HStack(spacing: 10) {
+                if auth.isRefreshing {
+                    ProgressView()
+                }
                 Button {
                     reveal.toggle()
                 } label: {
                     Image(systemName: reveal ? "eye.slash" : "eye")
                         .font(.body)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
-
-            ZStack(alignment: .trailing) {
-                Group {
-                    if reveal {
-                        TextField("key_placeholder", text: $key)
-                            .textInputAutocapitalization(.none)
-                            .autocorrectionDisabled(true)
-                    } else {
-                        SecureField("key_placeholder", text: $key)
-                            .textInputAutocapitalization(.none)
-                            .autocorrectionDisabled(true)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color(.separator), lineWidth: 0.5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(.secondarySystemBackground))
-                        )
-                )
-
-                if auth.isRefreshing {
-                    ProgressView()
-                        .padding(.trailing, 10)
-                }
-            }
-
-            Button {
-                Task { await auth.submit(key: key) }
-            } label: {
-                Text("activate")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(auth.isRefreshing || key.isEmpty)
-
-            if let msg = auth.revocationMessage {
-                Banner(kind: .error, message: msg)
-            }
+            .padding(.trailing, 14)
         }
     }
 
-    private var online: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "checkmark.shield.fill")
-                    .foregroundStyle(.green)
-                Text("license_valid")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-            }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(auth.status.plan ?? "—")
-                        .font(.body.weight(.semibold))
-                    Text(auth.status.displayKey ?? "—")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if let exp = auth.status.expiresAt {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("expires_at")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(exp, style: .date)
-                            .font(.caption.weight(.semibold))
-                    }
-                }
-            }
+    private var submit: some View {
+        Button {
+            Task { await auth.submit(key: key) }
+        } label: {
+            Text("gate_submit")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
         }
+        .buttonStyle(.borderedProminent)
+        .disabled(auth.isRefreshing || key.isEmpty)
+    }
+
+    private var languageChip: some View {
+        Button {
+            language.hasChosen = false
+        } label: {
+            Text(String(language.selected.rawValue.prefix(3)).uppercased())
+                .font(.caption.weight(.bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(Color(.secondarySystemBackground)))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
     }
 }
-

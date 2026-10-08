@@ -1,61 +1,138 @@
-﻿"status" = "status";
-"controls" = "controls";
-"log" = "log";
-"logout_confirm_title" = "logout_confirm_title";
-"logout_confirm_yes" = "logout_confirm_yes";
-"logout_confirm_cancel" = "logout_confirm_cancel";
-"logout_confirm_msg" = "logout_confirm_msg";
-"app_title" = "app_title";
-"version" = "version";
-"license_valid" = "license_valid";
-"checking" = "checking";
-"offline" = "offline";
-"unlicensed" = "unlicensed";
-"log_empty" = "log_empty";
-"all" = "all";
-"copied" = "copied";
-"license" = "license";
-"enter_license_key" = "enter_license_key";
-"license_key_hint" = "license_key_hint";
-"key_placeholder" = "key_placeholder";
-"activate" = "activate";
-"expires_at" = "expires_at";
-"select_your_language" = "select_your_language";
-"confirm" = "confirm";
-"inject_active" = "inject_active";
-"uninject" = "uninject";
-"injection" = "injection";
-"inject" = "inject";
-"wipe" = "wipe";
-"launch" = "launch";
-"controls_unavailable" = "controls_unavailable";
-"controls_unavailable_hint" = "controls_unavailable_hint";
-"logout" = "logout";
-"container_resolved" = "container_resolved";
-"game_not_installed" = "game_not_installed";
-"container_access_denied" = "container_access_denied";
-"container_bridge_unavailable" = "container_bridge_unavailable";
-"license_error.valid" = "license_error.valid";
-"license_error.revoked" = "license_error.revoked";
-"license_error.deleted" = "license_error.deleted";
-"license_error.expired" = "license_error.expired";
-"license_error.deviceMismatch" = "license_error.deviceMismatch";
-"license_error.invalid" = "license_error.invalid";
-"license_error.server" = "license_error.server";
-"license_error.network" = "license_error.network";
-"license_error.networkError" = "license_error.networkError";
-"license_error.malformedResponse" = "license_error.malformedResponse";
-"license_error.invalidSignature" = "license_error.invalidSignature";
-"license_error.replayDetected" = "license_error.replayDetected";
-"license_error.sessionInvalid" = "license_error.sessionInvalid";
-"license_error.secureStorage" = "license_error.secureStorage";
-"license_error.integrityFailed" = "license_error.integrityFailed";
-"license_error.fileUnavailable" = "license_error.fileUnavailable";
-"license_error.writeFailed" = "license_error.writeFailed";
-"license_error.containerNotFound" = "license_error.containerNotFound";
-"license_error.processResetUnavailable" = "license_error.processResetUnavailable";
-"license_error.launchFailed" = "license_error.launchFailed";
-"license_error.supported" = "license_error.supported";
-"license_error.unsupportedOS" = "license_error.unsupportedOS";
-"license_error.unsupportedHardware" = "license_error.unsupportedHardware";
-"license_error.simulator" = "license_error.simulator";
+﻿/* Shell */
+"status" = "Status";
+"controls" = "Controls";
+"log" = "Log";
+"app_title" = "DELTA CLIENT";
+"version" = "Version";
+"license_valid" = "License valid";
+"checking" = "Checking…";
+"offline" = "Offline";
+"unlicensed" = "Unlicensed";
+"log_empty" = "No entries yet";
+"all" = "All";
+"copied" = "Copied";
+"confirm" = "Confirm";
+"select_your_language" = "Select your language";
+
+/* Tabs */
+"tab_aimbot" = "Aimbot";
+"tab_visual" = "Visual";
+"tab_misc" = "Misc";
+"tab_setting" = "Setting";
+"welcome_back" = "Welcome %@ back! Have a good day.";
+
+/* License gate */
+"license" = "License";
+"gate_hint" = "Nhập license key để tiếp tục";
+"gate_submit" = "Nhập";
+"enter_license_key" = "Enter license key";
+"license_key_hint" = "Your key is stored on this device only";
+"key_placeholder" = "Nhập License Key";
+"activate" = "Activate";
+"expires_at" = "Expires";
+
+/* Logout */
+"logout" = "Log out";
+"logout_confirm_title" = "Log out?";
+"logout_confirm_yes" = "Log out";
+"logout_confirm_cancel" = "Cancel";
+"logout_confirm_msg" = "Your license will be released from this device.";
+
+/* Injection */
+"inject_active" = "Injection active";
+"uninject" = "Remove";
+"injection" = "Injection";
+"inject" = "Inject";
+"wipe" = "Wipe";
+"launch" = "Launch";
+
+/* Catalog fallback */
+"controls_unavailable" = "No controls";
+"controls_unavailable_hint" = "The deployment has not published a control catalog yet.";
+
+/* Container states */
+"container_resolved" = "Container resolved";
+"game_not_installed" = "Game not installed";
+"container_access_denied" = "Container access denied";
+"container_bridge_unavailable" = "Container bridge unavailable";
+
+/* Aimbot tab */
+"section_antiban" = "ANTI-BAN";
+"anti_ban" = "Anti-Ban";
+"section_aimbot_type" = "AIMBOT TYPE";
+"aimbot_type" = "Type";
+"aimbot_type_normal" = "Aimbot";
+"aimbot_type_silent" = "Aimbot Silent";
+"bone" = "Bone";
+"bone_head" = "Head";
+"bone_body" = "Body";
+"hit_chance" = "Hit Chance";
+"silent_aim" = "Silent";
+"section_aimbot_settings" = "AIMBOT SETTINGS";
+"draw_fov" = "Draw Field Of View";
+"field_of_view" = "Field Of View";
+"aimbot_distance" = "Aimbot Distance";
+"ignore_knocked" = "Ignore Knocked";
+
+/* Visual tab */
+"section_esp_main" = "ESP MAIN";
+"master_esp" = "Master ESP";
+"line_esp" = "Line ESP";
+"box_esp" = "Box";
+"box_type" = "Box Type";
+"box_type_corner" = "Corner";
+"box_type_edge" = "Edge";
+"name_esp" = "ESP Name";
+"distance_esp" = "Distance ESP";
+"health_esp" = "Health";
+"health_type" = "Health Type";
+"health_type_left" = "Left";
+"health_type_right" = "Right";
+"skeleton_esp" = "ESP Skeleton";
+"draw_enemy_count" = "Draw Count Enemies";
+"section_visual_sliders" = "VISUAL SLIDERS";
+"text_size" = "Text Size";
+"bounding_2d" = "2D Bounding";
+"esp_thickness" = "Thickness";
+
+/* Setting tab */
+"section_privacy" = "QUYỀN RIÊNG";
+"stream_proof" = "Stream Proof";
+"section_license_info" = "THÔNG TIN BẢN QUYỀN";
+"setting_license" = "License";
+"validity" = "Hạn dùng";
+"uuid_label" = "UUID";
+"copy" = "Sao chép";
+"section_compat" = "TƯƠNG THÍCH";
+"ios_version_current" = "Phiên bản iOS hiện tại";
+"section_language" = "NGÔN NGỮ";
+"section_support" = "HỖ TRỢ & HỆ THỐNG";
+"support_discord" = "Liên hệ hỗ trợ (Discord)";
+"system_log" = "Nhật ký hệ thống";
+"logout_account" = "Đăng xuất tài khoản";
+
+/* License errors */
+"license_error.valid" = "License valid";
+"license_error.revoked" = "License revoked";
+"license_error.deleted" = "License deleted";
+"license_error.expired" = "License expired";
+"license_error.deviceMismatch" = "Device mismatch";
+"license_error.invalid" = "Invalid key";
+"license_error.server" = "Server error";
+"license_error.network" = "Network error";
+"license_error.networkError" = "Network error";
+"license_error.malformedResponse" = "Malformed server response";
+"license_error.invalidSignature" = "Invalid signature";
+"license_error.replayDetected" = "Replay detected";
+"license_error.sessionInvalid" = "Session invalid";
+"license_error.secureStorage" = "Secure storage unavailable";
+"license_error.integrityFailed" = "Integrity check failed";
+"license_error.fileUnavailable" = "File unavailable";
+"license_error.writeFailed" = "Write failed";
+"license_error.containerNotFound" = "Container not found";
+"license_error.processResetUnavailable" = "Process reset unavailable";
+"license_error.launchFailed" = "Launch failed";
+"license_error.supported" = "Supported";
+"license_error.unsupportedOS" = "Unsupported OS";
+"license_error.unsupportedHardware" = "Unsupported hardware";
+"license_error.simulator" = "Simulator not supported";

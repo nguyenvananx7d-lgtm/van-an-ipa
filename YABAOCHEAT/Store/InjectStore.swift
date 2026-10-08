@@ -32,7 +32,7 @@ public final class InjectStore: ObservableObject {
     private let menu: MenuStore
     private let installer: RuntimeInstaller
     private let launcher: GameLauncher
-    private let wipe: WipeRoutine
+    private let wiper: WipeRoutine
     private let bridge: ContainerBridge
 
     private init(
@@ -45,7 +45,7 @@ public final class InjectStore: ObservableObject {
         self.bridge = bridge ?? ContainerBridge(log: log)
         self.installer = RuntimeInstaller(log: log, bridge: self.bridge, krw: .shared)
         self.launcher = GameLauncher(log: log)
-        self.wipe = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
+        self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
         self.game = menu.selectedGame
     }
 
@@ -134,7 +134,7 @@ public final class InjectStore: ObservableObject {
 
     public func wipe() {
         do {
-            let report = try wipe.wipe(game: game)
+            let report = try wiper.wipe(game: game)
             wipeReport = report
             filesWiped = report.isClean
             isActive = false
