@@ -26,5 +26,9 @@ int64_t MCMActivateContainer(
     BOOL group,
     NSString * _Nullable * _Nullable error
 );
+/// True when the running code signature grants `entitlement` (e.g.
+/// `com.apple.private.security.no-sandbox`). Kept in ObjC because the
+/// SecTask SPI in the SDK is ObjC-gated and not exposed to Swift.
+BOOL MCMHasEntitlement(const char *entitlement);
 
 NS_ASSUME_NONNULL_END

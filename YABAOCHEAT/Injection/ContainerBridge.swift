@@ -1,5 +1,4 @@
 import Foundation
-import Security
 import Darwin
 import os
 
@@ -56,7 +55,8 @@ public final class ContainerBridge: @unchecked Sendable {
     // MARK: - entitlement introspection
 
     /// True when this process currently holds an entitlement, read from the
-    /// *running* code signature via `SecTask`. Entitlements listed in
+    /// *running* code signature (SecTask, bridged from Objective-C — the SPI
+    /// is ObjC-gated in the SDK). Entitlements listed in
     /// `YABAOCHEAT.entitlements` are only honoured if the install actually
     /// signed for them (ldid / jailbroken signer / a profile that grants them);
     /// a plain free-Apple-ID sideload silently drops them. This distinguishes
@@ -65,11 +65,7 @@ public final class ContainerBridge: @unchecked Sendable {
     /// Note: the MCM token bridge does not rely on either entitlement — it is
     /// kept here as a diagnostic only.
     public static func hasEntitlement(_ name: String) -> Bool {
-        guard let task = SecTaskCreateFromSelf(nil) else { return false }
-        let value = SecTaskCopyValueForEntitlement(task, name as CFString, nil)
-        if let bool = value as? Bool { return bool }
-        if let num = value as? NSNumber { return num.boolValue }
-        return false
+        name.withCString { MCMHasEntitlement($0) }
     }
 
     /// The two entitlements that decide whether sibling containers are readable:

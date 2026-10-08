@@ -3,6 +3,7 @@
 #import <fcntl.h>
 #import <stdlib.h>
 #import <unistd.h>
+#import <Security/Security.h>
 #import <xpc/xpc.h>
 
 typedef void *(*MCMQueryCreate)(void);
@@ -329,4 +330,41 @@ NSString *MCMActivateContainerPath(uint64_t cls, NSString *identifier, BOOL grou
 
 int64_t MCMActivateContainer(uint64_t cls, NSString *identifier, BOOL group, NSString **error) {
     return MCMActivateContainerPath(cls, identifier, group, error) ? 1 : -1;
+}
+
+BOOL MCMHasEntitlement(const char *entitlementC) {
+    if (!entitlementC) return NO;
+
+    CFStringRef entitlement = CFStringCreateWithCString(
+        kCFAllocatorDefault, entitlementC, kCFStringEncodingUTF8
+    );
+    if (!entitlement) return NO;
+
+    BOOL result = NO;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    SecTaskRef task = SecTaskCreateFromSelf(NULL);
+    if (task) {
+        CFErrorRef error = NULL;
+        CFTypeRef value = SecTaskCopyValueForEntitlement(task, entitlement, &error);
+        if (value) {
+            CFTypeID type = CFGetTypeID(value);
+            if (type == CFBooleanGetTypeID()) {
+                result = CFBooleanGetValue(value);
+            } else if (type == CFNumberGetTypeID()) {
+                result = CFNumberGetIntValue((CFNumberRef)value, kCFNumberIntType) != 0;
+            } else if (type == CFStringGetTypeID()) {
+                CFStringRef str = (CFStringRef)value;
+                result = CFStringCompare(str, CFSTR("true"), 0) == kCFCompareEqualTo ||
+                    CFStringCompare(str, CFSTR("1"), 0) == kCFCompareEqualTo;
+            }
+            CFRelease(value);
+        }
+        if (error) CFRelease(error);
+        CFRelease(task);
+    }
+#pragma clang diagnostic pop
+
+    CFRelease(entitlement);
+    return result;
 }
