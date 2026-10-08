@@ -1,0 +1,23 @@
+# XcodeGen output
+*.xcodeproj
+
+# build products
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# swift package
+.build/
+
+# macOS
+.DS_Store
+
+# local drops, not source
+DeltaFromSources-Repo.zip
+
+# editors
+.vscode/
+.idea/

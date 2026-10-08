@@ -1,0 +1,48 @@
+﻿name: DeltaClient
+options:
+  deploymentTarget:
+    iOS: 16.0
+  createIntermediateGroups: true
+  bundleIdPrefix: com.apple.mobile
+
+settings:
+  base:
+    INFOPLIST_FILE: YABAOCHEAT/Info.plist
+    PRODUCT_NAME: YABAOCHEAT
+    PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.mobilehousearrest
+    CODE_SIGN_STYLE: Manual
+    SWIFT_VERSION: 5.9
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    TARGETED_DEVICE_FAMILY: 1
+
+targets:
+  YABAOCHEAT:
+    type: application
+    platform: iOS
+    sources:
+      - path: YABAOCHEAT
+        excludes:
+          - "Recovered/**"
+          - "Model/RecoveredTypes.swift"
+          - "Resources/**"
+          - "Info.plist"
+    resources:
+      - path: YABAOCHEAT/Resources
+    entitlements:
+      path: YABAOCHEAT.entitlements
+    settings:
+      base:
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+        EXECUTABLE_NAME: YABAOCHEAT
+        DISPLAY_NAME: Delta Client
+
+schemes:
+  YABAOCHEAT:
+    build:
+      targets:
+        YABAOCHEAT: all
+    run:
+      config: Release
+    archive:
+      config: Release

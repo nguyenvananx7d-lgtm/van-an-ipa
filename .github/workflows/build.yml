@@ -1,0 +1,34 @@
+﻿name: Build DeltaClient IPA
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml --project .
+
+      - name: Build unsigned IPA
+        shell: bash
+        run: |
+          set -eo pipefail
+          mkdir -p build
+          xcodebuild -project DeltaClient.xcodeproj -scheme YABAOCHEAT -configuration Release -sdk iphoneos -archivePath build/DeltaClient.xcarchive archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          mkdir -p build/Payload
+          cp -R build/DeltaClient.xcarchive/Products/Applications/YABAOCHEAT.app build/Payload/
+          cd build
+          zip -r ../DeltaClient-unsigned.ipa Payload
+          cd ..
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeltaClient-unsigned.ipa
+          path: DeltaClient-unsigned.ipa
