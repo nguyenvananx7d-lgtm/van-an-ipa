@@ -12,6 +12,13 @@ public final class InjectStore: ObservableObject {
 
     /// The game this store is currently acting on.
     public var game: Game { menu.selectedGame }
+    public var accessDeniedReason: String? {
+        let diag = bridge.sandboxDiagnosis
+        if let reason = bridge.lastAccessError, !reason.isEmpty {
+            return "\(reason) · \(diag)"
+        }
+        return nil
+    }
 
     /// A session is active and the payload is mapped in the running target.
     @Published public var isActive: Bool = false
@@ -91,7 +98,7 @@ public final class InjectStore: ObservableObject {
             set(.gameNotInstalled, "\(game.displayName) (\(game.bundleIdentifier)) is not installed")
         case .accessDenied:
             menu.resolutions[game] = .accessDenied
-            set(.containerAccessDenied, "The app container is sealed")
+            set(.containerAccessDenied, "The app container is sealed — \(bridge.sandboxDiagnosis)")
         case .bridgeUnavailable:
             menu.resolutions[game] = .bridgeUnavailable
             set(.containerBridgeUnavailable, "The container bridge is unavailable")

@@ -67,14 +67,28 @@ struct InjectView: View {
     private func resolutionBanner(_ resolution: ContainerResolution) -> some View {
         switch resolution {
         case .resolved:
-            return Banner(kind: .info, message: String(localized: "container_resolved"))
+            return banner(.info, String(localized: "container_resolved"))
         case .notFound:
-            return Banner(kind: .error, message: String(localized: "game_not_installed"))
+            return banner(.error, String(localized: "game_not_installed"))
         case .accessDenied:
-            return Banner(kind: .error, message: String(localized: "container_access_denied"))
+            return banner(.error, accessDeniedMessage)
         case .bridgeUnavailable:
-            return Banner(kind: .warning, message: String(localized: "container_bridge_unavailable"))
+            return banner(.warning, String(localized: "container_bridge_unavailable"))
         }
+    }
+
+    /// The red banner for `.accessDenied` shows *why* the container is sealed:
+    /// the underlying FileManager error when there is one, else the entitlement
+    /// status, else the short key.
+    private var accessDeniedMessage: String {
+        if let reason = inject.accessDeniedReason, !reason.isEmpty {
+            return reason
+        }
+        return String(localized: "container_access_denied")
+    }
+
+    private func banner(_ kind: Banner.Kind, _ message: String) -> some View {
+        Banner(kind: kind, message: message)
     }
 
     private var buttons: some View {

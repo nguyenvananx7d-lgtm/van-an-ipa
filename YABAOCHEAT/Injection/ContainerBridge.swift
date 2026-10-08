@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import os
 
 /// Locates and opens another app's data container.
@@ -29,8 +30,38 @@ public final class ContainerBridge: @unchecked Sendable {
     private let log: AppLog
     private let fm = FileManager.default
 
+    /// Last concrete reason a resolution failed, surfaced in the UI so a red
+    /// banner says *why* (sandbox denied vs game absent) instead of a generic
+    /// message. MainActor-facing reads; mutations happen on any thread.
+    public private(set) var lastAccessError: String?
+
     public init(log: AppLog) {
         self.log = log
+    }
+
+    // MARK: - entitlement introspection
+
+    /// True when this process currently holds an entitlement, read from the
+    /// *running* code signature via `SecTask`. Entitlements listed in
+    /// `YABAOCHEAT.entitlements` are only honoured if the install actually
+    /// signed for them (ldid / jailbroken signer / a profile that grants them);
+    /// a plain free-Apple-ID sideload silently drops them. This distinguishes
+    /// "the install kept no-sandbox" from "the entitlement is missing".
+    public static func hasEntitlement(_ name: String) -> Bool {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let value = SecTaskCopyValueForEntitlement(task, name as CFString, nil)
+        if let bool = value as? Bool { return bool }
+        if let num = value as? NSNumber { return num.boolValue }
+        return false
+    }
+
+    /// The two entitlements that decide whether sibling containers are readable:
+    /// `no-sandbox` lifts the sandbox entirely; `container-manager` is the
+    /// narrower key that permits the MCM directory itself.
+    public var sandboxDiagnosis: String {
+        let noSandbox = Self.hasEntitlement("com.apple.private.security.no-sandbox")
+        let containerManager = Self.hasEntitlement("com.apple.private.security.container-manager")
+        return "no-sandbox=\(noSandbox) container-manager=\(containerManager)"
     }
 
     // MARK: - discovery
@@ -57,6 +88,7 @@ public final class ContainerBridge: @unchecked Sendable {
                 includingPropertiesForKeys: keys,
                 options: [.skipsHiddenFiles]
             )
+            lastAccessError = nil
             for entry in entries {
                 guard let id = containerIdentifier(at: entry) else { continue }
                 out[id] = entry
@@ -64,7 +96,9 @@ public final class ContainerBridge: @unchecked Sendable {
             log.log(.mcm, "found \(out.count) container(s) under \(containers.path)")
         } catch {
             let ns = error as NSError
-            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription))")
+            let diag = sandboxDiagnosis
+            lastAccessError = ns.localizedDescription
+            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription)); \(diag)")
         }
         return out
     }
@@ -190,11 +224,13 @@ public final class ContainerBridge: @unchecked Sendable {
             }
         } catch {
             let ns = error as NSError
-            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription)); container lookup for \(game.bundleIdentifier) failed - access denied, not absent")
+            lastAccessError = ns.localizedDescription
+            log.log(.mcm, "cannot list \(containers.path) (\(ns.code) \(ns.localizedDescription)); container lookup for \(game.bundleIdentifier) failed - access denied, not absent (\(sandboxDiagnosis))")
             return .accessDenied
         }
 
         guard let container = found else {
+            lastAccessError = nil
             log.log(.mcm, "no container for \(game.bundleIdentifier) under \(containers.path)")
             return .notFound
         }
@@ -212,6 +248,7 @@ public final class ContainerBridge: @unchecked Sendable {
             log.log(.mcm, "container for \(game.bundleIdentifier) writable at \(data.path)")
             return .resolved(data)
         } catch {
+            lastAccessError = error.localizedDescription
             log.log(.mcm, "container for \(game.bundleIdentifier) not writable at \(data.path): \(error.localizedDescription)")
             return .accessDenied
         }
