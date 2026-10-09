@@ -59,6 +59,7 @@ public final class InjectStore: ObservableObject {
     private let launcher: GameLauncher
     private let wiper: WipeRoutine
     private let bridge: ContainerBridge
+    private let probe: PostLaunchProbe
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -73,6 +74,7 @@ public final class InjectStore: ObservableObject {
         self.installer = RuntimeInstaller(log: log, bridge: self.bridge, krw: .shared)
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
+        self.probe = PostLaunchProbe(log: log, bridge: self.bridge, launcher: self.launcher)
 
         // Live propagation: any panel change rewrites the runtime config into
         // the resolved container so ESP / aim toggles take effect without a
@@ -226,6 +228,7 @@ public final class InjectStore: ObservableObject {
             status = "Injected"
 
             try? launcher.launch(game: game)
+            probe.schedule(game: game, patchDigest: payload.sha256)
         } catch let error as RuntimeInstaller.InstallError {
             isActive = false
             set(fallbackState(for: error), error.localizedDescription)
