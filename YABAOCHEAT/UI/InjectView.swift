@@ -166,6 +166,7 @@ struct InjectView: View {
         Banner(kind: kind, message: message)
     }
 
+    @ViewBuilder
     private var buttons: some View {
         HStack(spacing: 10) {
             Button {
