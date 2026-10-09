@@ -110,7 +110,10 @@ public struct RuntimeConfiguration: Codable, Sendable {
     public let version: String
     public let sections: [String]
     public let options: [String: [String]]
-    public let selected: [String]
+    /// Active choice per control id, mirrored from `FeatureControls`'
+    /// `selectedControlIDs`. The runtime expects the object form here, not a
+    /// flat array of ids.
+    public let selected: [String: String]
     /// Anchor rows recovered from the catalog, e.g. `h0` / `a0`.
     public let anchors: [String]
 
@@ -119,7 +122,7 @@ public struct RuntimeConfiguration: Codable, Sendable {
         version  = try c.decode(String.self, forKey: .version)
         sections = try c.decodeIfPresent([String].self, forKey: .sections) ?? []
         options  = try c.decodeIfPresent([String: [String]].self, forKey: .options) ?? [:]
-        selected = try c.decodeIfPresent([String].self, forKey: .selected) ?? []
+        selected = try c.decodeIfPresent([String: String].self, forKey: .selected) ?? [:]
         anchors  = try c.decodeIfPresent([String].self, forKey: .anchors) ?? []
     }
 }
