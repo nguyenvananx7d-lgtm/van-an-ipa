@@ -82,7 +82,8 @@ public struct WipeRoutine: Sendable {
         }
 
         let report = Report(removed: Array(removed), retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
-        log.log(.wipe, "wipe finished: \(removed.count) removed, \(retained.count) retained")
+        bridge.releaseGrants()
+        log.log(.wipe, "wipe finished: \(removed.count) removed, \(retained.count) retained; sandbox grants released")
         return report
     }
 

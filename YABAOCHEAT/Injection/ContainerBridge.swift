@@ -60,6 +60,42 @@ public final class ContainerBridge: @unchecked Sendable {
     /// message. MainActor-facing reads; mutations happen on any thread.
     public private(set) var lastAccessError: String?
 
+    /// Consumed Geod-MCM partDomain sandbox extensions that must stay alive for
+    /// the process: releasing the handle revokes the grant, so a retained token
+    /// held here is what lets *subsequent* writes (patch, config, restages) land
+    /// in the sealed container after `resolve` returns. Keyed by canonical path
+    /// so repeated resolves/re-grants reuse one handle instead of leaking tokens.
+    private let grantLock = NSLock()
+    private var activeGrants: [String: Int64] = [:]
+
+    /// A per-container grant already held for `path` (canonical, no trailing slash).
+    private func activeGrant(for path: String) -> Int64? {
+        grantLock.lock(); defer { grantLock.unlock() }
+        return activeGrants[path]
+    }
+
+    /// Record a consumed grant for `path` so it is never released until the
+    /// session ends (uninject / wipe) or the process exits.
+    private func retainGrant(_ handle: Int64, for path: String) {
+        grantLock.lock(); defer { grantLock.unlock() }
+        activeGrants[path] = handle
+    }
+
+    /// Revoke every retained grant. Called only once the payload files are no
+    /// longer needed (uninject / wipe) — releasing the handles before that would
+    /// seal the container again and make the write/fetch operations fail.
+    public func releaseGrants() {
+        grantLock.lock()
+        let handles = Array(activeGrants.values)
+        activeGrants.removeAll()
+        grantLock.unlock()
+        guard !handles.isEmpty else { return }
+        log.log(.mcm, "releasing \(handles.count) held bad_query grant(s)")
+        for handle in handles {
+            releaseTraversal(handle)
+        }
+    }
+
     public init(log: AppLog) {
         self.log = log
     }
@@ -371,8 +407,13 @@ public final class ContainerBridge: @unchecked Sendable {
 
         // Probe under the root traversal grant first; if the root token covers
         // reads but the write is still denied, request a grant on the exact
-        // container (non-nil `grantAndProbe` means the write worked).
-        if probeWritable(data) || grantAndProbe(data) != nil {
+        // container (non-nil `grantAndProbe` means the write worked). On iOS 26+
+        // the per-container grant is preferred and retained so the later patch /
+        // config writes are made while the token is still alive.
+        if let granted = grantAndProbe(data) {
+            return .resolved(granted)
+        }
+        if probeWritable(data) {
             return .resolved(data)
         }
         log.log(.mcm, "container for \(game.bundleIdentifier) found but not writable at \(data.path): \(lastAccessError ?? "unknown")")
@@ -400,18 +441,37 @@ public final class ContainerBridge: @unchecked Sendable {
     /// then re-run the write probe under that grant. Returns the directory when
     /// the probe now succeeds, nil when the daemon refused or the write is still
     /// denied. The kernel exploit is never required for this.
+    ///
+    /// The consumed token is a process-scoped sandbox extension: it stays live
+    /// until `bad_query_release` (or process exit). Older code released it here,
+    /// which sealed the container again the moment `resolve` returned — the very
+    /// next write (the patch) then failed with "You don't have permission". The
+    /// handle is therefore retained and only revoked on uninject/wipe.
     private func grantAndProbe(_ dir: URL) -> URL? {
         guard shouldUseBadQuery else { return nil }
         let clean = dir.path.hasSuffix("/") ? String(dir.path.dropLast()) : dir.path
         guard clean.hasPrefix("/") else { return nil }
+
+        // A previous resolution already holds a grant for this exact container —
+        // reuse it instead of consuming another token per probe.
+        if activeGrant(for: clean) != nil {
+            return probeWritable(dir) ? dir : nil
+        }
+
         var pathC = clean.utf8CString.map { Int8($0) }
         let handle = bad_query(&pathC, true, nil, false)
-        defer { releaseTraversal(handle) }
         guard handle >= 0 else {
             log.log(.mcm, "bad_query grant refused at \(dir.path) -> \(handle)")
             return nil
         }
-        return probeWritable(dir) ? dir : nil
+        guard probeWritable(dir) else {
+            // Grant still denied the write; don't keep a useless extension.
+            releaseTraversal(handle)
+            return nil
+        }
+        retainGrant(handle, for: clean)
+        log.log(.mcm, "bad_query grant held for \(dir.path) (handle \(handle))")
+        return dir
     }
 
     // MARK: - sandbox extension grants

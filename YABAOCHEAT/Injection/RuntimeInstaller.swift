@@ -169,7 +169,8 @@ public actor RuntimeInstaller {
             try? FileManager.default.removeItem(at: url)
         }
         krw.flushAll()
-        log.log(.runtime, "removed patch and config for \(game.rawValue) from \(urls.count) location(s)")
+        bridge.releaseGrants()
+        log.log(.runtime, "removed patch and config for \(game.rawValue) from \(urls.count) location(s) and released sandbox grants")
     }
 
     /// Re-stage the same patch to force the game to reload it. Used by the reset
