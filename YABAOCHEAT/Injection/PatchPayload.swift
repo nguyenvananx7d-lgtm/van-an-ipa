@@ -77,10 +77,26 @@ public struct PatchPayload: Sendable {
     /// (`version` / `sections` / `options` / `selected` / `anchors`) that
     /// `RuntimeConfiguration` decodes. It keys off `id` / `selected` / `version`.
     ///
+    /// Two recovered artifacts ride in the same document:
+    ///
+    /// - `RecoveredVocabulary.patchProbeDocument` (`{"testCodePatch":true}`) —
+    ///   the marker the runtime reads to know the code patch may take effect.
+    /// - The `controls` object carries the recovered camelCase keys **and** the
+    ///   original snake_case command names (`aim_fov_mode`,
+    ///   `fast_reload_percent`, …), so a reader that consumes either spelling
+    ///   finds the same values it finds flat.
+    ///
     /// Static because it is a pure function of the controls — the live-config
     /// path re-stages it without needing the patch blob in hand.
     public static func configuration(for game: Game, controls: FeatureControls) -> Data {
         let flat = controls.runtimeConfigDocument()
+
+        // The recovered probe document, merged so the runtime sees the marker
+        // wherever it looks for it in `localConfig.json`.
+        let probe: [String: Any] = (try? JSONSerialization.jsonObject(
+            with: Data(RecoveredVocabulary.patchProbeDocument.utf8)
+        ) as? [String: Any]) ?? [:]
+
         var document: [String: Any] = [
             "version":   String(ProtocolConstants.protocolVersion),
             "signature": KernelRW.signature,
@@ -91,14 +107,20 @@ public struct PatchPayload: Sendable {
             "selected":  controls.selectedControlIDs,
             "anchors":   FeatureControls.anchors,
 
-            // Forward-compatible mirror: a runtime that reads the object form
-            // finds the same values it finds flat.
-            "controls":  flat,
             "setters":   controls.setterNames,
         ]
 
+        document.merge(probe) { _, new in new }
+
         // Flat wins — this is the level the runtime reads.
         for (key, value) in flat { document[key] = value }
+
+        // Forward-compatible mirror: the object form carries both the recovered
+        // camelCase keys and the original snake_case command payload keys.
+        let nested = controls.commandPayload()
+            .merging(flat) { _, new in new }
+            .merging(probe) { _, new in new }
+        document["controls"] = nested
 
         return (try? JSONSerialization.data(withJSONObject: document, options: [.sortedKeys]))
             ?? Data("{}".utf8)

@@ -29,6 +29,7 @@ public struct WipeRoutine: Sendable {
     /// even if it looks like ours.
     static let ownedNames: Set<String> = [
         ContainerBridge.patchName,
+        ContainerBridge.patchInjectionName,
         "localConfig.json",
         ".ffxc_access_probe",
     ]

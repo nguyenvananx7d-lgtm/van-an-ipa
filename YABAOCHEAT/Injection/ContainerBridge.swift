@@ -39,6 +39,11 @@ public final class ContainerBridge: @unchecked Sendable {
     /// Staged patch filename, inside whichever payload directory is resolved.
     public static let patchName = "Assembly-CSharp-patch.bytes"
 
+    /// The injection name the runtime looks for
+    /// (`RecoveredVocabulary.Payload.patchInjectionName`). Staged alongside
+    /// `patchName` so either reader finds the payload.
+    public static let patchInjectionName = RecoveredVocabulary.Payload.patchInjectionName
+
     /// MCM container class 2 = app data container.
     private let mcmDataClass: UInt64 = 2
 
@@ -467,8 +472,15 @@ public final class ContainerBridge: @unchecked Sendable {
     }
 
     /// Where the IL2CPP metadata patch is written. First entry is the primary.
+    /// Every payload directory gets both the bundled resource name and the
+    /// recovered injection name, so a runtime that reads either finds it.
     public func patchURLs(in data: URL, game: Game) -> [URL] {
-        payloadDirectories(in: data).map { $0.appendingPathComponent(ContainerBridge.patchName) }
+        payloadDirectories(in: data).flatMap { dir in
+            [
+                dir.appendingPathComponent(ContainerBridge.patchName),
+                dir.appendingPathComponent(ContainerBridge.patchInjectionName),
+            ]
+        }
     }
 
     /// Where the runtime config the payload reads at startup is written.
