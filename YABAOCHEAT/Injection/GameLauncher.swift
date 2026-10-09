@@ -83,32 +83,44 @@ public struct GameLauncher: Sendable {
     // MARK: - process lookup
 
     private func runningPID(for game: Game) -> pid_t? {
-        let procs = runningProcesses()
-        return procs.first { $0.bundleIdentifier == game.bundleIdentifier }?.pid
+        runningProcesses().first?.pid
+    }
+
+    /// Short names the two targets run under. `p_comm` is truncated to 16
+    /// bytes and carries no bundle id, so match a few fragments
+    /// case-insensitively — a rebuilt binary may be named `Free Fire`,
+    /// `freefire`, `Free FireMax`, etc.
+    private static let wantedCommFragments = ["freefire", "free fire", "com.dts.freefire"]
+
+    /// Process check exposed to the post-launch probe.
+    ///
+    /// The quiet truth behind the earlier "HAS EXITED" verdicts: exec args
+    /// (KERN_PROCARGS2) are gated — a sandboxed caller gets EPERM for every
+    /// process but its own, so a bundle-id lookup would report the target dead
+    /// even while it sat open on screen. The kernel proc table entry (pid +
+    /// short name `p_comm`) is what a jailed app can actually read for other
+    /// processes, so this is the only check a verdict may rely on.
+    public func runningDescription(for game: Game) -> String? {
+        runningProcesses().first.map { "pid \($0.pid) (\($0.comm))" }
     }
 
     struct Proc {
         let pid: pid_t
-        let bundleIdentifier: String
+        let comm: String
     }
 
-    /// Enumerate running apps by asking `runningboard` for the set of foreground
-    /// and background processes, then reading each bundle id out of its container.
     private func runningProcesses() -> [Proc] {
-        var found: [Proc] = []
-        let wanted = Set(Game.allCases.map(\.bundleIdentifier))
-
-        // sysctl KERN_PROC_ALL over the kernel process table, filtered to apps
-        // that have a container we can name. Kept deliberately narrow: we only
-        // care about two bundle ids, so there is no reason to walk everything.
-        for pid in Self.pids() {
-            guard let bundle = bundleIdentifier(for: pid), wanted.contains(bundle) else { continue }
-            found.append(Proc(pid: pid, bundleIdentifier: bundle))
+        pidsWithComm().filter { proc in
+            let lower = proc.comm.lowercased()
+            return Self.wantedCommFragments.contains { lower.contains($0) }
         }
-        return found
     }
 
-    private static func pids() -> [pid_t] {
+    /// Enumerate the kernel process table with pid + process short name. The
+    /// `kinfo_proc` entries themselves are readable from a sandboxed process
+    /// (pid, state, and `p_comm` come along for free); only the exec argument
+    /// strings and executable paths are gated.
+    private func pidsWithComm() -> [Proc] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
         var size = 0
         guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
@@ -122,48 +134,30 @@ public struct GameLauncher: Sendable {
         guard taken > 0 else { return [] }
 
         let entry = MemoryLayout<kinfo_proc>.stride
-        var pids: [pid_t] = []
+        var procs: [Proc] = []
         var offset = 0
         while offset + entry <= taken {
             let info: kinfo_proc = buffer.withUnsafeBytes { raw in
                 raw.load(fromByteOffset: offset, as: kinfo_proc.self)
             }
             let pid = info.kp_proc.p_pid
-            if pid > 1 { pids.append(pid) }
+            if pid > 1 {
+                procs.append(Proc(pid: pid, comm: Self.commName(info)))
+            }
             offset += entry
         }
-        return pids
+        return procs
     }
 
-    private func bundleIdentifier(for pid: pid_t) -> String? {
-        // The executable path maps back to the bundle through the app's own
-        // container; a proc that is not a bundled app has no path here.
-        guard let path = Self.executablePath(for: pid) else { return nil }
-        // …/Containers/Data/Application/<uuid>/<Game>.app/<Game>
-        guard let bundle = path.split(separator: "/").first(where: { $0.hasSuffix(".app") }) else {
-            return nil
+    /// Read `p_comm` from a `kinfo_proc` entry safely: the field is a fixed
+    /// 16-byte buffer that may not be NUL-terminated, so bound the read.
+    private static func commName(_ info: kinfo_proc) -> String {
+        withUnsafeBytes(of: info.kp_proc.p_comm) { raw in
+            guard let base = raw.baseAddress else { return "" }
+            let ptr = base.assumingMemoryBound(to: CChar.self)
+            let length = strnlen(ptr, raw.count)
+            let bytes = UnsafeBufferPointer(start: ptr, count: length)
+            return String(bytes: bytes, encoding: .utf8) ?? ""
         }
-        return Bundle(url: URL(fileURLWithPath: String(bundle)))?.bundleIdentifier
-    }
-
-    private static func executablePath(for pid: pid_t) -> String? {
-        // KERN_PROCARGS2 returns int32 argc, then the executable path
-        // NUL-terminated, then the argv strings. A jailed caller gets EPERM
-        // for anything but its own processes; nil then means "not resolvable".
-        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        var size = 0
-        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
-
-        var buffer = [UInt8](repeating: 0, count: size)
-        let taken = buffer.withUnsafeMutableBytes { raw -> Int in
-            guard let base = raw.baseAddress,
-                  sysctl(&mib, 3, base, &size, nil, 0) == 0 else { return 0 }
-            return size
-        }
-        guard taken > 4 else { return nil }
-
-        let path = buffer[4..<taken].prefix(while: { $0 != 0 })
-        guard !path.isEmpty else { return nil }
-        return String(decoding: path, as: UTF8.self)
     }
 }

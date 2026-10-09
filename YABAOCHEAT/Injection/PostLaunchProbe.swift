@@ -50,8 +50,11 @@ public struct PostLaunchProbe: Sendable {
     }
 
     private func run(game: Game, patchDigest: String, label: String) async {
-        let alive = launcher.isRunning(game: game)
-        log.log(.runtime, "\(label): target \(alive ? "still running" : "HAS EXITED")")
+        if let detail = launcher.runningDescription(game: game) {
+            log.log(.runtime, "\(label): target still running (\(detail))")
+        } else {
+            log.log(.runtime, "\(label): target HAS EXITED")
+        }
 
         guard case .resolved(let data) = bridge.resolve(game: game) else {
             log.log(.runtime, "post-launch probe: container not resolvable (\(bridge.lastAccessError ?? "unknown"))")
