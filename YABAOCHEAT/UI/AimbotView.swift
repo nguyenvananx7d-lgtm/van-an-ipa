@@ -6,6 +6,10 @@ struct AimbotView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            SectionGroup(title: String(localized: "section_aimbot_main")) {
+                ToggleRow(label: String(localized: "master_aimbot"), isOn: menu.feature(\.isEnabled))
+            }
+
             SectionGroup(title: String(localized: "section_antiban")) {
                 ToggleRow(label: String(localized: "anti_ban"), isOn: menu.feature(\.antiBan))
             }

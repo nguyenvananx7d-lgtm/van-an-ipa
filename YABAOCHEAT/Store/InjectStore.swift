@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// Drives one injection cycle end to end and holds the result.
 ///
@@ -59,6 +60,8 @@ public final class InjectStore: ObservableObject {
     private let wiper: WipeRoutine
     private let bridge: ContainerBridge
 
+    private var cancellables: Set<AnyCancellable> = []
+
     private init(
         log: AppLog = .shared,
         menu: MenuStore = .shared,
@@ -70,7 +73,22 @@ public final class InjectStore: ObservableObject {
         self.installer = RuntimeInstaller(log: log, bridge: self.bridge, krw: .shared)
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
-        
+
+        // Live propagation: any panel change rewrites the runtime config into
+        // the resolved container so ESP / aim toggles take effect without a
+        // wipe and re-inject. Debounced because sliders fire continuously, and
+        // deduped so a re-render that changes nothing does not write.
+        menu.$configurations
+            .dropFirst()
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self, self.isActive else { return }
+                let game = self.menu.selectedGame
+                let controls = self.menu.controls
+                Task { await self.installer.restageConfig(game: game, controls: controls) }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - capability gate

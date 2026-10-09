@@ -57,6 +57,8 @@
 "container_bridge_unavailable" = "Container bridge unavailable";
 
 /* Aimbot tab */
+"section_aimbot_main" = "AIMBOT";
+"master_aimbot" = "Master Aimbot";
 "section_antiban" = "ANTI-BAN";
 "anti_ban" = "Anti-Ban";
 "section_aimbot_type" = "AIMBOT TYPE";
@@ -75,6 +77,8 @@
 "ignore_knocked" = "Ignore Knocked";
 
 /* Visual tab */
+"section_esp_color" = "ESP COLOR";
+"esp_color" = "Color";
 "section_esp_main" = "ESP MAIN";
 "master_esp" = "Master ESP";
 "line_esp" = "Line ESP";

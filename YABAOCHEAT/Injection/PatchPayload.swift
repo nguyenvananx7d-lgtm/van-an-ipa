@@ -69,17 +69,38 @@ public struct PatchPayload: Sendable {
         }
     }
 
-    /// The configuration blob the payload reads on wake. Its shape mirrors
-    /// `RuntimeConfiguration`; the payload keys off `id` / `selected` / `version`.
-    public func configuration(for game: Game, controls: FeatureControls) -> Data {
-        let payload: [String: Any] = [
-            "version": ProtocolConstants.protocolVersion,
+    /// The configuration document the injected runtime reads on wake.
+    ///
+    /// Shape is what the runtime actually parses: a single flat map carrying
+    /// the recovered camelCase keys (`aimbotRadius`, `aimFovMode`, `espColor`,
+    /// …) at the top level, wrapped in the catalogue envelope
+    /// (`version` / `sections` / `options` / `selected` / `anchors`) that
+    /// `RuntimeConfiguration` decodes. It keys off `id` / `selected` / `version`.
+    ///
+    /// Static because it is a pure function of the controls — the live-config
+    /// path re-stages it without needing the patch blob in hand.
+    public static func configuration(for game: Game, controls: FeatureControls) -> Data {
+        let flat = controls.runtimeConfigDocument()
+        var document: [String: Any] = [
+            "version":   String(ProtocolConstants.protocolVersion),
             "signature": KernelRW.signature,
-            "game": game.rawValue,
-            "controls": controls.commandPayload(),
-            "setters": controls.setterNames,
+            "game":      game.rawValue,
+
+            "sections":  FeatureControls.panelSections,
+            "options":   FeatureControls.selectionOptions,
+            "selected":  controls.selectedControlIDs,
+            "anchors":   FeatureControls.anchors,
+
+            // Forward-compatible mirror: a runtime that reads the object form
+            // finds the same values it finds flat.
+            "controls":  flat,
+            "setters":   controls.setterNames,
         ]
-        return (try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]))
+
+        // Flat wins — this is the level the runtime reads.
+        for (key, value) in flat { document[key] = value }
+
+        return (try? JSONSerialization.data(withJSONObject: document, options: [.sortedKeys]))
             ?? Data("{}".utf8)
     }
 }

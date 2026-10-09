@@ -229,6 +229,59 @@ struct SegmentRow: View {
     }
 }
 
+// MARK: - colour
+
+extension Color {
+    /// Packed `0xAARRGGBB`, the same form `FeatureControls.espColor` uses.
+    init(argb: Int) {
+        self.init(
+            .sRGB,
+            red:   Double((argb >> 16) & 0xFF) / 255.0,
+            green: Double((argb >> 8) & 0xFF) / 255.0,
+            blue:  Double(argb & 0xFF) / 255.0,
+            opacity: Double((argb >> 24) & 0xFF) / 255.0
+        )
+    }
+}
+
+/// Horizontal swatch picker bound to a packed `0xAARRGGBB` value. The ramp
+/// comes from `ColorSwatch.defaults`, which mirrors the set the payload ships
+/// with, so a picked colour is one the runtime already knows.
+struct SwatchRow: View {
+    let label: String
+    @Binding var argb: Int
+    var swatches: [ColorSwatch] = ColorSwatch.defaults
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.body.weight(.medium))
+            HStack(spacing: 10) {
+                ForEach(swatches) { swatch in
+                    Button {
+                        argb = swatch.argb
+                    } label: {
+                        Circle()
+                            .fill(Color(argb: swatch.argb))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Circle().strokeBorder(
+                                    argb == swatch.argb ? Color.primary : Color.black.opacity(0.15),
+                                    lineWidth: argb == swatch.argb ? 2.5 : 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(swatch.name)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
 // MARK: - logo
 
 struct Mark: View {

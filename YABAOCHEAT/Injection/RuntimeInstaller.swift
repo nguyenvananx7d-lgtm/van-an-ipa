@@ -81,7 +81,7 @@ public actor RuntimeInstaller {
         }
 
         do {
-            let config = payload.configuration(for: game, controls: controls)
+            let config = PatchPayload.configuration(for: game, controls: controls)
             for url in configURLs {
                 try config.write(to: url, options: .atomic)
             }
@@ -132,6 +132,28 @@ public actor RuntimeInstaller {
         }
         log.log(.runtime, "staged patch intact after \(monitorMs)ms watcher window")
         return Date().timeIntervalSince(start)
+    }
+
+    // MARK: - live config
+
+    /// Rewrite only `localConfig.json` from the current controls. No digest
+    /// check — the config is not signed, only the patch blob is — and no touch
+    /// to `Assembly-CSharp-patch.bytes`. Called whenever a panel control
+    /// changes so an already-injected session picks the change up on the
+    /// game's next read instead of needing a full wipe and re-inject.
+    @discardableResult
+    public func restageConfig(game: Game, controls: FeatureControls) -> Int {
+        guard case .resolved(let data) = bridge.resolve(game: game) else {
+            log.log(.runtime, "config restage skipped for \(game.rawValue): container not resolved")
+            return 0
+        }
+        let config = PatchPayload.configuration(for: game, controls: controls)
+        var written = 0
+        for url in bridge.configURLs(in: data, game: game) {
+            if (try? config.write(to: url, options: .atomic)) != nil { written += 1 }
+        }
+        log.log(.runtime, "restaged config (\(config.count) bytes) to \(written) location(s) for \(game.rawValue)")
+        return written
     }
 
     // MARK: - remove

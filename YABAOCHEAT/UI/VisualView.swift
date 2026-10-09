@@ -37,6 +37,10 @@ struct VisualView: View {
                 ToggleRow(label: String(localized: "draw_enemy_count"), isOn: menu.feature(\.drawEnemyCount))
             }
 
+            SectionGroup(title: String(localized: "section_esp_color")) {
+                SwatchRow(label: String(localized: "esp_color"), argb: menu.feature(\.espColor))
+            }
+
             SectionGroup(title: String(localized: "section_visual_sliders")) {
                 SliderRow(
                     label: String(localized: "text_size"),

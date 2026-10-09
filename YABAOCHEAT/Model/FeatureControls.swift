@@ -268,6 +268,103 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "streamProof": streamProof,
         ]
     }
+
+    // MARK: - runtime configuration document
+    //
+    // `localConfig.json` is read back by the injected IFix runtime, not by this
+    // app. The names are the ones recovered from `__cstring`
+    // (`RecoveredVocabulary.RuntimeConfig`): flat, top-level, camelCase. The
+    // panel keys ride in the same map so a runtime that learns them picks them
+    // up; the shipped blob ignores what it does not know.
+    //
+    // The earlier output nested everything under `controls` with snake_case
+    // keys, so the runtime — which reads top-level camelCase — found nothing.
+
+    /// Flat key/value map the injected runtime overlays onto its own state.
+    public func runtimeConfigDocument() -> [String: Any] {
+        [
+            // recovered runtime keys — exact spelling
+            "aimbotRadius":      aimbotRadiusValue,
+            "radius":            radiusValue,
+            "fastReloadPercent": fastReloadPercent,
+            "fastFireLevel":     fastFireLevel,
+            "espColor":          espColor,
+            "espThickness":      espThickness,
+            "aimFovMode":        aimFovMode,
+            "h0":                colorRGB,
+            "a0":                colorAlpha,
+
+            // behavioural switches
+            "enabled":           isEnabled,
+            "headshot":          headshotValue,
+            "aimTarget":         aimTarget,
+            "aim_target":        aimTarget,
+
+            // aimbot panel
+            "aimbotType":        aimbotType,
+            "silentAim":         silentAim,
+            "hitChance":         hitChance,
+            "aimDistance":       aimDistance,
+            "drawFov":           drawFov,
+            "ignoreKnocked":     ignoreKnocked,
+            "antiBan":           antiBan,
+
+            // visual panel
+            "masterEsp":         masterEsp,
+            "lineEsp":           lineEsp,
+            "boxEsp":            boxEsp,
+            "boxType":           boxType,
+            "nameEsp":           nameEsp,
+            "distanceEsp":       distanceEsp,
+            "healthEsp":         healthEsp,
+            "healthType":        healthType,
+            "skeletonEsp":       skeletonEsp,
+            "drawEnemyCount":    drawEnemyCount,
+            "textSize":          textSize,
+            "espBounding":       espBounding,
+
+            "streamProof":       streamProof,
+            "radiusPolicy":      radiusPolicy.rawValue,
+            "headshotPolicy":    headshotPolicy.rawValue,
+        ]
+    }
+
+    /// The recovered `h0` / `a0` pair decomposed from `espColor`. The runtime
+    /// reads a colour through these two keys, so splitting here keeps a single
+    /// `espColor` change visible even if `espColor` itself is ignored.
+    ///
+    /// `h0` = the colour with alpha forced opaque; `a0` = the alpha byte. This
+    /// is the only place the decomposition lives — if the recovered runtime
+    /// turns out to split differently, edit these two.
+    public var colorRGB: Int { espColor & 0x00FF_FFFF }
+    public var colorAlpha: Int { (espColor >> 24) & 0xFF }
+
+    /// Envelope field `selected`: the choice the runtime shows as active.
+    public var selectedControlIDs: [String] {
+        [
+            "aim_target":   aimTarget,
+            "aimbot_type":  aimbotType,
+            "aim_fov_mode": aimFovMode,
+            "box_type":     boxType,
+            "health_type":  healthType,
+        ]
+    }
+
+    /// Envelope field `options`: the choice set behind each control.
+    public static let selectionOptions: [String: [String]] = [
+        "aim_target":   ["head", "body"],
+        "aimbot_type":  ["aimbot", "silent"],
+        "aim_fov_mode": ["strict", "loose"],
+        "box_type":     ["corner", "edge"],
+        "health_type":  ["left", "right"],
+    ]
+
+    /// Envelope field `sections`: panel order the runtime renders.
+    public static let panelSections = ["aimbot", "visual", "weapon", "setting"]
+
+    /// Envelope field `anchors`: the two recovered rows that sort between
+    /// `aimbotRadius` and `fastReloadPercent`.
+    public static let anchors = ["h0", "a0"]
 }
 
 /// Swatch offered by the colour control.
