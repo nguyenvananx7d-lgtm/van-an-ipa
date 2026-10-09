@@ -53,7 +53,12 @@ public struct PostLaunchProbe: Sendable {
         if let detail = launcher.runningDescription(for: game) {
             log.log(.runtime, "\(label): target still running (\(detail))")
         } else {
-            log.log(.runtime, "\(label): target HAS EXITED")
+            let fires = launcher.fireProcs()
+            if fires.isEmpty {
+                log.log(.runtime, "\(label): target HAS EXITED (no fire-named process running)")
+            } else {
+                log.log(.runtime, "\(label): target HAS EXITED — fire-named procs: \(fires.joined(separator: ", "))")
+            }
         }
 
         guard case .resolved(let data) = bridge.resolve(game: game) else {

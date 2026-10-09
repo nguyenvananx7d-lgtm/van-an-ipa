@@ -36,12 +36,13 @@ public struct GameLauncher: Sendable {
 
         let url = URL(string: "\(game.bundleIdentifier)://")!
         if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url, options: [:]) { [log] ok in
+            UIApplication.shared.open(url, options: [:]) { [self] ok in
                 if ok {
                     log.log(.launch, "launched \(game.bundleIdentifier)")
                 } else {
                     log.log(.launch, "launch refused for \(game.bundleIdentifier)")
                 }
+                logFireProcs("after scheme launch")
             }
             return
         }
@@ -51,6 +52,7 @@ public struct GameLauncher: Sendable {
         // reported missing if that also fails.
         if openViaWorkspace(game) {
             log.log(.launch, "launched \(game.bundleIdentifier) via workspace")
+            logFireProcs("after workspace launch")
             return
         }
 
@@ -61,6 +63,22 @@ public struct GameLauncher: Sendable {
     /// Whether the target is currently running.
     public func isRunning(game: Game) -> Bool {
         runningPID(for: game) != nil
+    }
+
+    /// Diagnostics: every running process whose short name looks Free-Fire
+    /// adjacent, as "pid:name". Logged by the probe whenever the target is not
+    /// matched, so a build whose binary name dodges our fragment list still
+    /// leaves its real process name in the log instead of a bare "HAS EXITED".
+    public func fireProcs() -> [String] {
+        pidsWithComm()
+            .filter { $0.comm.lowercased().contains("fire") }
+            .map { "\($0.pid):\($0.comm)" }
+    }
+
+    private func logFireProcs(_ context: String) {
+        let procs = fireProcs()
+        guard !procs.isEmpty else { return }
+        log.log(.launch, "fire-named procs \(context): \(procs.joined(separator: ", "))")
     }
 
     /// Launch by bundle id through `LSApplicationWorkspace`. Private API, so it
