@@ -50,20 +50,39 @@ jobs:
             echo "ok $f"
           done
 
-      - name: Verify embedded entitlements
+      - name: Sign with entitlements (codesign)
         shell: bash
         run: |
           set -eo pipefail
           APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
-          bin="$APP/YABAOCHEAT"
-          # The __entitlements section lands verbatim in the Mach-O __TEXT;
-          # grep the file directly (not ldid -e, which we intentionally avoid).
+          cp YABAOCHEAT/Resources/embedded.mobileprovision "$APP/embedded.mobileprovision"
+          ls -l "$APP/embedded.mobileprovision"
+          # Sign the whole app ad-hoc with the entitlements embedded in the code
+          # signature. This is exactly the channel the working "Sophia" build
+          # carries them in (ldid-style blob inside the Mach-O); TrollStore /
+          # permasigner-family installers read entitlements from the signature
+          # and re-sign with them, so on-device the app runs unsandboxed +
+          # platform. The __entitlements section alone is not read by those
+          # installers — that is why the previous build still logged
+          # no-sandbox=false container-manager=false.
+          codesign --force --sign - --entitlements YABAOCHEAT.entitlements "$APP"
+          echo "codesign ok"
+
+      - name: Verify installed entitlements channel
+        shell: bash
+        run: |
+          set -eo pipefail
+          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
+          test -f "$APP/embedded.mobileprovision" || { echo "::error::embedded.mobileprovision missing"; exit 1; }
+          # Secondary channel: the __entitlements section survives in the Mach-O.
+          for key in com.apple.private.security.no-sandbox com.apple.springboard.launchapplications com.apple.frontboard.launchapplications com.apple.multitasking.termination; do
+            grep -aq "$key" "$APP/YABAOCHEAT" || { echo "::error::key missing from binary: $key"; exit 1; }
+          done
+          # Primary channel: the code signature the install tool reads back.
+          ent="$(codesign -d --entitlements - "$APP" 2>/dev/null || true)"
+          echo "$ent"
           for key in com.apple.private.security.no-sandbox com.apple.springboard.launchapplications com.apple.frontboard.launchapplications com.apple.multitasking.termination com.apple.private.security.container-manager; do
-            if ! grep -aq "$key" "$bin"; then
-              echo "::error::entitlement key missing from binary: $key"
-              exit 1
-            fi
-            echo "ok $key"
+            grep -q "$key" <<<"$ent" || { echo "::error::entitlement not in code signature: $key"; exit 1; }
           done
 
       - name: Package IPA
