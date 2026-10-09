@@ -8,6 +8,11 @@ import Foundation
 /// `setFastFireLevel`, `setEspColor`, `setEspThickness`), so renaming one
 /// breaks the wire contract.
 ///
+/// Ship defaults are Sophia-style: master enable + the full visual ESP set are
+/// on, so the first Inject already stages an armed `localConfig.json` instead
+/// of a blank one. The `.v4` storage key forces these defaults even when an
+/// older (all-off) profile was persisted under `.v3`.
+///
 /// Fields from `aimbotType` on are the panel tabs the mockups show. They ride
 /// along in the serialized payload so a payload that learns them picks them up;
 /// the shipped blob reads the keys it knows and ignores the rest.
@@ -68,9 +73,9 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var streamProof: Bool
 
     public init(
-        isEnabled: Bool = false,
+        isEnabled: Bool = true,
         radiusValue: Double = 0,
-        aimbotRadiusValue: Double = 0,
+        aimbotRadiusValue: Double = 90.0,
         radiusPolicy: ControlPolicy = .value,
         headshotValue: Bool = true,
         headshotPolicy: ControlPolicy = .value,
@@ -87,16 +92,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
-        masterEsp: Bool = false,
-        lineEsp: Bool = false,
-        boxEsp: Bool = false,
+        masterEsp: Bool = true,
+        lineEsp: Bool = true,
+        boxEsp: Bool = true,
         boxType: String = "corner",
-        nameEsp: Bool = false,
-        distanceEsp: Bool = false,
-        healthEsp: Bool = false,
+        nameEsp: Bool = true,
+        distanceEsp: Bool = true,
+        healthEsp: Bool = true,
         healthType: String = "right",
-        skeletonEsp: Bool = false,
-        drawEnemyCount: Bool = false,
+        skeletonEsp: Bool = true,
+        drawEnemyCount: Bool = true,
         textSize: Int = 14,
         espBounding: Int = 2,
         streamProof: Bool = false
@@ -138,9 +143,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - persistence
 
     /// Controls live in `UserDefaults` under a per-game prefix so the two titles
-    /// keep separate profiles.
+    /// keep separate profiles. The `.v4` suffix forces the Sophia-style
+    /// default-enabled profile onto installs that already saved an older (all-
+    /// off) controls blob under `.v3`.
     public static func defaultsKey(for game: Game) -> String {
-        game.defaultsKeyPrefix + "controls"
+        game.defaultsKeyPrefix + "controls.v4"
     }
 
     public static func load(for game: Game) -> FeatureControls {

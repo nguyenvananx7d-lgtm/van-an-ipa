@@ -223,12 +223,67 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// Sophia parity. The vendor build runs its kernel chain implicitly at the
+    /// front of every inject instead of waiting for an opt-in button: kernel
+    /// R/W / sandbox escape first, then the container work runs against direct
+    /// (grant-free) access. Blocking (10–30 s, potential brief freeze) so it
+    /// runs detached; never throws, so staging still proceeds on the grant/MCM
+    /// path if this boot loses the exploit race. Always logs the iOS version so
+    /// the log screen shows exactly what the support table was asked about.
+    @MainActor
+    private func ensureExploitBeforeInject() async {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        log.log(.kernelRW, "exploit check: iOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) (build \(DeviceOS.build))")
+
+        let supported = ExploitSupportPolicy.isSupported(
+            major: os.majorVersion,
+            minor: os.minorVersion,
+            patch: os.patchVersion,
+            build: DeviceOS.build
+        )
+        guard supported else {
+            log.log(.kernelRW, "exploit auto-run skipped — iOS \(DeviceOS.displayString) is not on the verified table")
+            return
+        }
+
+        if case .success = exploitStatus {
+            log.log(.kernelRW, "exploit already active — reusing it")
+            return
+        }
+        guard !isRunningExploit else { return }
+        if KernelExploit.hasSandboxAccess() {
+            exploitStatus = .success(method: KernelExploit.requiresSandboxEscape ? "sandbox" : "kernel")
+            log.log(.kernelRW, "outside-sandbox access already held")
+            return
+        }
+
+        isRunningExploit = true
+        status = "Bringing up kernel access…"
+        log.log(.kernelRW, "auto-running exploit before inject (Sophia parity)")
+        let ok = await Task.detached(priority: .userInitiated) { KernelExploit.run() }.value
+        isRunningExploit = false
+
+        let kind = KernelExploit.requiresSandboxEscape ? "sandbox" : "kernel"
+        if ok {
+            exploitStatus = .success(method: kind)
+            log.log(.kernelRW, "exploit OK — continuing install with \(kind) access")
+        } else {
+            exploitStatus = .failed(method: kind, code: -1)
+            log.log(.kernelRW, "exploit failed — continuing install on the grant/MCM path")
+        }
+    }
+
     // MARK: - install
 
     public func install(expectedDigest: String?, monitorMs: Int) async {
         set(.injecting, "Installing…")
         do {
             let payload = try PatchPayload.bundled()
+            // Sophia parity: bring the kernel chain up before touching the
+            // target (the vendor build never waits for an opt-in button).
+            // Non-fatal — if the exploit loses this boot, staging still proceeds
+            // on the grant/MCM path.
+            await ensureExploitBeforeInject()
             let result = try await installer.install(
                 game: game,
                 payload: payload,
