@@ -45,6 +45,10 @@ public final class InjectStore: ObservableObject {
 
     @Published public var wipeReport: WipeRoutine.Report?
 
+    /// Cooldown backing the foreground re-probe so returning to the app a few
+    /// times in a row does not spam the log with identical probe verdicts.
+    private var lastForegroundRecheck = Date.distantPast
+
     /// Where the (opt-in) kernel-exploit chain stands. Always `notStarted`
     /// until the user presses the run button; iOS 26+ refuses the filesystem
     /// scan without it, iOS 17/18 work regardless via the MCM token.
@@ -75,6 +79,18 @@ public final class InjectStore: ObservableObject {
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
         self.probe = PostLaunchProbe(log: log, bridge: self.bridge, launcher: self.launcher)
+
+        // When the game takes over the screen the injector sits in the
+        // background and its scheduled probe is deferred. Re-probe whenever the
+        // app returns to the foreground, so the log then shows the container
+        // state the user is actually looking at. Cooldown in `foregroundRecheck`.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.foregroundRecheck() }
+        }
 
         // Live propagation: any panel change rewrites the runtime config into
         // the resolved container so ESP / aim toggles take effect without a
@@ -272,6 +288,47 @@ public final class InjectStore: ObservableObject {
         } catch {
             status = error.localizedDescription
         }
+    }
+
+    // MARK: - diagnostics
+
+    /// The decisive baseline experiment: wipe all staged payload out of the
+    /// container, launch the game clean, and probe it 10 s later. If the game
+    /// exits on its own with an empty container it is the sideloaded build
+    /// dying at boot, not anything the injector staged; if it survives clean
+    /// but dies once the patch/config are present, the staged files are what
+    /// the target detects and kills itself over.
+    public func cleanLaunchDiagnostic() {
+        do {
+            let report = try wiper.wipe(game: game)
+            log.log(.runtime, "clean-launch diagnostic: removed \(report.removed.count) payload file(s) — container baseline clean")
+        } catch {
+            status = error.localizedDescription
+            return
+        }
+        isActive = false
+        menu.injected.remove(game)
+        menu.injectStates[game] = .ready
+        do {
+            try launcher.launch(game: game)
+        } catch {
+            status = error.localizedDescription
+            return
+        }
+        status = "Clean launch — game started without payload"
+        probe.schedule(game: game, patchDigest: (try? PatchPayload.bundled())?.sha256 ?? "")
+    }
+
+    /// Cooldown-guarded re-probe used when the injector returns to the
+    /// foreground (the scheduled probe is deferred while the game owns the
+    /// screen).
+    private func foregroundRecheck() {
+        guard isActive, lastInstall != nil else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastForegroundRecheck) > 15 else { return }
+        lastForegroundRecheck = now
+        let digest = (try? PatchPayload.bundled())?.sha256 ?? ""
+        Task { await probe.recheck(game: game, patchDigest: digest) }
     }
 
     // MARK: - helpers

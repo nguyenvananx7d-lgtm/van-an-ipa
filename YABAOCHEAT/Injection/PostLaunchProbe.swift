@@ -37,13 +37,21 @@ public struct PostLaunchProbe: Sendable {
     public func schedule(game: Game, patchDigest: String) {
         Task.detached(priority: .utility) { [self] in
             try? await Task.sleep(nanoseconds: PostLaunchProbe.settleSeconds * 1_000_000_000)
-            await run(game: game, patchDigest: patchDigest)
+            await run(game: game, patchDigest: patchDigest, label: "post-launch probe")
         }
     }
 
-    private func run(game: Game, patchDigest: String) async {
+    /// Run the probe immediately — used when the injector comes back to the
+    /// foreground after the target has been up for a while, so the state the
+    /// user sees in the log reflects the container *now* (the scheduled probe
+    /// is delayed while this app sits in the background behind the game).
+    public func recheck(game: Game, patchDigest: String) async {
+        await run(game: game, patchDigest: patchDigest, label: "probe recheck")
+    }
+
+    private func run(game: Game, patchDigest: String, label: String) async {
         let alive = launcher.isRunning(game: game)
-        log.log(.runtime, "post-launch probe: target \(alive ? "still running" : "HAS EXITED") after \(PostLaunchProbe.settleSeconds)s")
+        log.log(.runtime, "\(label): target \(alive ? "still running" : "HAS EXITED")")
 
         guard case .resolved(let data) = bridge.resolve(game: game) else {
             log.log(.runtime, "post-launch probe: container not resolvable (\(bridge.lastAccessError ?? "unknown"))")

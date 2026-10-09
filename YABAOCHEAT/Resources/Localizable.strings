@@ -46,6 +46,9 @@
 "wipe" = "Wipe";
 "launch" = "Launch";
 
+/* Clean-launch diagnostic */
+"clean_launch_diagnostic" = "Launch clean (diagnostic)";
+
 /* Catalog fallback */
 "controls_unavailable" = "No controls";
 "controls_unavailable_hint" = "The deployment has not published a control catalog yet.";

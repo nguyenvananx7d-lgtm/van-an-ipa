@@ -205,6 +205,16 @@ struct InjectView: View {
             }
             .buttonStyle(.bordered)
         }
+
+        // Diagnostic: wipe the payload, launch clean, probe 10s later. Tells
+        // whether the game dies on its own (sideloaded build boot-crash) or
+        // because of the staged files (target self-kill after detecting them).
+        Button("clean_launch_diagnostic") {
+            inject.cleanLaunchDiagnostic()
+        }
+        .font(.footnote)
+        .buttonStyle(.bordered)
+        .frame(maxWidth: .infinity)
     }
 
     private var canInject: Bool {
