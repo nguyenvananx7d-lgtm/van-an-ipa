@@ -340,7 +340,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var colorAlpha: Int { (espColor >> 24) & 0xFF }
 
     /// Envelope field `selected`: the choice the runtime shows as active.
-    public var selectedControlIDs: [String] {
+    public var selectedControlIDs: [String: String] {
         [
             "aim_target":   aimTarget,
             "aimbot_type":  aimbotType,
