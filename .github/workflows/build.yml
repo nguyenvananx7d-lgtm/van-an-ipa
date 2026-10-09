@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen ldid
 
       - name: Lint localization strings
         shell: bash
@@ -41,6 +41,35 @@ jobs:
               exit 1
             fi
             echo "ok $f"
+          done
+
+      - name: Embed entitlements (ldid)
+        shell: bash
+        run: |
+          set -eo pipefail
+          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
+          # ldid -S writes the __entitlements section into the Mach-O and
+          # fake-signs it. TrollStore/permasigner-style installers read that
+          # section back and grant no-sandbox + springboard/frontboard launch
+          # at install time — exactly what the original YABAOCHEAT ("Sophia")
+          # ships with. Without this section the app installs sandboxed and
+          # cannot touch the game container at all.
+          ldid -SYABAOCHEAT.entitlements "$APP/YABAOCHEAT"
+          echo "ldid applied"
+
+      - name: Verify embedded entitlements
+        shell: bash
+        run: |
+          set -eo pipefail
+          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
+          seen="$(ldid -e "$APP/YABAOCHEAT" || true)"
+          echo "$seen"
+          for key in com.apple.private.security.no-sandbox com.apple.springboard.launchapplications com.apple.frontboard.launchapplications com.apple.multitasking.termination com.apple.private.security.container-manager; do
+            if ! grep -q "$key" <<<"$seen"; then
+              echo "::error::entitlement missing after ldid: $key"
+              exit 1
+            fi
+            echo "ok $key"
           done
 
       - name: Package IPA
