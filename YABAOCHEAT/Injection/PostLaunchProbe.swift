@@ -50,7 +50,7 @@ public struct PostLaunchProbe: Sendable {
     }
 
     private func run(game: Game, patchDigest: String, label: String) async {
-        if let detail = launcher.runningDescription(game: game) {
+        if let detail = launcher.runningDescription(for: game) {
             log.log(.runtime, "\(label): target still running (\(detail))")
         } else {
             log.log(.runtime, "\(label): target HAS EXITED")

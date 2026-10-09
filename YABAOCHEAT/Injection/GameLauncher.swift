@@ -157,7 +157,7 @@ public struct GameLauncher: Sendable {
             let ptr = base.assumingMemoryBound(to: CChar.self)
             let length = strnlen(ptr, raw.count)
             let bytes = UnsafeBufferPointer(start: ptr, count: length)
-            return String(bytes: bytes, encoding: .utf8) ?? ""
+            return String(decoding: bytes.map { UInt8(bitPattern: $0) }, as: UTF8.self)
         }
     }
 }
