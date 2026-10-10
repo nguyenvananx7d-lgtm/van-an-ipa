@@ -10,17 +10,17 @@ import UIKit
 // not decoration layered on top of every control.
 
 enum Palette {
-    // plate
-    static let void      = Color(hex: 0x06070A)   // deepest well
-    static let base      = Color(hex: 0x0A0C10)   // background
-    static let surface   = Color(hex: 0x111318)   // cards
-    static let surfaceHi = Color(hex: 0x171A21)   // raised / active
-    static let well      = Color(hex: 0x08090C)   // inset fields, tracks
+    // plate — pushed to near-black; hierarchy kept by value, not hue
+    static let void      = Color(hex: 0x030408)   // deepest well
+    static let base      = Color(hex: 0x06070B)   // background
+    static let surface   = Color(hex: 0x0B0D12)   // cards
+    static let surfaceHi = Color(hex: 0x11141B)   // raised / active
+    static let well      = Color(hex: 0x04050A)   // inset fields, tracks
 
     // machined edge
-    static let hairline   = Color.white.opacity(0.06)
-    static let edgeTop    = Color.white.opacity(0.10)
-    static let edgeBottom = Color.black.opacity(0.50)
+    static let hairline   = Color.white.opacity(0.05)
+    static let edgeTop    = Color.white.opacity(0.08)
+    static let edgeBottom = Color.black.opacity(0.55)
 
     // type
     static let text      = Color(hex: 0xE7E9ED)
