@@ -84,16 +84,12 @@ struct ContentView: View {
         Card(padding: 16, radius: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 14) {
-                    ZStack {
-                        PulseRing(size: 62)
-                        Mark(size: 54)
-                    }
+                    Mark(size: 54)
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text("app_title")
                             .font(.title3.weight(.bold))
                             .foregroundStyle(Palette.text)
-                            .glitch()
                         HStack(spacing: 6) {
                             Text("version")
                                 .foregroundStyle(Palette.textFaint)

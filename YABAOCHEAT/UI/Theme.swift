@@ -6,8 +6,8 @@ import UIKit
 // One palette, one accent. The restraint is the point: near-black graphite
 // surfaces, hairline "machined" edges, a single muted brass accent, and a fine
 // grain over the whole plate. Nothing rainbow, nothing glass. Effects are
-// instruments — a pulse on a live state, a sheen on the primary action — not
-// decoration layered on top of every control.
+// instruments — a sheen on the primary action, springy presses and toggles —
+// not decoration layered on top of every control.
 
 enum Palette {
     // plate
@@ -385,31 +385,12 @@ extension View {
     }
 }
 
-/// Ambient sweep kept from the original build; still available for accent fills.
-struct SweepGradient: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let colors: [Color]
-    var period: Double = 6
-
-    @State private var phase: Double = 0
-
-    var body: some View {
-        LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
-            .offset(x: reduceMotion ? 0 : phase)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: period).repeatForever(autoreverses: true)) {
-                    phase = 240
-                }
-            }
-    }
-}
-
-// MARK: - cheat-plate FX
+// MARK: - plate texture
 //
-// The hack-menu layer, kept restrained: thin CRT scanlines, a slow-drifting
-// accent band, a faint dot matrix, and a top edge beam. Enough to read
-// "instrument", never enough to read "decoration parade".
+// Static texture only: a faint dot matrix, thin scanlines, and the top accent
+// hairline. Everything is drawn once — nothing animates, nothing eats frames,
+// nothing can swallow a tap. The only motion in the app is reactive: press
+// springs, toggle springs, and the sheen on the primary action.
 
 /// Faint dot matrix across the plate.
 struct HackGrid: View {
@@ -434,11 +415,8 @@ struct HackGrid: View {
     }
 }
 
-/// CRT scanlines plus a soft accent band that rolls top to bottom.
+/// Static CRT scanlines — thin, fixed, drawn once. Texture only, no motion.
 struct Scanlines: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var band: CGFloat = -0.2
-
     var body: some View {
         Canvas { ctx, size in
             var path = Path()
@@ -450,23 +428,6 @@ struct Scanlines: View {
                 y += spacing
             }
             ctx.stroke(path, with: .color(Color.black.opacity(0.09)), lineWidth: 1)
-        }
-        .overlay {
-            GeometryReader { geo in
-                LinearGradient(
-                    colors: [.clear, Palette.accent.opacity(0.06), .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 130)
-                .position(x: geo.size.width / 2, y: band * geo.size.height)
-            }
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 7).repeatForever(autoreverses: false)) {
-                band = 1.3
-            }
         }
         .allowsHitTesting(false)
     }
@@ -487,122 +448,26 @@ struct HackPlate: View {
     }
 }
 
-/// Thin brass beam drawn along the top edge; breathes in width.
+/// Static brass hairline along the top edge. No motion, no layout churn.
 struct EdgeBeam: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var on = false
-
     var body: some View {
         GeometryReader { geo in
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [.clear, Palette.accent.opacity(0.55), .clear],
+                        colors: [.clear, Palette.accent.opacity(0.5), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: max(60, geo.size.width * (on ? 1 : 0.35)), height: 1.2)
-                .opacity(0.65)
-                .animation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true), value: on)
+                .frame(width: geo.size.width, height: 1.2)
+                .opacity(0.6)
         }
         .frame(height: 1)
-        .onAppear {
-            guard !reduceMotion else { return }
-            on = true
-        }
-    }
-}
-
-/// Expanding, fading ring — the "live" signature for a mark or a status dot.
-struct PulseRing: View {
-    var color: Color = Palette.accent
-    var size: CGFloat = 26
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = 0
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<2, id: \.self) { i in
-                let c = phase + CGFloat(i) * 0.45
-                Circle()
-                    .stroke(color.opacity(0.5 * (1 - phase)), lineWidth: 1.2)
-                    .frame(width: size + size * c, height: size + size * c)
-            }
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
-        }
         .allowsHitTesting(false)
     }
 }
 
-// MARK: - glitch
-
-/// Periodic brand glitch: jitter, a quick RGB-split sheen (brass + steel), then
-/// it settles. Run on a task that is cancelled on disappear; fully inert under
-/// reduce-motion.
-struct GlitchModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase = false
-    @State private var jitter: CGFloat = 0
-    @State private var task: Task<Void, Never>?
-
-    var minInterval: Double = 2.8
-    var maxInterval: Double = 6.5
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if phase {
-                    ZStack {
-                        content
-                            .foregroundStyle(Palette.accent)
-                            .blendMode(.plusLighter)
-                            .offset(x: -3)
-                            .opacity(0.5)
-                        content
-                            .foregroundStyle(Palette.info)
-                            .blendMode(.plusLighter)
-                            .offset(x: 3)
-                            .opacity(0.45)
-                    }
-                    .allowsHitTesting(false)
-                }
-            }
-            .offset(x: phase ? jitter : 0)
-            .onAppear { start() }
-            .onDisappear { task?.cancel() }
-    }
-
-    private func start() {
-        guard !reduceMotion else { return }
-        task?.cancel()
-        task = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Double.random(in: minInterval...maxInterval) * 1e9))
-                guard !Task.isCancelled else { break }
-                await MainActor.run { trigger() }
-            }
-        }
-    }
-
-    private func trigger() {
-        jitter = CGFloat.random(in: -2.2...2.2)
-        withAnimation(.easeOut(duration: 0.12)) { phase = true }
-        let hold = Double.random(in: 0.10...0.32)
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(hold * 1e9))
-            withAnimation(.easeIn(duration: 0.15)) { phase = false; jitter = 0 }
-        }
-    }
-}
-
-extension View {
-    func glitch(minInterval: Double = 2.8, maxInterval: Double = 6.5) -> some View {
-        modifier(GlitchModifier(minInterval: minInterval, maxInterval: maxInterval))
-    }
-}
+/// Expanding, fading ring — the "live" signature for a mark or a status dot.
+// (Removed: ambient rings froze taps on low-end devices. Replaced by static
+// textures and reactive press/toggle springs only.)

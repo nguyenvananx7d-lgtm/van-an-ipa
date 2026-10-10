@@ -12,16 +12,12 @@ struct LanguagePickerView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    ZStack {
-                        PulseRing(size: 96)
-                        Mark(size: 84)
-                    }
+                    Mark(size: 84)
 
                     VStack(spacing: 6) {
                         Text("app_title")
                             .font(.largeTitle.bold())
                             .foregroundStyle(Palette.text)
-                            .glitch()
                         Text("select_your_language")
                             .font(.subheadline)
                             .foregroundStyle(Palette.textDim)

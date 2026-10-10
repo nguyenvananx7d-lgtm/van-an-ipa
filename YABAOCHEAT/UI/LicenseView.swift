@@ -17,16 +17,12 @@ struct LicenseView: View {
             VStack(spacing: 20) {
                 Spacer(minLength: 32)
 
-                ZStack {
-                    PulseRing(size: 104)
-                    Mark(size: 92)
-                }
+                Mark(size: 92)
 
                 VStack(spacing: 6) {
                     Text("app_title")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(Palette.text)
-                        .glitch()
                     Text("gate_hint")
                         .font(.subheadline)
                         .foregroundStyle(Palette.textDim)

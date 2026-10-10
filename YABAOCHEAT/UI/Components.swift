@@ -5,10 +5,6 @@ import SwiftUI
 // brass accents held back to where they mean something. Public shapes are
 // unchanged so the panel tabs keep compiling against the same API.
 
-// MARK: - motion (re-exported here for callers that still import it)
-
-// `SweepGradient` lives in Theme.swift.
-
 // MARK: - surfaces
 
 struct Card<Content: View>: View {
@@ -54,15 +50,10 @@ struct StateBadge: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ZStack {
-                if tone == .good {
-                    PulseRing(color: tone.color, size: 20)
-                }
-                Circle()
-                    .fill(tone.color)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: tone.color.opacity(0.8), radius: 4)
-            }
+            Circle()
+                .fill(tone.color)
+                .frame(width: 6, height: 6)
+                .shadow(color: tone.color.opacity(0.8), radius: 4)
             Text(text)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(tone.color)
