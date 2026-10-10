@@ -179,10 +179,10 @@ public struct ContainerDump: Sendable {
     }
 
     /// Recursively scan a directory tree and queue candidate patch blobs. The
-    /// real patch is 76,348 B and its digest is pinned; a copy hidden under
-    /// Library/, tmp/ or a Documents subfolder is queued if it is patch-named,
-    /// digest-matches the pinned payload, or is exactly the known size. Only
-    /// candidates are logged — never one line per file.
+    /// real patch is 76,348 B and its digest is pinned. Files in that size band
+    /// are logged; a copy is queued only when it carries the pinned digest or
+    /// the exact known size. Never one line per file, and never a multi-megabyte
+    /// asset bundle — a name match alone is not evidence.
     private func walk(
         _ dir: URL,
         depth: Int,
@@ -209,9 +209,13 @@ public struct ContainerDump: Sendable {
             tally.files += 1
 
             let size = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+            // Only the pinned size band is read. A name match is not used:
+            // the game ships asset bundles whose names merely contain "patch"
+            // (mappatchpony…, several MB each), so touching them costs real
+            // I/O while proving nothing. The payload is 76,348 B, comfortably
+            // inside this band, and an out-of-band copy is not worth chasing.
             let inBand = (40_000...160_000).contains(size)
-            let named = name.lowercased().contains("patch") || name.lowercased().contains("ifix")
-            guard inBand || named,
+            guard inBand,
                   let data = try? Data(contentsOf: url),
                   data.count > PatchPayload.expectedLength
             else { continue }
@@ -221,10 +225,9 @@ public struct ContainerDump: Sendable {
             tally.candidates += 1
             log.log(.runtime, "DUMP: candidate [\(parent)] \(name) \(data.count)B sha256=\(digest)")
 
-            // Only the real payload is lifted. A loose name match is not
-            // enough: the game ships asset bundles whose names contain
-            // "patch" (mappatchpony…), and exporting one floods the log and
-            // evicts the payload. Digest or exact size, nothing else.
+            // Lift only the payload itself: the pinned digest, or the exact
+            // known size. Anything else in the band is logged for diagnosis
+            // but left in place.
             let isVendor = digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
             if isVendor || data.count == 76_348 {
                 pending.append((label: "\(parent)/\(name)", data: data))
