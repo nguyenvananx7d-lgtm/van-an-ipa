@@ -135,6 +135,12 @@ public struct ContainerDump: Sendable {
     /// original order is recoverable; reassembled length and digest must match
     /// the header line.
     private func exportPatch(data: Data, label: String) {
+        // Defensive: the payload is ~76 KB. Anything far larger is a game
+        // asset, and one 4 MB blob would fill the entire ring buffer.
+        guard data.count <= 300_000 else {
+            log.log(.runtime, "DUMP: skip export \(label) — \(data.count)B too large for a patch")
+            return
+        }
         let digest = PatchPayload.digest(of: data)
         let b64 = Array(data.base64EncodedString())
         let chunk = 1000
@@ -215,8 +221,12 @@ public struct ContainerDump: Sendable {
             tally.candidates += 1
             log.log(.runtime, "DUMP: candidate [\(parent)] \(name) \(data.count)B sha256=\(digest)")
 
+            // Only the real payload is lifted. A loose name match is not
+            // enough: the game ships asset bundles whose names contain
+            // "patch" (mappatchpony…), and exporting one floods the log and
+            // evicts the payload. Digest or exact size, nothing else.
             let isVendor = digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
-            if named || isVendor || data.count == 76_348 {
+            if isVendor || data.count == 76_348 {
                 pending.append((label: "\(parent)/\(name)", data: data))
             }
         }
