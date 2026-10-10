@@ -76,13 +76,17 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     public var streamProof: Bool
 
+    /// Every switch starts OFF: the profile ships with nothing enabled and the
+    /// player opts into each feature. Value controls (sliders, bone) keep
+    /// sensible non-zero defaults so the moment a switch is turned on it does
+    /// something useful.
     public init(
-        isEnabled: Bool = true,
-        aimEnabled: Bool = true,
+        isEnabled: Bool = false,
+        aimEnabled: Bool = false,
         radiusValue: Double = 0,
         aimbotRadiusValue: Double = 90.0,
         radiusPolicy: ControlPolicy = .value,
-        headshotValue: Bool = true,
+        headshotValue: Bool = false,
         headshotPolicy: ControlPolicy = .value,
         aimTarget: String = "head",
         aimFovMode: String = "strict",
@@ -90,23 +94,23 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         silentAim: Bool = false,
         hitChance: Int = 85,
         aimDistance: Int = 200,
-        drawFov: Bool = true,
+        drawFov: Bool = false,
         ignoreKnocked: Bool = false,
         antiBan: Bool = false,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
-        masterEsp: Bool = true,
-        lineEsp: Bool = true,
-        boxEsp: Bool = true,
+        masterEsp: Bool = false,
+        lineEsp: Bool = false,
+        boxEsp: Bool = false,
         boxType: String = "corner",
-        nameEsp: Bool = true,
-        distanceEsp: Bool = true,
-        healthEsp: Bool = true,
+        nameEsp: Bool = false,
+        distanceEsp: Bool = false,
+        healthEsp: Bool = false,
         healthType: String = "right",
-        skeletonEsp: Bool = true,
-        drawEnemyCount: Bool = true,
+        skeletonEsp: Bool = false,
+        drawEnemyCount: Bool = false,
         textSize: Int = 14,
         espBounding: Int = 2,
         streamProof: Bool = false
@@ -149,11 +153,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - persistence
 
     /// Controls live in `UserDefaults` under a per-game prefix so the two titles
-    /// keep separate profiles. The `.v4` suffix forces the Sophia-style
-    /// default-enabled profile onto installs that already saved an older (all-
-    /// off) controls blob under `.v3`.
+    /// keep separate profiles. The `.v5` suffix forces the all-off profile onto
+    /// installs that already saved a default-enabled blob under `.v4`, so the
+    /// switches do not come back pre-ticked after an update.
     public static func defaultsKey(for game: Game) -> String {
-        game.defaultsKeyPrefix + "controls.v4"
+        game.defaultsKeyPrefix + "controls.v5"
     }
 
     public static func load(for game: Game) -> FeatureControls {
