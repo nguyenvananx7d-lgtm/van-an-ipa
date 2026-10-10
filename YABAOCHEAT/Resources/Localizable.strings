@@ -57,7 +57,7 @@
 "section_aimbot_type" = "AIMBOT TYPE";
 "bone" = "Bone";
 "bone_head" = "Head";
-"bone_body" = "Body";
+"bone_neck" = "Neck";
 "hit_chance" = "Hit Chance";
 "section_aimbot_settings" = "AIMBOT SETTINGS";
 "draw_fov" = "Draw Field Of View";
@@ -72,6 +72,7 @@
 "distance_esp" = "Distance ESP";
 "health_esp" = "Health";
 "skeleton_esp" = "ESP Skeleton";
+"tracer_esp" = "Top Tracer";
 
 /* Setting tab */
 "section_exploit" = "KERNEL EXPLOIT";

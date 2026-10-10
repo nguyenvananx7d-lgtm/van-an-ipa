@@ -1,0 +1,16 @@
+[Unit]
+Description=ffxc-auth license server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/ffxc-auth
+ExecStart=/usr/bin/node --env-file=.env dist/src/server.js
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=3
+User=ffxc
+Group=ffxc
+
+[Install]
+WantedBy=multi-user.target

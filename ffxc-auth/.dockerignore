@@ -1,0 +1,10 @@
+node_modules
+dist
+logs
+data
+keys
+.env
+.env.example
+*.cmd
+*.log
+.git

@@ -25,7 +25,7 @@ struct AimbotView: View {
                     selection: menu.feature(\.aimTarget),
                     options: [
                         SegmentOption(value: "head", title: String(localized: "bone_head")),
-                        SegmentOption(value: "body", title: String(localized: "bone_body")),
+                        SegmentOption(value: "neck", title: String(localized: "bone_neck")),
                     ]
                 )
 

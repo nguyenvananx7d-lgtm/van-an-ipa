@@ -68,6 +68,9 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var healthEsp: Bool
     public var healthType: String
     public var skeletonEsp: Bool
+    /// Tracer line to the enemy. The runtime key is `EspTracer`; the cheat's own
+    /// menu labels it "Top tracer".
+    public var tracerEsp: Bool
     public var drawEnemyCount: Bool
     public var textSize: Int
     public var espBounding: Int
@@ -110,6 +113,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         healthEsp: Bool = false,
         healthType: String = "right",
         skeletonEsp: Bool = false,
+        tracerEsp: Bool = false,
         drawEnemyCount: Bool = false,
         textSize: Int = 14,
         espBounding: Int = 2,
@@ -144,6 +148,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.healthEsp = healthEsp
         self.healthType = healthType
         self.skeletonEsp = skeletonEsp
+        self.tracerEsp = tracerEsp
         self.drawEnemyCount = drawEnemyCount
         self.textSize = textSize
         self.espBounding = espBounding
@@ -182,7 +187,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              fastReloadPercent, fastFireLevel,
              espColor, espThickness,
              masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
-             healthEsp, healthType, skeletonEsp, drawEnemyCount, textSize,
+             healthEsp, healthType, skeletonEsp, tracerEsp, drawEnemyCount, textSize,
              espBounding,
              streamProof
     }
@@ -226,6 +231,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         healthEsp         = try c.decodeIfPresent(Bool.self, forKey: .healthEsp) ?? d.healthEsp
         healthType        = try c.decodeIfPresent(String.self, forKey: .healthType) ?? d.healthType
         skeletonEsp       = try c.decodeIfPresent(Bool.self, forKey: .skeletonEsp) ?? d.skeletonEsp
+        tracerEsp         = try c.decodeIfPresent(Bool.self, forKey: .tracerEsp) ?? d.tracerEsp
         drawEnemyCount    = try c.decodeIfPresent(Bool.self, forKey: .drawEnemyCount) ?? d.drawEnemyCount
         textSize          = try c.decodeIfPresent(Int.self, forKey: .textSize) ?? d.textSize
         espBounding       = try c.decodeIfPresent(Int.self, forKey: .espBounding) ?? d.espBounding
@@ -294,7 +300,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // verbatim from the patch's `__cstring`:
     //
     //     EspMaster EspBox EspLine EspName EspDistance EspHealth EspSkeleton
-    //     AimSystemEnabled AimEnabled AimTarget HeadshotRate FovSize EspFov
+    //     EspTracer AimSystemEnabled AimEnabled AimTarget HeadshotRate FovSize
+    //     EspFov
     //
     // The panel writes camelCase (`masterEsp`, `boxEsp`, `aimTarget`, …), which
     // the runtime does not match, so every switch stayed at the cheat's default.
@@ -317,6 +324,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "EspDistance":      distanceEsp,
             "EspHealth":        healthEsp,
             "EspSkeleton":      skeletonEsp,
+            "EspTracer":        tracerEsp,
 
             // aim
             "AimSystemEnabled": isEnabled,
@@ -328,9 +336,13 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         ]
     }
 
-    /// The runtime reads `AimTarget` as an ordinal, not a word: `1` = head,
-    /// `2` = body. `FeatureControls` keeps the word for the panel.
-    public var aimTargetOrdinal: Int { aimTarget == "body" ? 2 : 1 }
+    /// The runtime reads `AimTarget` as an ordinal, not a word. Recovered from
+    /// the patch: the status line is built from two whole-string branches,
+    /// `Aim system target: HEAD` and `Aim system target: NECK`, and the config
+    /// writer only emits the literals `"AimTarget":1` and `"AimTarget":2`. So
+    /// `1` = head and `2` = neck; there is no body option. `FeatureControls`
+    /// keeps the word for the panel.
+    public var aimTargetOrdinal: Int { aimTarget == "neck" ? 2 : 1 }
 
     /// The recovered `h0` / `a0` pair decomposed from `espColor`. The runtime
     /// reads a colour through these two keys, so splitting here keeps a single

@@ -1,25 +1,15 @@
-# Terminate TLS in front of ffxc-auth. The iOS client posts to
-# https://<host>/api and will not accept a plaintext endpoint in practice.
+# TLS terminator in front of ffxc-auth. The iOS client posts to
+# https://<DOMAIN>/api and will not accept a plaintext endpoint in practice.
 #
-#   caddy run --config Caddyfile
-#
-# Point your DNS A record at the box first; Caddy provisions the cert.
+# DOMAIN comes from the environment (.env), e.g. DOMAIN=auth.example.com
+# Point the DNS A record at the VPS first; Caddy provisions the cert automatically.
 
-crackbomaydi.dev {
+{$DOMAIN} {
 	encode zstd gzip
 
-	@auth path /api
-	handle @auth {
-		reverse_proxy 127.0.0.1:8787
-	}
-
-	@admin path /admin*
-	handle @admin {
-		reverse_proxy 127.0.0.1:8787
-	}
-
-	handle /health {
-		reverse_proxy 127.0.0.1:8787
+	@app path / /api /admin* /health
+	handle @app {
+		reverse_proxy auth:8787
 	}
 
 	handle {
@@ -27,6 +17,7 @@ crackbomaydi.dev {
 	}
 
 	log {
-		output file /var/log/caddy/ffxc-auth.log
+		output stdout
+		format console
 	}
 }

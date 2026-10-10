@@ -3,9 +3,9 @@ import CryptoKit
 
 /// The IL2CPP metadata patch that gets dropped into the target game.
 ///
-/// The shipped payload is a 322-byte `Assembly-CSharp-patch.bytes`. It is not
-/// generated at runtime — it is a fixed blob whose SHA-256 is pinned in the
-/// licensing handshake, so a tampered payload is refused before it is written
+/// The shipped payload is a real, populated IFix patch `Assembly-CSharp-patch.bytes`.
+/// It is not generated at runtime — it is a fixed blob whose SHA-256 is pinned in
+/// the licensing handshake, so a tampered payload is refused before it is written
 /// anywhere.
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.

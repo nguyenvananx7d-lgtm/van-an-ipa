@@ -181,7 +181,7 @@ public final class MenuStore: ObservableObject {
         var c = controls
         switch descriptor.id {
         case ControlID.headshot.rawValue:            c.headshotValue = new >= 0.5
-        case ControlID.aimTarget.rawValue:           c.aimTarget = new >= 0.5 ? "body" : "head"
+        case ControlID.aimTarget.rawValue:           c.aimTarget = new >= 0.5 ? "neck" : "head"
         case ControlID.aimbotFovMode.rawValue:       c.aimFovMode = new >= 0.5 ? "loose" : "strict"
         case ControlID.fastReloadPercent.rawValue:   c.fastReloadPercent = Int(new)
         case ControlID.fastFire.rawValue:            c.fastFireLevel = Int(new)

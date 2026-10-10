@@ -10,6 +10,7 @@ import SwiftUI
 /// - distance → `EspDistance`
 /// - health → `EspHealth`
 /// - skeleton → `EspSkeleton`
+/// - tracer → `EspTracer` (the cheat's "Top tracer")
 struct VisualView: View {
     @EnvironmentObject var menu: MenuStore
 
@@ -23,6 +24,7 @@ struct VisualView: View {
                 ToggleRow(label: String(localized: "distance_esp"), isOn: menu.feature(\.distanceEsp))
                 ToggleRow(label: String(localized: "health_esp"), isOn: menu.feature(\.healthEsp))
                 ToggleRow(label: String(localized: "skeleton_esp"), isOn: menu.feature(\.skeletonEsp))
+                ToggleRow(label: String(localized: "tracer_esp"), isOn: menu.feature(\.tracerEsp))
             }
         }
     }
