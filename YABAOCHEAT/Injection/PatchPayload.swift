@@ -11,6 +11,11 @@ public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     public static let expectedLength = 322
 
+    /// SHA-256 of the vendor's real IFix patch (76,348 B), recovered from the
+    /// vendor journal's `active` field and the live container dump. Pinned here
+    /// so a copy hidden anywhere in the container can be adopted by digest.
+    public static let vendorPatchSHA256 = "2f86dddbf0c7a1664151f0c8b3c7115c36597e92dc70a2895b3f7943f89f3718"
+
     public static let fileName = "Assembly-CSharp-patch.bytes"
 
     public let data: Data

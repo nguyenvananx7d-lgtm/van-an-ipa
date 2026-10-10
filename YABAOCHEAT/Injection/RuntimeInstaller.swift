@@ -63,9 +63,13 @@ public actor RuntimeInstaller {
         // back to the bundled manifest only when neither exists.
         let onDiskPatch = RuntimeInstaller.adoptablePatch(in: patchURLs)
         let backedUpPatch = RuntimeInstaller.adoptablePatch(in: [RuntimeInstaller.backupURL])
-        let activePatch = onDiskPatch ?? backedUpPatch ?? payload.data
+        // A vendor run occasionally stages the real patch outside the four
+        // known names (Library/, tmp/, a Documents subfolder). A whole-container
+        // scan for the pinned payload digest catches those copies too.
+        let hiddenPatch = RuntimeInstaller.whitelistedPatch(in: [data])
+        let activePatch = onDiskPatch ?? backedUpPatch ?? hiddenPatch ?? payload.data
 
-        if let real = onDiskPatch ?? backedUpPatch {
+        if let real = onDiskPatch ?? backedUpPatch ?? hiddenPatch {
             RuntimeInstaller.storeBackup(real)
             log.log(.runtime, "adopted real patch (\(real.count) bytes, sha256=\(PatchPayload.digest(of: real))) — keeping it instead of the \(payload.data.count)B neutral manifest")
         } else {
@@ -207,6 +211,50 @@ public actor RuntimeInstaller {
                   size.int64Value > Int64(PatchPayload.expectedLength),
                   let blob = try? Data(contentsOf: url) else { continue }
             return blob
+        }
+        return nil
+    }
+
+    /// Scan the container for any blob whose digest matches the vendor's real
+    /// payload. The adoption above only looks at the four known stage names;
+    /// this catches a copy that was placed (or cached) elsewhere — Library/,
+    /// tmp/, a Documents subfolder.
+    private static func whitelistedPatch(in roots: [URL]) -> Data? {
+        let fm = FileManager.default
+        for root in roots {
+            if let blob = findBlob(
+                matching: PatchPayload.vendorPatchSHA256,
+                under: root, fm: fm, depth: 0, maxDepth: 6
+            ) {
+                return blob
+            }
+        }
+        return nil
+    }
+
+    private static func findBlob(
+        matching sha: String, under dir: URL, fm: FileManager, depth: Int, maxDepth: Int
+    ) -> Data? {
+        guard depth <= maxDepth, let entries = try? fm.contentsOfDirectory(atPath: dir.path) else { return nil }
+        for name in entries {
+            if name == "." || name == ".." { continue }
+            let url = dir.appendingPathComponent(name)
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+            if isDir.boolValue {
+                if let found = findBlob(matching: sha, under: url, fm: fm, depth: depth + 1, maxDepth: maxDepth) {
+                    return found
+                }
+            } else {
+                // Only stat and read plausible blobs: nothing as small as the
+                // neutral manifest, nothing past the patch size band.
+                let size = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+                guard size > PatchPayload.expectedLength, size <= 262_144,
+                      let data = try? Data(contentsOf: url),
+                      PatchPayload.digest(of: data).caseInsensitiveCompare(sha) == .orderedSame
+                else { continue }
+                return data
+            }
         }
         return nil
     }

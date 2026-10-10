@@ -97,6 +97,14 @@ public struct ContainerDump: Sendable {
                 log.log(.runtime, "DUMP: ffxc_debug.log tail @ [\(dir.lastPathComponent)]: \(tail)")
             }
         }
+
+        // 6) Whole-container walk. The known copies live in root/Documents,
+        //    but a newer vendor run may stage the real patch in Library/,
+        //    tmp/, SystemData/, or a Documents subfolder — none of which the
+        //    sections above inspect. Every file is listed by size, and any
+        //    blob in the real patch's size band (or patch-named files) is
+        //    lifted off the device the same way the known copy is.
+        walk(path, depth: 0)
     }
 
     /// Lift the real patch off the device: a copy into this app's own
@@ -125,6 +133,48 @@ public struct ContainerDump: Sendable {
             let out = docs.appendingPathComponent(name)
             if (try? data.write(to: out, options: .atomic)) != nil {
                 log.log(.runtime, "DUMP: exported \(data.count)B to app Documents/\(name)")
+            }
+        }
+    }
+
+    /// Recursively list a directory tree (names + sizes) and export candidate
+    /// patch blobs. The real patch is 76,348 B and its digest is pinned; a copy
+    /// hidden under Library/, tmp/ or a Documents subfolder is lifted if it is
+    /// patch-named, digest-matches the pinned payload, or is exactly the known
+    /// size. Anything else in the size band is only logged as a candidate so
+    /// the log stays readable.
+    private func walk(_ dir: URL, depth: Int, maxDepth: Int = 5) {
+        let fm = FileManager.default
+        guard depth <= maxDepth,
+              let entries = try? fm.contentsOfDirectory(atPath: dir.path)
+        else { return }
+
+        for name in entries.sorted() {
+            if name == "." || name == ".." { continue }
+            let url = dir.appendingPathComponent(name)
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+            if isDir.boolValue {
+                walk(url, depth: depth + 1, maxDepth: maxDepth)
+                continue
+            }
+
+            let size = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
+            log.log(.runtime, "DUMP: walk [\(url.deletingLastPathComponent().lastPathComponent)] \(name)(\(size)B)")
+
+            let inBand = (40_000...160_000).contains(size)
+            let named = name.lowercased().contains("patch") || name.lowercased().contains("ifix")
+            guard inBand || named,
+                  let data = try? Data(contentsOf: url),
+                  data.count > PatchPayload.expectedLength
+            else { continue }
+
+            let digest = PatchPayload.digest(of: data)
+            log.log(.runtime, "DUMP: candidate [\(url.deletingLastPathComponent().lastPathComponent)] \(name) \(data.count)B sha256=\(digest)")
+
+            let isVendor = digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
+            if named || isVendor || data.count == 76_348 {
+                exportPatch(data: data, label: "\(url.deletingLastPathComponent().lastPathComponent)/\(name)")
             }
         }
     }
