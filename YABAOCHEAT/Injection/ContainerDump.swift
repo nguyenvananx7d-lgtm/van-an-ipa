@@ -112,15 +112,37 @@ public struct ContainerDump: Sendable {
         // 7) Quiet whole-container walk. The known copies live in root and
         //    Documents, but a vendor run may stage the real patch in Library/,
         //    tmp/, SystemData/, or a Documents subfolder. Only candidates are
-        //    logged — the game's cache trees (CDNICON holds tens of thousands
-        //    of icons) are skipped so the 500-line log is not flooded.
+        //    logged, never one line per file — the game's cache trees (CDNICON
+        //    holds tens of thousands of icons) are skipped entirely.
         walk(path, depth: 0, pending: &pending, tally: &tally)
-        log.log(.runtime, "DUMP: walk complete dirs=\(tally.dirs) files=\(tally.files) candidates=\(tally.candidates)")
+        log.log(.runtime, "DUMP: walk complete dirs=\(tally.dirs) files=\(tally.files) reads=\(tally.reads) candidates=\(tally.candidates)")
 
-        // 8) Emit the payloads LAST. The in-app log is a 500-line ring buffer,
-        //    so the PATCHB64 header and chunks must be the newest entries or
-        //    they scroll off before the user can read them. Identical blobs
-        //    found in several places are emitted once.
+        // 8) Sibling app containers. The vendor build fetches the payload from
+        //    its own server, so a cached copy would live in *its* container,
+        //    not the game's. Walk every container this process can read and
+        //    lift any in-band blob — same size band, same pinned digest. A
+        //    container that cannot be read is counted, never fatal.
+        var siblingTally = WalkTally()
+        let appRoot = URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application")
+        if let uuids = try? fm.contentsOfDirectory(atPath: appRoot.path) {
+            log.log(.runtime, "DUMP: sibling containers \(uuids.count)")
+            for uuid in uuids {
+                let root = appRoot.appendingPathComponent(uuid)
+                if root.path == path.path { continue }
+                let bid = ContainerDump.bundleIdentifier(ofContainer: root) ?? uuid
+                walk(root, depth: 0, pending: &pending, tally: &siblingTally,
+                     maxDepth: 3, labelPrefix: "sib:\(bid)", noisy: ContainerDump.siblingNoisy,
+                     logAllCandidates: false, readBudget: 1_200)
+            }
+            log.log(.runtime, "DUMP: sibling walk dirs=\(siblingTally.dirs) files=\(siblingTally.files) reads=\(siblingTally.reads) candidates=\(siblingTally.candidates)")
+        } else {
+            log.log(.runtime, "DUMP: sibling containers unreadable — \(bridge.lastAccessError ?? "no access")")
+        }
+
+        // 9) Emit the payloads LAST. The in-app log is a ring buffer, so the
+        //    PATCHB64 header and chunks must be the newest entries or they
+        //    scroll off before the user can read them. Identical blobs found in
+        //    several places are emitted once.
         var emitted = Set<String>()
         for (label, data) in pending {
             let digest = PatchPayload.digest(of: data)
@@ -165,18 +187,31 @@ public struct ContainerDump: Sendable {
         }
     }
 
-    /// Directory trees that hold no payload: the game's icon/asset/shard caches.
-    /// Skipped so the walk is fast and the log stays short.
+    /// Directory trees that hold no payload in the *game* container: its
+    /// icon/asset/shard caches. Skipped so the walk is fast and the log stays
+    /// short.
     private static let noisyDirectories: Set<String> = [
         "CDNICON", "Caches", "Cache", "ImageCache", "fsCachedData",
+        "WebKit", "com.apple.WebKit.GPU", "com.apple.metal", "downscaled",
+    ]
+
+    /// The sibling scan must *not* skip `Caches`: that is where a vendor app
+    /// would cache a downloaded pack. Only the browser/metal caches, which are
+    /// large and never hold a payload, are skipped.
+    private static let siblingNoisy: Set<String> = [
         "WebKit", "com.apple.WebKit.GPU", "com.apple.metal", "downscaled",
     ]
 
     private struct WalkTally {
         var dirs = 0
         var files = 0
+        var reads = 0
         var candidates = 0
     }
+
+    /// Bytes read before the walk gives up — a guard against a container full
+    /// of 40-160 KB files (other games, document stores) stalling the scan.
+    private static let readBudget = 6_000
 
     /// Recursively scan a directory tree and queue candidate patch blobs. The
     /// real patch is 76,348 B and its digest is pinned. Files in that size band
@@ -188,7 +223,11 @@ public struct ContainerDump: Sendable {
         depth: Int,
         pending: inout [(label: String, data: Data)],
         tally: inout WalkTally,
-        maxDepth: Int = 6
+        maxDepth: Int = 6,
+        labelPrefix: String = "",
+        noisy: Set<String> = ContainerDump.noisyDirectories,
+        logAllCandidates: Bool = true,
+        readBudget: Int = ContainerDump.readBudget
     ) {
         let fm = FileManager.default
         guard depth <= maxDepth,
@@ -202,8 +241,10 @@ public struct ContainerDump: Sendable {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
             if isDir.boolValue {
-                if ContainerDump.noisyDirectories.contains(name) { continue }
-                walk(url, depth: depth + 1, pending: &pending, tally: &tally, maxDepth: maxDepth)
+                if noisy.contains(name) { continue }
+                walk(url, depth: depth + 1, pending: &pending, tally: &tally,
+                     maxDepth: maxDepth, labelPrefix: labelPrefix, noisy: noisy,
+                     logAllCandidates: logAllCandidates, readBudget: readBudget)
                 continue
             }
             tally.files += 1
@@ -215,22 +256,28 @@ public struct ContainerDump: Sendable {
             // I/O while proving nothing. The payload is 76,348 B, comfortably
             // inside this band, and an out-of-band copy is not worth chasing.
             let inBand = (40_000...160_000).contains(size)
-            guard inBand,
-                  let data = try? Data(contentsOf: url),
+            guard inBand, tally.reads < readBudget else { continue }
+            tally.reads += 1
+            guard let data = try? Data(contentsOf: url),
                   data.count > PatchPayload.expectedLength
             else { continue }
 
             let digest = PatchPayload.digest(of: data)
             let parent = url.deletingLastPathComponent().lastPathComponent
+            let rel = labelPrefix.isEmpty ? "\(parent)/\(name)" : "\(labelPrefix)/\(parent)/\(name)"
             tally.candidates += 1
-            log.log(.runtime, "DUMP: candidate [\(parent)] \(name) \(data.count)B sha256=\(digest)")
 
             // Lift only the payload itself: the pinned digest, or the exact
-            // known size. Anything else in the band is logged for diagnosis
-            // but left in place.
+            // known size. Anything else in the band is left in place — logged
+            // when this is the game container (diagnosis), counted silently in
+            // the sibling sweep so the log stays readable.
             let isVendor = digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
-            if isVendor || data.count == 76_348 {
-                pending.append((label: "\(parent)/\(name)", data: data))
+            let isPayload = isVendor || data.count == 76_348
+            if logAllCandidates || isPayload {
+                log.log(.runtime, "DUMP: candidate [\(rel)] \(data.count)B sha256=\(digest)")
+            }
+            if isPayload {
+                pending.append((label: rel, data: data))
             }
         }
     }
@@ -248,6 +295,18 @@ public struct ContainerDump: Sendable {
         }
         let tail = entries.count > 40 ? ", …(\(entries.count - 40) more)" : ""
         return shown.joined(separator: ", ") + tail
+    }
+
+    /// The bundle identifier of a sibling container, read from the metadata
+    /// plist every container carries. Nil when the plist is unreadable — the
+    /// caller falls back to the container's UUID.
+    private static func bundleIdentifier(ofContainer root: URL) -> String? {
+        let meta = root.appendingPathComponent(".com.apple.mobile_container_manager.metadata.plist")
+        guard let data = try? Data(contentsOf: meta),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let dict = plist as? [String: Any]
+        else { return nil }
+        return dict["MCMMetadataIdentifier"] as? String
     }
 
     /// Pull the printable runs out of a binary blob, for identifying a manifest.
