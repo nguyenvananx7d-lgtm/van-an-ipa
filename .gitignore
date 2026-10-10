@@ -1,0 +1,26 @@
+# XcodeGen output
+*.xcodeproj
+
+# build products
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# swift package
+.build/
+
+# macOS
+.DS_Store
+
+# local drops, not source
+VortexArena-FromSources-Repo.zip
+ảnh lỗi/
+image.png
+IMG_*.png
+
+# editors
+.vscode/
+.idea/

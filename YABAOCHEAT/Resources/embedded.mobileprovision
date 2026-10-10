@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AppIDName</key>
+	<string>FFXC-VortexArena</string>
+	<key>ApplicationIdentifierPrefix</key>
+	<array>
+		<string>com.apple.mobile.MobileHouseArrest</string>
+	</array>
+	<key>CreationDate</key>
+	<date>2024-01-01T00:00:00Z</date>
+	<key>Platform</key>
+	<array>
+		<string>iOS</string>
+	</array>
+	<key>DeveloperCertificates</key>
+	<array/>
+	<key>Entitlements</key>
+	<dict>
+		<key>application-identifier</key>
+		<string>com.apple.mobile.MobileHouseArrest</string>
+		<key>platform-application</key>
+		<true/>
+		<key>com.apple.security.exception.iokit-user-client-class</key>
+		<array>
+			<string>AGXDeviceUserClient</string>
+			<string>IOSurfaceRootUserClient</string>
+		</array>
+		<key>com.apple.private.security.no-sandbox</key>
+		<true/>
+		<key>com.apple.private.security.container-manager</key>
+		<true/>
+		<key>com.apple.private.MobileContainerManager.allowed</key>
+		<true/>
+		<key>com.apple.private.security.storage.AppDataContainers</key>
+		<true/>
+		<key>com.apple.private.coreservices.canmaplsdatabase</key>
+		<true/>
+		<key>com.apple.springboard.launchapplications</key>
+		<true/>
+		<key>com.apple.frontboard.launchapplications</key>
+		<true/>
+		<key>com.apple.multitasking.termination</key>
+		<true/>
+		<key>get-task-allow</key>
+		<true/>
+	</dict>
+	<key>ExpirationDate</key>
+	<date>2099-01-01T00:00:00Z</date>
+	<key>Name</key>
+	<string>FFXC-VortexArena-Entitlements</string>
+	<key>ProvisionedDevices</key>
+	<array/>
+	<key>TeamIdentifier</key>
+	<array>
+		<string>FFXC</string>
+	</array>
+	<key>UUID</key>
+	<string>FFXC0000-0000-0000-0000-000000000001</string>
+	<key>Version</key>
+	<integer>1</integer>
+</dict>
+</plist>
