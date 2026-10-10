@@ -53,6 +53,7 @@
 /* Aimbot tab */
 "section_aimbot_main" = "AIMBOT";
 "master_aimbot" = "Master Aimbot";
+"aim_enabled" = "Aim";
 "section_aimbot_type" = "AIMBOT TYPE";
 "bone" = "Bone";
 "bone_head" = "Head";

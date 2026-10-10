@@ -20,6 +20,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: aimbot
 
     public var isEnabled: Bool
+    /// Second aim gate the runtime reads under its own key (`AimEnabled`).
+    /// Surfaced separately so `AimSystemEnabled` (`isEnabled`) and `AimEnabled`
+    /// can be toggled independently.
+    public var aimEnabled: Bool
     /// Head radius the assist locks onto.
     public var radiusValue: Double
     /// Field-of-view radius for the aim assist, distinct from the head radius.
@@ -74,6 +78,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     public init(
         isEnabled: Bool = true,
+        aimEnabled: Bool = true,
         radiusValue: Double = 0,
         aimbotRadiusValue: Double = 90.0,
         radiusPolicy: ControlPolicy = .value,
@@ -107,6 +112,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         streamProof: Bool = false
     ) {
         self.isEnabled = isEnabled
+        self.aimEnabled = aimEnabled
         self.radiusValue = radiusValue
         self.aimbotRadiusValue = aimbotRadiusValue
         self.radiusPolicy = radiusPolicy
@@ -165,7 +171,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - wire shape
 
     private enum CodingKeys: String, CodingKey {
-        case isEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
+        case isEnabled, aimEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
              headshotValue, headshotPolicy, aimTarget, aimFovMode,
              aimbotType, silentAim, hitChance, aimDistance, drawFov,
              ignoreKnocked, antiBan,
@@ -184,6 +190,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         let d = FeatureControls()
 
         isEnabled         = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? d.isEnabled
+        aimEnabled        = try c.decodeIfPresent(Bool.self, forKey: .aimEnabled) ?? d.aimEnabled
         radiusValue       = try c.decodeIfPresent(Double.self, forKey: .radiusValue) ?? d.radiusValue
         aimbotRadiusValue = try c.decodeIfPresent(Double.self, forKey: .aimbotRadiusValue) ?? d.aimbotRadiusValue
         radiusPolicy      = try c.decodeIfPresent(ControlPolicy.self, forKey: .radiusPolicy) ?? d.radiusPolicy
@@ -309,7 +316,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
             // aim
             "AimSystemEnabled": isEnabled,
-            "AimEnabled":       isEnabled,
+            "AimEnabled":       aimEnabled,
             "AimTarget":        aimTargetOrdinal,
             "HeadshotRate":     hitChance,
             "FovSize":          Int(aimbotRadiusValue.rounded()),
