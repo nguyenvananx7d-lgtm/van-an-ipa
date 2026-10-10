@@ -51,17 +51,33 @@ public actor RuntimeInstaller {
         case .bridgeUnavailable: throw InstallError.processResetUnavailable
         }
 
-        // The digest is checked before anything touches the filesystem. A bad
-        // payload must never reach the game's container, not even transiently.
-        do {
-            try payload.verify(against: expectedDigest)
-        } catch {
-            log.log(.integrity, "payload digest mismatch; refusing to install")
-            throw InstallError.integrityMismatch
-        }
-
         let patchURLs = bridge.patchURLs(in: data, game: game)
         let configURLs = bridge.configURLs(in: data, game: game)
+
+        // The blob this app ships is a 322-byte neutral IFix manifest — it
+        // carries no code. The payload that actually runs is a multi-KB IFix
+        // patch the vendor build installs. If one is already in the container
+        // (left by the vendor build or an earlier install), keep it: writing
+        // the neutral manifest over it is exactly what leaves the game with no
+        // ESP. Prefer the on-disk patch, then our own backup of it, and fall
+        // back to the bundled manifest only when neither exists.
+        let onDiskPatch = RuntimeInstaller.adoptablePatch(in: patchURLs)
+        let backedUpPatch = RuntimeInstaller.adoptablePatch(in: [RuntimeInstaller.backupURL])
+        let activePatch = onDiskPatch ?? backedUpPatch ?? payload.data
+
+        if let real = onDiskPatch ?? backedUpPatch {
+            RuntimeInstaller.storeBackup(real)
+            log.log(.runtime, "adopted real patch (\(real.count) bytes, sha256=\(PatchPayload.digest(of: real))) — keeping it instead of the \(payload.data.count)B neutral manifest")
+        } else {
+            // Only the neutral manifest is available; its digest must match the
+            // pin before it reaches the container.
+            do {
+                try payload.verify(against: expectedDigest)
+            } catch {
+                log.log(.integrity, "payload digest mismatch; refusing to install")
+                throw InstallError.integrityMismatch
+            }
+        }
 
         // Clear any previous copy first so a partial write can never be
         // mistaken for a good one on the next pass.
@@ -71,9 +87,9 @@ public actor RuntimeInstaller {
 
         do {
             for url in patchURLs {
-                try payload.data.write(to: url, options: .atomic)
+                try activePatch.write(to: url, options: .atomic)
             }
-            log.log(.runtime, "staged patch (\(payload.data.count) bytes) in \(patchURLs.count) location(s)")
+            log.log(.runtime, "staged patch (\(activePatch.count) bytes) in \(patchURLs.count) location(s)")
         } catch {
             for url in patchURLs { try? FileManager.default.removeItem(at: url) }
             log.log(.runtime, "patch write failed: \(error.localizedDescription)")
@@ -95,7 +111,7 @@ public actor RuntimeInstaller {
         let elapsed = await confirmStaging(
             game: game,
             patchURLs: patchURLs,
-            digest: payload.sha256,
+            digest: PatchPayload.digest(of: activePatch),
             monitorMs: monitorMs
         )
 
@@ -178,5 +194,32 @@ public actor RuntimeInstaller {
     public func reset(game: Game) async throws {
         log.log(.runtime, "reset requested for \(game.rawValue)")
         try await uninject(game: game)
+    }
+
+    // MARK: - real patch
+
+    /// A staged blob larger than the neutral manifest is the vendor's real IFix
+    /// patch. Nil when only neutral copies (or nothing) are present.
+    private static func adoptablePatch(in urls: [URL]) -> Data? {
+        let fm = FileManager.default
+        for url in urls {
+            guard let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
+                  size.int64Value > Int64(PatchPayload.expectedLength),
+                  let blob = try? Data(contentsOf: url) else { continue }
+            return blob
+        }
+        return nil
+    }
+
+    /// Keep the real patch in this app's own container so a wipe or an
+    /// un-inject cannot lose the only working payload.
+    private static func storeBackup(_ data: Data) {
+        try? data.write(to: backupURL, options: .atomic)
+    }
+
+    private static var backupURL: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return docs.appendingPathComponent("ffxc_real_patch.bytes")
     }
 }

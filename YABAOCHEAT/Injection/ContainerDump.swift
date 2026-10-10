@@ -66,6 +66,13 @@ public struct ContainerDump: Sendable {
             let digest = PatchPayload.digest(of: data)
             let printable = ContainerDump.printableStrings(in: data).joined(separator: " | ")
             log.log(.runtime, "DUMP: \(url.lastPathComponent) @ [\(parent)]: \(size)B sha256=\(digest) \(printable)")
+
+            // A blob larger than the neutral manifest is the real patch — the
+            // artifact this build does not ship. Lift it off the device so it
+            // can be pinned and re-shipped.
+            if data.count != PatchPayload.expectedLength {
+                exportPatch(data: data, label: "\(parent)/\(url.lastPathComponent)")
+            }
         }
 
         // 4) Marker / probe-document files the runtime may create or expect.
@@ -88,6 +95,36 @@ public struct ContainerDump: Sendable {
             if let text = try? String(contentsOf: debugLog, encoding: .utf8) {
                 let tail = String(text.suffix(500)).replacingOccurrences(of: "\n", with: " ⏎ ")
                 log.log(.runtime, "DUMP: ffxc_debug.log tail @ [\(dir.lastPathComponent)]: \(tail)")
+            }
+        }
+    }
+
+    /// Lift the real patch off the device: a copy into this app's own
+    /// Documents for a Filza/Files pull, plus base64 in the log itself so it
+    /// survives even without a file manager. Chunks carry an index so the
+    /// original order is recoverable; reassembled length and digest must match
+    /// the header line.
+    private func exportPatch(data: Data, label: String) {
+        let digest = PatchPayload.digest(of: data)
+        let b64 = Array(data.base64EncodedString())
+        let chunk = 1000
+        let total = max(1, (b64.count + chunk - 1) / chunk)
+        log.log(.runtime, "DUMP: PATCHB64 \(label) bytes=\(data.count) sha256=\(digest) chunks=\(total)")
+
+        var offset = 0
+        var index = 0
+        while offset < b64.count {
+            let end = min(offset + chunk, b64.count)
+            index += 1
+            log.log(.runtime, "DUMP: PATCHB64 \(index)/\(total) \(String(b64[offset..<end]))")
+            offset = end
+        }
+
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let name = "captured-" + label.replacingOccurrences(of: "/", with: "_")
+            let out = docs.appendingPathComponent(name)
+            if (try? data.write(to: out, options: .atomic)) != nil {
+                log.log(.runtime, "DUMP: exported \(data.count)B to app Documents/\(name)")
             }
         }
     }
