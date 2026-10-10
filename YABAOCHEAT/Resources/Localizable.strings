@@ -54,6 +54,11 @@
    the log so a vendor build's staging can be compared byte for byte. */
 "dump_container" = "Dump container (read-only)";
 
+/* Live capture: keeps the app watching the game container in the background
+   for the vendor's real patch to appear, exporting it the instant it does. */
+"capture_live" = "Capture live";
+"capture_stop" = "Stop capture";
+
 /* Catalog fallback */
 "controls_unavailable" = "No controls";
 "controls_unavailable_hint" = "The deployment has not published a control catalog yet.";

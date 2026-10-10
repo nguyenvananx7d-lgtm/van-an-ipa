@@ -365,6 +365,87 @@ public final class InjectStore: ObservableObject {
         ContainerDump(log: log, bridge: bridge).dump(game: game)
     }
 
+    // MARK: - live capture
+
+    /// The background capture loop is running: the app watches the game
+    /// container for the vendor's real patch to appear and exports it the
+    /// moment it does. Uses a background-execution token so the loop keeps
+    /// running while the user switches to the vendor build and injects.
+    @Published public private(set) var captureActive = false
+    private var captureToken: UIBackgroundTaskIdentifier = .invalid
+    private var captureTask: Task<Void, Never>?
+
+    /// Start watching, or stop a running watch.
+    public func toggleCapture() {
+        if captureTask != nil { stopCapture() } else { startCapture() }
+    }
+
+    private func startCapture() {
+        guard captureTask == nil else { return }
+        let game = self.game
+        let bridge = self.bridge
+        let log = self.log
+        captureActive = true
+        captureToken = UIApplication.shared.beginBackgroundTask(withName: "ffxc.live-capture") { [weak self] in
+            Task { @MainActor in self?.stopCapture() }
+        }
+
+        captureTask = Task.detached(priority: .userInitiated) { [log, bridge] in
+            // Resolve once. `resolve` proves writability with a canary write, so
+            // calling it on every tick would poke the container hundreds of
+            // times while the vendor runtime is live. After this, only the
+            // staged filenames are read.
+            guard case .resolved(let data) = bridge.resolve(game: game) else {
+                log.log(.runtime, "CAPTURE: container not resolvable — \(bridge.lastAccessError ?? "unknown")")
+                return
+            }
+            let urls = bridge.patchURLs(in: data, game: game)
+            let deadline = Date().addingTimeInterval(180)
+            var lastNotice = Date.distantPast
+            log.log(.runtime, "CAPTURE: watching \(urls.count) stage path(s) for a blob over 322 B")
+
+            while !Task.isCancelled, Date() < deadline {
+                var hit: (data: Data, url: URL)?
+                for url in urls where FileManager.default.fileExists(atPath: url.path) {
+                    guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
+                          size.intValue > Int64(PatchPayload.expectedLength) else { continue }
+                    if let blob = try? Data(contentsOf: url) { hit = (blob, url); break }
+                }
+
+                if let hit {
+                    let digest = PatchPayload.digest(of: hit.data)
+                    log.log(.runtime, "CAPTURE: live blob at \(hit.url.lastPathComponent) — \(hit.data.count)B sha256=\(digest)")
+                    if digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
+                        || hit.data.count == 76_348 {
+                        ContainerDump.captureExport(label: "live", data: hit.data)
+                        log.log(.runtime, "CAPTURE: payload exported — Files/Filza ▸ Vortex Arena ▸ Documents")
+                        return
+                    }
+                    log.log(.runtime, "CAPTURE: non-neutral blob but not the payload digest/size; still watching")
+                } else if Date().timeIntervalSince(lastNotice) > 45 {
+                    log.log(.runtime, "CAPTURE: still neutral after 45 s — run Sophia Inject while the game stays open")
+                    lastNotice = Date()
+                }
+
+                try? await Task.sleep(nanoseconds: 800_000_000)
+            }
+            log.log(.runtime, "CAPTURE: loop ended")
+        }
+    }
+
+    private func stopCapture() {
+        captureTask?.cancel()
+        captureTask = nil
+        if captureActive {
+            captureActive = false
+            log.log(.runtime, "CAPTURE: stopped")
+        }
+        if captureToken != .invalid {
+            UIApplication.shared.endBackgroundTask(captureToken)
+            captureToken = .invalid
+        }
+    }
+
     // MARK: - diagnostics
 
     /// The decisive baseline experiment: wipe all staged payload out of the

@@ -225,6 +225,17 @@ struct InjectView: View {
         .font(.footnote)
         .buttonStyle(AccentButtonStyle(prominent: false))
         .frame(maxWidth: .infinity)
+
+        // Live capture: while this app sits in the background, watch the game
+        // container for the vendor's real patch to appear and export it the
+        // moment it does. Flow: start this, switch to Sophia and Inject, keep
+        // the game open, then come back — the payload is already saved.
+        Button(LocalizedStringKey(inject.captureActive ? "capture_stop" : "capture_live")) {
+            inject.toggleCapture()
+        }
+        .font(.footnote)
+        .buttonStyle(AccentButtonStyle(prominent: inject.captureActive))
+        .frame(maxWidth: .infinity)
     }
 
     private var canInject: Bool {

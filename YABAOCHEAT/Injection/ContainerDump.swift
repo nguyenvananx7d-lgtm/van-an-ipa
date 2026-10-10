@@ -139,6 +139,20 @@ public struct ContainerDump: Sendable {
             log.log(.runtime, "DUMP: sibling containers unreadable — \(bridge.lastAccessError ?? "no access")")
         }
 
+        // 8b) Our own app container. The vendor build spoofs the same bundle id
+        //     (`com.apple.mobile.MobileHouseArrest`), so when either runs it
+        //     owns this container — and a fetched pack or receipt the vendor
+        //     cached there survives a reinstall. Unlike the sibling sweep,
+        //     everything here is fully readable. Same band, same pinned digest.
+        if let ownDocs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let ownRoot = ownDocs.deletingLastPathComponent()
+            var ownTally = WalkTally()
+            walk(ownRoot, depth: 0, pending: &pending, tally: &ownTally,
+                 maxDepth: 4, labelPrefix: "self:", noisy: ContainerDump.siblingNoisy,
+                 logAllCandidates: true, readBudget: 1_200)
+            log.log(.runtime, "DUMP: own walk dirs=\(ownTally.dirs) files=\(ownTally.files) reads=\(ownTally.reads) candidates=\(ownTally.candidates)")
+        }
+
         // 9) Emit the payloads LAST. The in-app log is a ring buffer, so the
         //    PATCHB64 header and chunks must be the newest entries or they
         //    scroll off before the user can read them. Identical blobs found in
@@ -183,6 +197,34 @@ public struct ContainerDump: Sendable {
             let out = docs.appendingPathComponent(name)
             if (try? data.write(to: out, options: .atomic)) != nil {
                 log.log(.runtime, "DUMP: exported \(data.count)B to app Documents/\(name)")
+            }
+        }
+    }
+
+    /// Export a blob captured by the live loop: the same treatment as a dump
+    /// payload — PATCHB64 in the log plus a copy in this app's Documents.
+    /// Static so the capture loop needs no bridge instance.
+    public static func captureExport(label: String, data: Data) {
+        let digest = PatchPayload.digest(of: data)
+        let b64 = Array(data.base64EncodedString())
+        let chunk = 1000
+        let total = max(1, (b64.count + chunk - 1) / chunk)
+        AppLog.shared.log(.runtime, "DUMP: PATCHB64 \(label) bytes=\(data.count) sha256=\(digest) chunks=\(total)")
+
+        var offset = 0
+        var index = 0
+        while offset < b64.count {
+            let end = min(offset + chunk, b64.count)
+            index += 1
+            AppLog.shared.log(.runtime, "DUMP: PATCHB64 \(index)/\(total) \(String(b64[offset..<end]))")
+            offset = end
+        }
+
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let name = "captured-" + label.replacingOccurrences(of: "/", with: "_")
+            let out = docs.appendingPathComponent(name)
+            if (try? data.write(to: out, options: .atomic)) != nil {
+                AppLog.shared.log(.runtime, "DUMP: exported \(data.count)B to app Documents/\(name)")
             }
         }
     }
