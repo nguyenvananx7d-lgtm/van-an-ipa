@@ -68,7 +68,7 @@
 "master_esp" = "Master ESP";
 "line_esp" = "Line ESP";
 "box_esp" = "Box";
-"name_esp" = "ESP Name";
+"name_esp" = "Tên địch";
 "distance_esp" = "Distance ESP";
 "health_esp" = "Health";
 "skeleton_esp" = "ESP Skeleton";
