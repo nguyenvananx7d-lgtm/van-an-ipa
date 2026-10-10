@@ -38,6 +38,8 @@ public struct ContainerDump: Sendable {
         log.log(.runtime, "DUMP: container \(game.bundleIdentifier) = \(path.path)")
 
         let fm = FileManager.default
+        var pending: [(label: String, data: Data)] = []
+        var tally = WalkTally()
 
         // 1) What is actually in the container — file names, sizes.
         for dir in bridge.payloadDirectories(in: path) {
@@ -68,10 +70,10 @@ public struct ContainerDump: Sendable {
             log.log(.runtime, "DUMP: \(url.lastPathComponent) @ [\(parent)]: \(size)B sha256=\(digest) \(printable)")
 
             // A blob larger than the neutral manifest is the real patch — the
-            // artifact this build does not ship. Lift it off the device so it
-            // can be pinned and re-shipped.
+            // artifact this build does not ship. Queue it for export; payloads
+            // are emitted last so the ring buffer cannot evict them.
             if data.count != PatchPayload.expectedLength {
-                exportPatch(data: data, label: "\(parent)/\(url.lastPathComponent)")
+                pending.append((label: "\(parent)/\(url.lastPathComponent)", data: data))
             }
         }
 
@@ -98,13 +100,33 @@ public struct ContainerDump: Sendable {
             }
         }
 
-        // 6) Whole-container walk. The known copies live in root/Documents,
-        //    but a newer vendor run may stage the real patch in Library/,
-        //    tmp/, SystemData/, or a Documents subfolder — none of which the
-        //    sections above inspect. Every file is listed by size, and any
-        //    blob in the real patch's size band (or patch-named files) is
-        //    lifted off the device the same way the known copy is.
-        walk(path, depth: 0)
+        // 6) This app's own backup, if an earlier Inject adopted the real patch.
+        let ownBackup = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("ffxc_real_patch.bytes")
+        if let ownBackup, let data = try? Data(contentsOf: ownBackup),
+           data.count != PatchPayload.expectedLength {
+            log.log(.runtime, "DUMP: own backup ffxc_real_patch.bytes \(data.count)B sha256=\(PatchPayload.digest(of: data))")
+            pending.append((label: "backup/ffxc_real_patch.bytes", data: data))
+        }
+
+        // 7) Quiet whole-container walk. The known copies live in root and
+        //    Documents, but a vendor run may stage the real patch in Library/,
+        //    tmp/, SystemData/, or a Documents subfolder. Only candidates are
+        //    logged — the game's cache trees (CDNICON holds tens of thousands
+        //    of icons) are skipped so the 500-line log is not flooded.
+        walk(path, depth: 0, pending: &pending, tally: &tally)
+        log.log(.runtime, "DUMP: walk complete dirs=\(tally.dirs) files=\(tally.files) candidates=\(tally.candidates)")
+
+        // 8) Emit the payloads LAST. The in-app log is a 500-line ring buffer,
+        //    so the PATCHB64 header and chunks must be the newest entries or
+        //    they scroll off before the user can read them. Identical blobs
+        //    found in several places are emitted once.
+        var emitted = Set<String>()
+        for (label, data) in pending {
+            let digest = PatchPayload.digest(of: data)
+            guard emitted.insert(digest).inserted else { continue }
+            exportPatch(data: data, label: label)
+        }
     }
 
     /// Lift the real patch off the device: a copy into this app's own
@@ -137,17 +159,36 @@ public struct ContainerDump: Sendable {
         }
     }
 
-    /// Recursively list a directory tree (names + sizes) and export candidate
-    /// patch blobs. The real patch is 76,348 B and its digest is pinned; a copy
-    /// hidden under Library/, tmp/ or a Documents subfolder is lifted if it is
-    /// patch-named, digest-matches the pinned payload, or is exactly the known
-    /// size. Anything else in the size band is only logged as a candidate so
-    /// the log stays readable.
-    private func walk(_ dir: URL, depth: Int, maxDepth: Int = 5) {
+    /// Directory trees that hold no payload: the game's icon/asset/shard caches.
+    /// Skipped so the walk is fast and the log stays short.
+    private static let noisyDirectories: Set<String> = [
+        "CDNICON", "Caches", "Cache", "ImageCache", "fsCachedData",
+        "WebKit", "com.apple.WebKit.GPU", "com.apple.metal", "downscaled",
+    ]
+
+    private struct WalkTally {
+        var dirs = 0
+        var files = 0
+        var candidates = 0
+    }
+
+    /// Recursively scan a directory tree and queue candidate patch blobs. The
+    /// real patch is 76,348 B and its digest is pinned; a copy hidden under
+    /// Library/, tmp/ or a Documents subfolder is queued if it is patch-named,
+    /// digest-matches the pinned payload, or is exactly the known size. Only
+    /// candidates are logged — never one line per file.
+    private func walk(
+        _ dir: URL,
+        depth: Int,
+        pending: inout [(label: String, data: Data)],
+        tally: inout WalkTally,
+        maxDepth: Int = 6
+    ) {
         let fm = FileManager.default
         guard depth <= maxDepth,
               let entries = try? fm.contentsOfDirectory(atPath: dir.path)
         else { return }
+        tally.dirs += 1
 
         for name in entries.sorted() {
             if name == "." || name == ".." { continue }
@@ -155,13 +196,13 @@ public struct ContainerDump: Sendable {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
             if isDir.boolValue {
-                walk(url, depth: depth + 1, maxDepth: maxDepth)
+                if ContainerDump.noisyDirectories.contains(name) { continue }
+                walk(url, depth: depth + 1, pending: &pending, tally: &tally, maxDepth: maxDepth)
                 continue
             }
+            tally.files += 1
 
             let size = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
-            log.log(.runtime, "DUMP: walk [\(url.deletingLastPathComponent().lastPathComponent)] \(name)(\(size)B)")
-
             let inBand = (40_000...160_000).contains(size)
             let named = name.lowercased().contains("patch") || name.lowercased().contains("ifix")
             guard inBand || named,
@@ -170,11 +211,13 @@ public struct ContainerDump: Sendable {
             else { continue }
 
             let digest = PatchPayload.digest(of: data)
-            log.log(.runtime, "DUMP: candidate [\(url.deletingLastPathComponent().lastPathComponent)] \(name) \(data.count)B sha256=\(digest)")
+            let parent = url.deletingLastPathComponent().lastPathComponent
+            tally.candidates += 1
+            log.log(.runtime, "DUMP: candidate [\(parent)] \(name) \(data.count)B sha256=\(digest)")
 
             let isVendor = digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
             if named || isVendor || data.count == 76_348 {
-                exportPatch(data: data, label: "\(url.deletingLastPathComponent().lastPathComponent)/\(name)")
+                pending.append((label: "\(parent)/\(name)", data: data))
             }
         }
     }
