@@ -214,6 +214,17 @@ struct InjectView: View {
         .font(.footnote)
         .buttonStyle(AccentButtonStyle(prominent: false))
         .frame(maxWidth: .infinity)
+
+        // Diagnostic: read-only dump of everything currently staged in the
+        // game container, printed to the log. Run the vendor build (Sophia)
+        // first, then tap this — the log then shows the vendor's exact files,
+        // paths, and localConfig.json so staging can be matched byte for byte.
+        Button("dump_container") {
+            inject.dumpContainer()
+        }
+        .font(.footnote)
+        .buttonStyle(AccentButtonStyle(prominent: false))
+        .frame(maxWidth: .infinity)
     }
 
     private var canInject: Bool {

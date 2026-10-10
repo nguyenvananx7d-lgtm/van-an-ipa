@@ -356,6 +356,15 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// Read-only diagnostic: print whatever is currently staged inside the
+    /// resolved game container to the log (file names, `localConfig.json`
+    /// verbatim, patch digest, runtime markers). Run this *after* the vendor
+    /// build (Sophia) has staged its files to capture them byte for byte. It
+    /// never writes or removes anything in the container.
+    public func dumpContainer() {
+        ContainerDump(log: log, bridge: bridge).dump(game: game)
+    }
+
     // MARK: - diagnostics
 
     /// The decisive baseline experiment: wipe all staged payload out of the

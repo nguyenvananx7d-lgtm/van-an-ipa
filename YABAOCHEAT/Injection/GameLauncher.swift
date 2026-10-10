@@ -191,10 +191,37 @@ public struct GameLauncher: Sendable {
     /// process but its own, so a bundle-id lookup would report the target dead
     /// even while it sat open on screen. The kernel proc table entry (pid +
     /// short name `p_comm`) is what a jailed app can actually read for other
-    /// processes, so this is the only check a verdict may rely on.
+    /// processes, so this is the only check a verdict may rely on. And even
+    /// that can miss a Unity title whose main binary is not named after the
+    /// product (e.g. `Unity-iPhone`), which is what the probe's process-table
+    /// sample exists to expose.
     public func runningDescription(for game: Game) -> String? {
         runningProcesses().first.map { "pid \($0.pid) (\($0.comm))" }
     }
+
+    /// Sample of the process table for diagnostics.
+    ///
+    /// Prefers processes whose `p_comm` looks game-adjacent (Free Fire, Garena,
+    /// Unity default binary names), otherwise falls back to the first processes
+    /// in the table. Used by the probe so a name miss is a visible fact (the
+    /// real comm of the running game shows up here) instead of a bare "HAS
+    /// EXITED".
+    public func processTableSample(limit: Int = 40) -> [String] {
+        let all = pidsWithComm()
+        let broad = all.filter { proc in
+            Self.diagnosticCommFragments.contains { proc.comm.lowercased().contains($0) }
+        }
+        let shown = broad.isEmpty ? Array(all.prefix(min(limit, all.count))) : Array(broad.prefix(limit))
+        return shown.map { "\($0.pid):\($0.comm)" }
+    }
+
+    /// Broader matcher used only to *report* what is running. Deliberately wider
+    /// than `wantedCommFragments` (which gates cold-start kills) — a false
+    /// positive here only adds a line to the log; a false positive in the kill
+    /// list would terminate the wrong process.
+    private static let diagnosticCommFragments = [
+        "fire", "freefire", "garena", "unity", "dts", "ff", "game",
+    ]
 
     struct Proc {
         let pid: pid_t

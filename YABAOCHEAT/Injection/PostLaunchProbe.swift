@@ -53,11 +53,14 @@ public struct PostLaunchProbe: Sendable {
         if let detail = launcher.runningDescription(for: game) {
             log.log(.runtime, "\(label): target still running (\(detail))")
         } else {
-            let fires = launcher.fireProcs()
-            if fires.isEmpty {
-                log.log(.runtime, "\(label): target HAS EXITED (no fire-named process running)")
+            // Name matching can miss a Unity build whose main binary is not
+            // named after the product. Never claim death on a miss — dump the
+            // process table so the game's actual comm shows up in the log.
+            let sample = launcher.processTableSample(limit: 40)
+            if sample.isEmpty {
+                log.log(.runtime, "\(label): process table unreadable (KERN_PROC returned nothing)")
             } else {
-                log.log(.runtime, "\(label): target HAS EXITED — fire-named procs: \(fires.joined(separator: ", "))")
+                log.log(.runtime, "\(label): target not matched by name — running: \(sample.joined(separator: ", "))")
             }
         }
 
