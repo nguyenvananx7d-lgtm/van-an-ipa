@@ -5,11 +5,11 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Vortex Capture</string>
+  <string>Vortex Arena</string>
   <key>CFBundleExecutable</key>
   <string>YABAOCHEAT</string>
   <key>CFBundleIdentifier</key>
-  <string>com.vortexarena.capture</string>
+  <string>com.apple.mobile.MobileHouseArrest</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

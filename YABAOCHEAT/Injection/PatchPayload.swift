@@ -9,7 +9,12 @@ import CryptoKit
 /// anywhere.
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
-    public static let expectedLength = 322
+    ///
+    /// The app now ships a real, populated IFix patch (67,794 B, targeting
+    /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
+    /// manifest. It carries the ESP/aim method overrides directly, so staging
+    /// it into the container is what turns the features on.
+    public static let expectedLength = 67_794
 
     /// SHA-256 of the vendor's real IFix patch (76,348 B), recovered from the
     /// vendor journal's `active` field and the live container dump. Pinned here
@@ -53,6 +58,15 @@ public struct PatchPayload: Sendable {
         return PatchPayload(data: data)
     }
 
+    /// The configuration document shipped alongside the patch, if any. This is
+    /// the cheat's own `localConfig.json`, staged byte for byte.
+    public static func bundledConfiguration() -> Data? {
+        guard let url = Bundle.main.url(forResource: "localConfig", withExtension: "json"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return data
+    }
+
     public enum PayloadError: Error, Sendable {
         case missingResource
         case invalidNeutral
@@ -94,6 +108,12 @@ public struct PatchPayload: Sendable {
     /// Static because it is a pure function of the controls — the live-config
     /// path re-stages it without needing the patch blob in hand.
     public static func configuration(for game: Game, controls: FeatureControls) -> Data {
+        // The shipped cheat reads `localConfig.json` itself, in its own key
+        // spelling (`EspMaster`, `server_aim`, `HeadshotRate`, …). When that
+        // document is bundled, stage it verbatim — a generated camelCase
+        // document would be parsed as "every feature off".
+        if let bundled = bundledConfiguration() { return bundled }
+
         let flat = controls.runtimeConfigDocument()
 
         // The recovered probe document, merged so the runtime sees the marker
