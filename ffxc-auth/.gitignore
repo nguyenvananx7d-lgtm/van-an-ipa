@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# runtime state and secrets — never commit
+.env
+data/
+keys/
+*.pem
+*.log

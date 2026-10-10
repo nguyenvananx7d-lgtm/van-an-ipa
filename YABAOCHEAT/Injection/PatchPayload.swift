@@ -90,65 +90,40 @@ public struct PatchPayload: Sendable {
 
     /// The configuration document the injected runtime reads on wake.
     ///
-    /// Shape is what the runtime actually parses: a single flat map carrying
-    /// the recovered camelCase keys (`aimbotRadius`, `aimFovMode`, `espColor`,
-    /// …) at the top level, wrapped in the catalogue envelope
-    /// (`version` / `sections` / `options` / `selected` / `anchors`) that
-    /// `RuntimeConfiguration` decodes. It keys off `id` / `selected` / `version`.
+    /// The runtime parses a single flat object in its **own** key spelling
+    /// (`EspMaster`, `AimSystemEnabled`, `HeadshotRate`, `server_aim`, …). The
+    /// cheat ships that document as `localConfig.json`, so it is used as the
+    /// base: every key the panel does not expose — `NoRecoil`, `SpeedHack`,
+    /// `GhostMode`, the guest-reset block, the `server_*` grants, and the
+    /// `meomeo` / `sig` / `token` / `ts` session fields — keeps the value the
+    /// cheat shipped with.
     ///
-    /// Two recovered artifacts ride in the same document:
-    ///
-    /// - `RecoveredVocabulary.patchProbeDocument` (`{"testCodePatch":true}`) —
-    ///   the marker the runtime reads to know the code patch may take effect.
-    /// - The `controls` object carries the recovered camelCase keys **and** the
-    ///   original snake_case command names (`aim_fov_mode`,
-    ///   `fast_reload_percent`, …), so a reader that consumes either spelling
-    ///   finds the same values it finds flat.
+    /// The panel's aim / ESP switches are then overlaid on top in the same key
+    /// spelling, so a checkbox and the document always agree. `testCodePatch`
+    /// is the recovered marker the runtime reads to know the code patch may
+    /// apply.
     ///
     /// Static because it is a pure function of the controls — the live-config
     /// path re-stages it without needing the patch blob in hand.
     public static func configuration(for game: Game, controls: FeatureControls) -> Data {
-        // The shipped cheat reads `localConfig.json` itself, in its own key
-        // spelling (`EspMaster`, `server_aim`, `HeadshotRate`, …). When that
-        // document is bundled, stage it verbatim — a generated camelCase
-        // document would be parsed as "every feature off".
-        if let bundled = bundledConfiguration() { return bundled }
+        // Base: the cheat's own document. Empty only if the resource was
+        // stripped, in which case the overlay stands on its own.
+        var document: [String: Any] = [:]
+        if let base = bundledConfiguration(),
+           let object = try? JSONSerialization.jsonObject(with: base) as? [String: Any] {
+            document = object
+        }
 
-        let flat = controls.runtimeConfigDocument()
+        // Overlay: the panel's aim / ESP switches, translated to runtime keys.
+        for (key, value) in controls.runtimeConfigDocument() { document[key] = value }
 
-        // The recovered probe document, merged so the runtime sees the marker
-        // wherever it looks for it in `localConfig.json`.
-        let probe: [String: Any] = (try? JSONSerialization.jsonObject(
-            with: Data(RecoveredVocabulary.patchProbeDocument.utf8)
-        ) as? [String: Any]) ?? [:]
+        // Recovered marker: the runtime reads it to know the patch may apply.
+        document["testCodePatch"] = true
 
-        var document: [String: Any] = [
-            "version":   String(ProtocolConstants.protocolVersion),
-            "signature": KernelRW.signature,
-            "game":      game.rawValue,
-
-            "sections":  FeatureControls.panelSections,
-            "options":   FeatureControls.selectionOptions,
-            "selected":  controls.selectedControlIDs,
-            "anchors":   FeatureControls.anchors,
-
-            "setters":   controls.setterNames,
-        ]
-
-        document.merge(probe) { _, new in new }
-
-        // Flat wins — this is the level the runtime reads.
-        for (key, value) in flat { document[key] = value }
-
-        // Forward-compatible mirror: the object form carries both the recovered
-        // camelCase keys and the original snake_case command payload keys.
-        let nested = controls.commandPayload()
-            .merging(flat) { _, new in new }
-            .merging(probe) { _, new in new }
-        document["controls"] = nested
-
-        return (try? JSONSerialization.data(withJSONObject: document, options: [.sortedKeys]))
-            ?? Data("{}".utf8)
+        return (try? JSONSerialization.data(
+            withJSONObject: document,
+            options: [.prettyPrinted, .sortedKeys]
+        )) ?? Data("{}".utf8)
     }
 }
 

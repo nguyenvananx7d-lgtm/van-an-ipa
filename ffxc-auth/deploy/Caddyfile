@@ -1,0 +1,32 @@
+# Terminate TLS in front of ffxc-auth. The iOS client posts to
+# https://<host>/api and will not accept a plaintext endpoint in practice.
+#
+#   caddy run --config Caddyfile
+#
+# Point your DNS A record at the box first; Caddy provisions the cert.
+
+crackbomaydi.dev {
+	encode zstd gzip
+
+	@auth path /api
+	handle @auth {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	@admin path /admin*
+	handle @admin {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	handle {
+		respond 404
+	}
+
+	log {
+		output file /var/log/caddy/ffxc-auth.log
+	}
+}

@@ -1,6 +1,13 @@
 import SwiftUI
 
-/// Aimbot tab — anti-ban, assist type, and the tuning group from the mockup.
+/// Aimbot tab. Only the switches the injected runtime actually reads are shown
+/// here, so every row does something:
+///
+/// - master → `AimSystemEnabled` / `AimEnabled`
+/// - bone → `AimTarget`
+/// - hit chance → `HeadshotRate`
+/// - draw FOV → `EspFov`
+/// - field of view → `FovSize`
 struct AimbotView: View {
     @EnvironmentObject var menu: MenuStore
 
@@ -10,20 +17,7 @@ struct AimbotView: View {
                 ToggleRow(label: String(localized: "master_aimbot"), isOn: menu.feature(\.isEnabled))
             }
 
-            SectionGroup(title: String(localized: "section_antiban")) {
-                ToggleRow(label: String(localized: "anti_ban"), isOn: menu.feature(\.antiBan))
-            }
-
             SectionGroup(title: String(localized: "section_aimbot_type")) {
-                SegmentRow(
-                    label: String(localized: "aimbot_type"),
-                    selection: menu.feature(\.aimbotType),
-                    options: [
-                        SegmentOption(value: "aimbot", title: String(localized: "aimbot_type_normal")),
-                        SegmentOption(value: "silent", title: String(localized: "aimbot_type_silent")),
-                    ]
-                )
-
                 SegmentRow(
                     label: String(localized: "bone"),
                     selection: menu.feature(\.aimTarget),
@@ -38,8 +32,6 @@ struct AimbotView: View {
                     value: menu.feature(\.hitChance),
                     unit: "%"
                 )
-
-                ToggleRow(label: String(localized: "silent_aim"), isOn: menu.feature(\.silentAim))
             }
 
             SectionGroup(title: String(localized: "section_aimbot_settings")) {
@@ -50,15 +42,6 @@ struct AimbotView: View {
                     value: menu.feature(\.aimbotRadiusValue),
                     range: 0...360
                 )
-
-                SliderRow(
-                    label: String(localized: "aimbot_distance"),
-                    value: menu.feature(\.aimDistance),
-                    range: 0...500,
-                    unit: "m"
-                )
-
-                ToggleRow(label: String(localized: "ignore_knocked"), isOn: menu.feature(\.ignoreKnocked))
             }
         }
     }

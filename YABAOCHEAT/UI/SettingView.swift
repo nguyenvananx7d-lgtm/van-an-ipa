@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 
-/// Setting tab — privacy, license facts, compatibility, language, support.
+/// Setting tab — the kernel-exploit controls, license facts, compatibility,
+/// language, support.
 struct SettingView: View {
     @EnvironmentObject var auth: AuthorizationStore
     @EnvironmentObject var language: LanguageStore
-    @EnvironmentObject var menu: MenuStore
+    @EnvironmentObject var inject: InjectStore
 
     @State private var showLogout: Bool = false
     @State private var showLog: Bool = false
@@ -18,7 +19,7 @@ struct SettingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            privacy
+            exploit
             licenseInfo
             compatibility
             languageSection
@@ -50,13 +51,84 @@ struct SettingView: View {
 
     // MARK: - sections
 
-    private var privacy: some View {
-        SectionGroup(title: String(localized: "section_privacy")) {
-            ToggleRow(
-                label: String(localized: "stream_proof"),
-                isOn: menu.feature(\.streamProof)
-            )
+    /// Kernel-exploit controls, moved here from the Inject screen. The chain is
+    /// auto-run at the front of every inject; this is the manual fallback and
+    /// the status read-out.
+    private var exploit: some View {
+        SectionGroup(title: String(localized: "section_exploit")) {
+            exploitRow
         }
+    }
+
+    @ViewBuilder
+    private var exploitRow: some View {
+        if inject.isRunningExploit {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("exploit_status_running")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+        } else {
+            switch inject.exploitStatus {
+            case .success:
+                statusRow(
+                    icon: "checkmark.seal.fill",
+                    tint: .green,
+                    titleKey: "exploit_status_success",
+                    buttonKey: "retry_exploit"
+                )
+            case .failed:
+                VStack(alignment: .leading, spacing: 8) {
+                    Banner(kind: .error, message: String(localized: "exploit_status_failed"))
+                    Button("retry_exploit") { inject.runExploit() }
+                        .buttonStyle(ChipButtonStyle())
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+            case .notStarted:
+                HStack(spacing: 10) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .foregroundStyle(inject.requiresSandboxEscape ? Color.orange : Color.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("exploit_status_not_started")
+                            .font(.footnote.weight(.semibold))
+                        Text(NSLocalizedString(inject.exploitHintKey, comment: ""))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button("run_exploit") { inject.runExploit() }
+                        .buttonStyle(ChipButtonStyle())
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+            case .unsupported:
+                EmptyView()
+            }
+        }
+    }
+
+    private func statusRow(
+        icon: String,
+        tint: Color,
+        titleKey: LocalizedStringKey,
+        buttonKey: LocalizedStringKey
+    ) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+            Text(titleKey)
+                .font(.footnote)
+            Spacer(minLength: 0)
+            Button(buttonKey) { inject.runExploit() }
+                .buttonStyle(ChipButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
     }
 
     private var licenseInfo: some View {

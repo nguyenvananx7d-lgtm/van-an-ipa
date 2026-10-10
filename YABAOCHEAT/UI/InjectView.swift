@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Injection screen: pick the target, inject, or remove.
+///
+/// Two verbs only — Inject and Uninject — mirroring the vendor build. The
+/// kernel-exploit controls used to live here; they have moved to the Setting
+/// tab so this screen stays a single decision.
 struct InjectView: View {
     @EnvironmentObject var menu: MenuStore
     @EnvironmentObject var auth: AuthorizationStore
@@ -11,8 +16,6 @@ struct InjectView: View {
         Card(padding: 18, radius: 20) {
             VStack(alignment: .leading, spacing: 16) {
                 header
-
-                exploitSection
 
                 if menu.injectStates[inject.game] == .unsupportedOS {
                     banner(.error, String(localized: "ios_not_supported"))
@@ -31,15 +34,12 @@ struct InjectView: View {
                 }
 
                 if inject.isActive {
-                    HStack {
+                    HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         Text("inject_active")
                             .font(.footnote.weight(.semibold))
-                        Spacer()
-                        Button("uninject") { runningTask = Task { await inject.uninject() } }
-                            .buttonStyle(AccentButtonStyle(prominent: false))
-                            .disabled(runningTask != nil)
+                        Spacer(minLength: 0)
                     }
                 }
             }
@@ -65,74 +65,6 @@ struct InjectView: View {
             Text(inject.game.bundleIdentifier)
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    /// The opt-in kernel-exploit block (Vortex Arena-specific: 3105 auto-runs, Vortex Arena
-    /// keeps the chain behind an explicit button). `.unsupported` is rendered
-    /// by the unsupported-OS banner instead; every other status gets a row with
-    /// status text and a Run / Run-again button.
-    @ViewBuilder
-    private var exploitSection: some View {
-        if inject.isRunningExploit {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("exploit_status_running")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.vertical, 2)
-        } else {
-            switch inject.exploitStatus {
-            case .success:
-                statusRow(
-                    icon: "checkmark.seal.fill",
-                    tint: .green,
-                    titleKey: "exploit_status_success",
-                    buttonKey: "retry_exploit"
-                )
-            case .failed:
-                VStack(alignment: .leading, spacing: 8) {
-                    banner(.error, String(localized: "exploit_status_failed"))
-                    Button("retry_exploit") { inject.runExploit() }
-                        .buttonStyle(ChipButtonStyle())
-                }
-            case .notStarted:
-                HStack(spacing: 10) {
-                    Image(systemName: "shield.lefthalf.filled")
-                        .foregroundStyle(inject.requiresSandboxEscape ? Color.orange : Color.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("exploit_status_not_started")
-                            .font(.footnote.weight(.semibold))
-                        Text(NSLocalizedString(inject.exploitHintKey, comment: ""))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("run_exploit") { inject.runExploit() }
-                        .buttonStyle(ChipButtonStyle())
-                }
-            case .unsupported:
-                EmptyView()
-            }
-        }
-    }
-
-    private func statusRow(
-        icon: String,
-        tint: Color,
-        titleKey: LocalizedStringKey,
-        buttonKey: LocalizedStringKey
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(tint)
-            Text(titleKey)
-                .font(.footnote)
-            Spacer()
-            Button(buttonKey) { inject.runExploit() }
-                .buttonStyle(ChipButtonStyle())
         }
     }
 
@@ -163,7 +95,6 @@ struct InjectView: View {
         Banner(kind: kind, message: message)
     }
 
-    @ViewBuilder
     private var buttons: some View {
         HStack(spacing: 10) {
             Button {
@@ -184,58 +115,16 @@ struct InjectView: View {
             .disabled(!canInject || runningTask != nil)
 
             Button {
-                inject.wipe()
+                runningTask = Task { await inject.uninject() }
             } label: {
-                Text("wipe")
+                Text("uninject")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
             .buttonStyle(AccentButtonStyle(prominent: false))
             .disabled(runningTask != nil)
-
-            Button {
-                inject.launch()
-            } label: {
-                Text("launch")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(AccentButtonStyle(prominent: false))
         }
-
-        // Diagnostic: wipe the payload, launch clean, probe 10s later. Tells
-        // whether the game dies on its own (sideloaded build boot-crash) or
-        // because of the staged files (target self-kill after detecting them).
-        Button("clean_launch_diagnostic") {
-            inject.cleanLaunchDiagnostic()
-        }
-        .font(.footnote)
-        .buttonStyle(AccentButtonStyle(prominent: false))
-        .frame(maxWidth: .infinity)
-
-        // Diagnostic: read-only dump of everything currently staged in the
-        // game container, printed to the log. Run the vendor build (Sophia)
-        // first, then tap this — the log then shows the vendor's exact files,
-        // paths, and localConfig.json so staging can be matched byte for byte.
-        Button("dump_container") {
-            inject.dumpContainer()
-        }
-        .font(.footnote)
-        .buttonStyle(AccentButtonStyle(prominent: false))
-        .frame(maxWidth: .infinity)
-
-        // Live capture: while this app sits in the background, watch the game
-        // container for the vendor's real patch to appear and export it the
-        // moment it does. Flow: start this, switch to Sophia and Inject, keep
-        // the game open, then come back — the payload is already saved.
-        Button(LocalizedStringKey(inject.captureActive ? "capture_stop" : "capture_live")) {
-            inject.toggleCapture()
-        }
-        .font(.footnote)
-        .buttonStyle(AccentButtonStyle(prominent: inject.captureActive))
-        .frame(maxWidth: .infinity)
     }
 
     private var canInject: Bool {

@@ -1,17 +1,9 @@
 import SwiftUI
 
-/// Misc tab — the injection cycle plus whatever the deployment catalog still
-/// wants to show.
+/// Inject tab — the injection pair on its own. The kernel-exploit controls live
+/// in the Setting tab.
 struct MiscView: View {
-    @EnvironmentObject var menu: MenuStore
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            InjectView()
-
-            if !menu.catalog.isEmpty {
-                CatalogSections()
-            }
-        }
+        InjectView()
     }
 }

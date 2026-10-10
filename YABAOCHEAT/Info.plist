@@ -35,15 +35,6 @@
   <true/>
   <key>LSSupportsOpeningDocumentsInPlace</key>
   <true/>
-  <key>UIBackgroundModes</key>
-  <array>
-    <string>audio</string>
-    <string>location</string>
-  </array>
-  <key>NSLocationWhenInUseUsageDescription</key>
-  <string>Vortex Capture keeps the live capture loop awake in the background while the vendor build injects.</string>
-  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>Vortex Capture keeps the live capture loop awake in the background while the vendor build injects.</string>
   <key>UIRequiredDeviceCapabilities</key>
   <array><string>arm64</string></array>
   <key>UISupportedInterfaceOrientations</key>

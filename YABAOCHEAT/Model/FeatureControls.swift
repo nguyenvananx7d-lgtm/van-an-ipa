@@ -279,62 +279,47 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - runtime configuration document
     //
     // `localConfig.json` is read back by the injected IFix runtime, not by this
-    // app. The names are the ones recovered from `__cstring`
-    // (`RecoveredVocabulary.RuntimeConfig`): flat, top-level, camelCase. The
-    // panel keys ride in the same map so a runtime that learns them picks them
-    // up; the shipped blob ignores what it does not know.
+    // app. The keys it actually parses are the cheat's own spelling — recovered
+    // verbatim from the patch's `__cstring`:
     //
-    // The earlier output nested everything under `controls` with snake_case
-    // keys, so the runtime — which reads top-level camelCase — found nothing.
+    //     EspMaster EspBox EspLine EspName EspDistance EspHealth EspSkeleton
+    //     AimSystemEnabled AimEnabled AimTarget HeadshotRate FovSize EspFov
+    //
+    // The panel writes camelCase (`masterEsp`, `boxEsp`, `aimTarget`, …), which
+    // the runtime does not match, so every switch stayed at the cheat's default.
+    // This method is the single place the panel spelling is translated to the
+    // runtime spelling.
+    //
+    // Only the switches the panel exposes are emitted here; the keys it does not
+    // expose (`NoRecoil`, `SpeedHack`, the guest-reset block, `server_*`, …) are
+    // preserved from the shipped document by `PatchPayload.configuration`.
 
-    /// Flat key/value map the injected runtime overlays onto its own state.
+    /// The aim / ESP switches from the panel, keyed exactly as the injected
+    /// runtime reads them.
     public func runtimeConfigDocument() -> [String: Any] {
         [
-            // recovered runtime keys — exact spelling
-            "aimbotRadius":      aimbotRadiusValue,
-            "radius":            radiusValue,
-            "fastReloadPercent": fastReloadPercent,
-            "fastFireLevel":     fastFireLevel,
-            "espColor":          espColor,
-            "espThickness":      espThickness,
-            "aimFovMode":        aimFovMode,
-            "h0":                colorRGB,
-            "a0":                colorAlpha,
+            // visual ESP
+            "EspMaster":        masterEsp,
+            "EspBox":           boxEsp,
+            "EspLine":          lineEsp,
+            "EspName":          nameEsp,
+            "EspDistance":      distanceEsp,
+            "EspHealth":        healthEsp,
+            "EspSkeleton":      skeletonEsp,
 
-            // behavioural switches
-            "enabled":           isEnabled,
-            "headshot":          headshotValue,
-            "aimTarget":         aimTarget,
-            "aim_target":        aimTarget,
-
-            // aimbot panel
-            "aimbotType":        aimbotType,
-            "silentAim":         silentAim,
-            "hitChance":         hitChance,
-            "aimDistance":       aimDistance,
-            "drawFov":           drawFov,
-            "ignoreKnocked":     ignoreKnocked,
-            "antiBan":           antiBan,
-
-            // visual panel
-            "masterEsp":         masterEsp,
-            "lineEsp":           lineEsp,
-            "boxEsp":            boxEsp,
-            "boxType":           boxType,
-            "nameEsp":           nameEsp,
-            "distanceEsp":       distanceEsp,
-            "healthEsp":         healthEsp,
-            "healthType":        healthType,
-            "skeletonEsp":       skeletonEsp,
-            "drawEnemyCount":    drawEnemyCount,
-            "textSize":          textSize,
-            "espBounding":       espBounding,
-
-            "streamProof":       streamProof,
-            "radiusPolicy":      radiusPolicy.rawValue,
-            "headshotPolicy":    headshotPolicy.rawValue,
+            // aim
+            "AimSystemEnabled": isEnabled,
+            "AimEnabled":       isEnabled,
+            "AimTarget":        aimTargetOrdinal,
+            "HeadshotRate":     hitChance,
+            "FovSize":          Int(aimbotRadiusValue.rounded()),
+            "EspFov":           drawFov,
         ]
     }
+
+    /// The runtime reads `AimTarget` as an ordinal, not a word: `1` = head,
+    /// `2` = body. `FeatureControls` keeps the word for the panel.
+    public var aimTargetOrdinal: Int { aimTarget == "body" ? 2 : 1 }
 
     /// The recovered `h0` / `a0` pair decomposed from `espColor`. The runtime
     /// reads a colour through these two keys, so splitting here keeps a single
