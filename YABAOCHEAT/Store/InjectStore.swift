@@ -257,6 +257,17 @@ public final class InjectStore: ObservableObject {
             return
         }
 
+        // The kernel chain's stage 1 (`kexploit_opa334`) is verified only on
+        // iOS 17.0–18.7.1. On newer builds auto-running it here is a 10–30 s
+        // wait that can only fail; the vendor build does not gate staging on it
+        // either — the files land via the grant/MCM container route probed in
+        // `ContainerBridge.resolve`.
+        guard KernelExploit.kernelStageSupported else {
+            log.log(.kernelRW, "kernel chain targets iOS 17.0–18.7.1 — skipping auto-run on iOS \(DeviceOS.displayString)")
+            log.log(.kernelRW, "continuing on the grant/MCM container path (vendor parity)")
+            return
+        }
+
         isRunningExploit = true
         status = "Bringing up kernel access…"
         log.log(.kernelRW, "auto-running exploit before inject (Sophia parity)")

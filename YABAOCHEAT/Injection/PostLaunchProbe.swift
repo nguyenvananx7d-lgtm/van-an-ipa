@@ -125,6 +125,15 @@ public struct PostLaunchProbe: Sendable {
             verdicts.append("markers: \(markers.joined(separator: ", "))")
         }
 
+        // The injected runtime's own debug log (`Documents/ffxc_debug.log`) is
+        // the ground truth for whether it engaged: when a run wrote one, show
+        // the tail so the verdict carries what the game's side actually saw.
+        let debugLog = dir.appendingPathComponent("ffxc_debug.log")
+        if let text = try? String(contentsOf: debugLog, encoding: .utf8) {
+            let tail = String(text.suffix(220)).replacingOccurrences(of: "\n", with: " ⏎ ")
+            verdicts.append("ffxc_debug.log tail: \(tail)")
+        }
+
         log.log(.runtime, "probe \(dir.lastPathComponent): \(verdicts.joined(separator: ", "))")
     }
 

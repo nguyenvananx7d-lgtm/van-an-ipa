@@ -19,11 +19,17 @@ public struct GameLauncher: Sendable {
     /// `terminateFirst` matters: a warm start keeps the old runtime mapped, so a
     /// fresh patch would be loaded by nobody.
     ///
-    /// Launch tries the URL-scheme path first and falls back to asking the app
-    /// workspace to launch by bundle id. A `canOpenURL` refusal is not proof the
-    /// game is absent — some titles register no launchable scheme, so a fallback
-    /// that does not depend on scheme registration is required before reporting
-    /// the game as not installed.
+    /// Launch mirrors the vendor build (`Sophia`): open the title's registered
+    /// URL scheme directly and never gate on `canOpenURL`. On modern iOS a
+    /// `canOpenURL` refusal only proves the scheme is missing from the caller's
+    /// queries whitelist — exactly what an unsigned TrollStore-installed app
+    /// does not reliably carry — so the old gate skipped the one call that
+    /// actually opens the game and fell through to a workspace call whose reply
+    /// was logged as success even when no process came up. `UIApplication.open`
+    /// is itself un-gated, and its completion's `ok` is the genuine open
+    /// signal. Only when the scheme open is refused do we fall back to the
+    /// private app-workspace launch, and the 10 s post-launch probe is what
+    /// verifies either attempt really landed a running game.
     @MainActor
     public func launch(game: Game, terminateFirst: Bool = true) throws {
         if terminateFirst, let running = runningPID(for: game) {
@@ -34,30 +40,26 @@ public struct GameLauncher: Sendable {
             Thread.sleep(forTimeInterval: 0.6)
         }
 
+        log.log(.launch, "requesting open of \(game.bundleIdentifier) via registered scheme")
         let url = URL(string: "\(game.bundleIdentifier)://")!
-        if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url, options: [:]) { [self] ok in
+        UIApplication.shared.open(url, options: [:]) { [self] ok in
+            Task { @MainActor in
                 if ok {
-                    log.log(.launch, "launched \(game.bundleIdentifier)")
+                    log.log(.launch, "launched \(game.bundleIdentifier) via scheme")
                 } else {
-                    log.log(.launch, "launch refused for \(game.bundleIdentifier)")
+                    log.log(.launch, "scheme open refused for \(game.bundleIdentifier); trying app workspace")
+                    if openViaWorkspace(game) {
+                        // A non-nil `perform` reply means the workspace accepted
+                        // the request, not that the process is up — the probe
+                        // owns that verdict.
+                        log.log(.launch, "workspace accepted the launch request for \(game.bundleIdentifier)")
+                    } else {
+                        log.log(.launch, "\(game.bundleIdentifier) not installed or not launchable")
+                    }
                 }
-                logFireProcs("after scheme launch")
+                logFireProcs("after launch attempt")
             }
-            return
         }
-
-        // No URL scheme: some titles (or some sideload setups) never register
-        // one. Ask the workspace to open by bundle id instead. The app is only
-        // reported missing if that also fails.
-        if openViaWorkspace(game) {
-            log.log(.launch, "launched \(game.bundleIdentifier) via workspace")
-            logFireProcs("after workspace launch")
-            return
-        }
-
-        log.log(.launch, "\(game.bundleIdentifier) not installed or not launchable")
-        throw LaunchError.gameNotInstalled
     }
 
     /// Whether the target is currently running.
