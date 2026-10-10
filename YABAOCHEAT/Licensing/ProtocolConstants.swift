@@ -5,7 +5,16 @@ import Foundation
 /// These keys are the wire contract. The server is free to omit any of them; the
 /// defaults here are what the app assumes when a field is absent.
 public enum ProtocolConstants {
-    public static let endpoint = "https://crackbomaydi.dev/api"
+    /// The licensing endpoint. Overridable at build time with an `FFXCEndpoint`
+    /// string in Info.plist so a staging host can be swapped in without a code
+    /// change; otherwise it falls back to the production host.
+    public static let endpoint: String = {
+        if let override = Bundle.main.object(forInfoDictionaryKey: "FFXCEndpoint") as? String,
+           !override.isEmpty {
+            return override
+        }
+        return "https://crackbomaydi.dev/api"
+    }()
 
     /// Sent with every request so the server can refuse clients it no longer
     /// supports.

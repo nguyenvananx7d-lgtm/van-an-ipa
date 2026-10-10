@@ -386,6 +386,11 @@ public final class InjectStore: ObservableObject {
         let bridge = self.bridge
         let log = self.log
         captureActive = true
+
+        // Two independent keep-alives, so the loop is still scheduled while the
+        // user is inside the vendor build tapping Inject. A single
+        // `beginBackgroundTask` token only buys ~30 s.
+        CaptureKeepAlive.shared.start()
         captureToken = UIApplication.shared.beginBackgroundTask(withName: "ffxc.live-capture") { [weak self] in
             Task { @MainActor in self?.stopCapture() }
         }
@@ -400,34 +405,66 @@ public final class InjectStore: ObservableObject {
                 return
             }
             let urls = bridge.patchURLs(in: data, game: game)
-            let deadline = Date().addingTimeInterval(180)
+            let dirs = bridge.payloadDirectories(in: data)
+            let deadline = Date().addingTimeInterval(1_200)
             var lastNotice = Date.distantPast
-            log.log(.runtime, "CAPTURE: watching \(urls.count) stage path(s) for a blob over 322 B")
+            var lifted = Set<String>()
+            log.log(.runtime, "CAPTURE: watching \(urls.count) stage path(s) in \(dirs.count) dir(s) for a blob over 322 B")
 
             while !Task.isCancelled, Date() < deadline {
                 var hit: (data: Data, url: URL)?
+
+                // 1) The known staged names (container root + Documents). Cheap
+                //    direct stat, no directory listing.
                 for url in urls where FileManager.default.fileExists(atPath: url.path) {
                     guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
                           size.intValue > Int64(PatchPayload.expectedLength) else { continue }
                     if let blob = try? Data(contentsOf: url) { hit = (blob, url); break }
                 }
 
-                if let hit {
+                // 2) Anything else the vendor drops while it is live — a staging
+                //    copy under a name we have not seen. Only names that could
+                //    plausibly be the payload, only in-band sizes.
+                if hit == nil {
+                    for dir in dirs {
+                        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { continue }
+                        for name in names {
+                            let lower = name.lowercased()
+                            guard lower.contains("patch") || lower.contains("ffxc") else { continue }
+                            let url = dir.appendingPathComponent(name)
+                            guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
+                                  size.intValue > Int64(PatchPayload.expectedLength),
+                                  size.intValue <= 400_000 else { continue }
+                            if let blob = try? Data(contentsOf: url) { hit = (blob, url); break }
+                        }
+                        if hit != nil { break }
+                    }
+                }
+
+                if let hit, hit.data.count <= 400_000 {
                     let digest = PatchPayload.digest(of: hit.data)
                     log.log(.runtime, "CAPTURE: live blob at \(hit.url.lastPathComponent) — \(hit.data.count)B sha256=\(digest)")
                     if digest.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame
                         || hit.data.count == 76_348 {
                         ContainerDump.captureExport(label: "live", data: hit.data)
-                        log.log(.runtime, "CAPTURE: payload exported — Files/Filza ▸ Vortex Arena ▸ Documents")
+                        log.log(.runtime, "CAPTURE: payload exported — Files/Filza ▸ Vortex Capture ▸ Documents")
                         return
                     }
-                    log.log(.runtime, "CAPTURE: non-neutral blob but not the payload digest/size; still watching")
-                } else if Date().timeIntervalSince(lastNotice) > 45 {
-                    log.log(.runtime, "CAPTURE: still neutral after 45 s — run Sophia Inject while the game stays open")
+                    // Not the pinned digest, but the vendor wrote *something*
+                    // over the neutral manifest. Lift it once (it may be a
+                    // version whose digest we have not recovered yet) and keep
+                    // watching for the pinned one.
+                    let key = "\(hit.url.path):\(hit.data.count)"
+                    if lifted.insert(key).inserted {
+                        ContainerDump.captureExport(label: "live-\(hit.data.count)", data: hit.data)
+                        log.log(.runtime, "CAPTURE: non-neutral blob lifted (\(hit.data.count)B) — still watching for the pinned digest")
+                    }
+                } else if Date().timeIntervalSince(lastNotice) > 30 {
+                    log.log(.runtime, "CAPTURE: still neutral — run Sophia Inject while the game stays open")
                     lastNotice = Date()
                 }
 
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                try? await Task.sleep(nanoseconds: 300_000_000)
             }
             log.log(.runtime, "CAPTURE: loop ended")
         }
@@ -440,6 +477,7 @@ public final class InjectStore: ObservableObject {
             captureActive = false
             log.log(.runtime, "CAPTURE: stopped")
         }
+        CaptureKeepAlive.shared.stop()
         if captureToken != .invalid {
             UIApplication.shared.endBackgroundTask(captureToken)
             captureToken = .invalid

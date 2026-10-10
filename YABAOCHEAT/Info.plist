@@ -5,11 +5,11 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Vortex Arena</string>
+  <string>Vortex Capture</string>
   <key>CFBundleExecutable</key>
   <string>YABAOCHEAT</string>
   <key>CFBundleIdentifier</key>
-  <string>com.apple.mobile.MobileHouseArrest</string>
+  <string>com.vortexarena.capture</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -35,6 +35,15 @@
   <true/>
   <key>LSSupportsOpeningDocumentsInPlace</key>
   <true/>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>audio</string>
+    <string>location</string>
+  </array>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Vortex Capture keeps the live capture loop awake in the background while the vendor build injects.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>Vortex Capture keeps the live capture loop awake in the background while the vendor build injects.</string>
   <key>UIRequiredDeviceCapabilities</key>
   <array><string>arm64</string></array>
   <key>UISupportedInterfaceOrientations</key>
