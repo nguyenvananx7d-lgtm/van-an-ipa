@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Main shell: license gate until the session is valid, then the branded header
-/// with the four tab pages.
+/// Main shell: license gate until the session is valid, then a slim app bar
+/// with the four screens under an underline tab strip.
 struct ContentView: View {
     @StateObject private var language = LanguageStore.shared
     @StateObject private var menu = MenuStore.shared
@@ -36,13 +36,21 @@ struct ContentView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    header
+                    topBar
 
                     if let msg = auth.revocationMessage {
                         Banner(kind: .error, message: msg)
                     }
 
-                    tabBar
+                    TabStrip(
+                        selection: $selectedTab,
+                        items: [
+                            String(localized: "tab_aimbot"),
+                            String(localized: "tab_visual"),
+                            String(localized: "tab_misc"),
+                            String(localized: "tab_setting"),
+                        ]
+                    )
 
                     Group {
                         switch selectedTab {
@@ -54,10 +62,10 @@ struct ContentView: View {
                     }
                     .transition(.opacity)
 
-                    Spacer(minLength: 32)
+                    Spacer(minLength: 40)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 12)
             }
         }
         .animation(.easeInOut(duration: 0.18), value: selectedTab)
@@ -66,69 +74,50 @@ struct ContentView: View {
         .task { await inject.evaluate() }
     }
 
-    private var tabBar: some View {
-        SegmentedControl(
-            selection: $selectedTab,
-            items: [
-                SegItem(value: 0, title: String(localized: "tab_aimbot")),
-                SegItem(value: 1, title: String(localized: "tab_visual")),
-                SegItem(value: 2, title: String(localized: "tab_misc")),
-                SegItem(value: 3, title: String(localized: "tab_setting")),
-            ]
-        )
-    }
+    // MARK: - app bar
 
-    // MARK: - header
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            Mark(size: 36)
 
-    private var header: some View {
-        Card(padding: 16, radius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 14) {
-                    Mark(size: 54)
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("app_title")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(Palette.text)
-                        HStack(spacing: 6) {
-                            Text("version")
-                                .foregroundStyle(Palette.textFaint)
-                            Text("3.7.33")
-                                .foregroundStyle(Palette.textDim)
-                        }
-                        .font(.caption)
-                        statusBadge
-                    }
-
-                    Spacer(minLength: 0)
-
-                    VStack(alignment: .trailing, spacing: 5) {
-                        Text(auth.status.plan ?? "offline")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Palette.accent)
-                        Text(auth.status.displayKey ?? "—")
-                            .font(.caption2)
-                            .foregroundStyle(Palette.textDim)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text("app_title")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(Palette.text)
+                    Text(verbatim: "v3.7.33")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(Palette.textFaint)
+                }
+                HStack(spacing: 8) {
+                    Text(planLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Palette.accent)
+                    if let key = auth.status.displayKey {
+                        Text(key)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Palette.textFaint)
                             .lineLimit(1)
                     }
                 }
-
-                Rectangle()
-                    .fill(Palette.hairline)
-                    .frame(height: 1)
-
-                Text(welcomeLine)
-                    .font(.footnote)
-                    .foregroundStyle(Palette.textDim)
             }
+
+            Spacer(minLength: 12)
+
+            statusBadge
         }
+        .padding(.bottom, 2)
     }
 
-    private var welcomeLine: String {
-        String(
-            format: String(localized: "welcome_back"),
-            auth.status.displayKey ?? "—"
-        )
+    private var planLabel: String {
+        let s = auth.status
+        if s.isOnline {
+            return s.plan ?? String(localized: "plan_premium")
+        }
+        if case .checking = s {
+            return String(localized: "checking")
+        }
+        return String(localized: "offline")
     }
 
     private var statusBadge: some View {

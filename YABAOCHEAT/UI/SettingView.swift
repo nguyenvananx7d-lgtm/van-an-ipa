@@ -7,6 +7,7 @@ struct SettingView: View {
     @EnvironmentObject var auth: AuthorizationStore
     @EnvironmentObject var language: LanguageStore
     @EnvironmentObject var inject: InjectStore
+    @EnvironmentObject var menu: MenuStore
 
     @State private var showLogout: Bool = false
     @State private var showLog: Bool = false
@@ -20,6 +21,7 @@ struct SettingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             exploit
+            antiBanSection
             licenseInfo
             compatibility
             languageSection
@@ -47,6 +49,11 @@ struct SettingView: View {
             }
             .navigationViewStyle(.stack)
         }
+        .onChange(of: menu.controls.antiBan) { newValue in
+            if newValue {
+                Task { await inject.runAntiBan() }
+            }
+        }
     }
 
     // MARK: - sections
@@ -60,6 +67,59 @@ struct SettingView: View {
         }
     }
 
+    /// Anti-ban: the checkbox drives a trace sweep of the panel's own residue
+    /// in the container (probe leftovers, signature strays) and a session
+    /// re-stamp. The same sweep also runs at the front of every inject while
+    /// the switch is on. The staged patch and config are never touched.
+    private var antiBanSection: some View {
+        SectionGroup(title: String(localized: "section_anti_ban")) {
+            ToggleRow(
+                label: String(localized: "anti_ban"),
+                detail: String(localized: "anti_ban_caption"),
+                isOn: menu.feature(\.antiBan)
+            )
+
+            HStack(spacing: 10) {
+                if inject.isRunningAntiBan {
+                    ProgressView()
+                        .tint(Palette.accent)
+                    Text("anti_ban_running")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.textDim)
+                } else {
+                    Text(lastAntiBanText)
+                        .font(.footnote)
+                        .foregroundStyle(Palette.textDim)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    Task { await inject.runAntiBan() }
+                } label: {
+                    Text("anti_ban_sweep_now")
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(inject.isRunningAntiBan)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .rowDivider()
+        }
+    }
+
+    private var lastAntiBanText: String {
+        guard let report = inject.antiBanReport else {
+            return String(localized: "anti_ban_idle")
+        }
+        if report.removed.isEmpty && report.flagged.isEmpty {
+            return String(localized: "anti_ban_clean")
+        }
+        return String(
+            format: String(localized: "anti_ban_summary"),
+            report.removed.count,
+            report.flagged.count
+        )
+    }
+
     @ViewBuilder
     private var exploitRow: some View {
         if inject.isRunningExploit {
@@ -67,7 +127,7 @@ struct SettingView: View {
                 ProgressView()
                 Text("exploit_status_running")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Palette.textDim)
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 8)
@@ -77,7 +137,7 @@ struct SettingView: View {
             case .success:
                 statusRow(
                     icon: "checkmark.seal.fill",
-                    tint: .green,
+                    tint: Palette.good,
                     titleKey: "exploit_status_success",
                     buttonKey: "retry_exploit"
                 )
@@ -92,13 +152,13 @@ struct SettingView: View {
             case .notStarted:
                 HStack(spacing: 10) {
                     Image(systemName: "shield.lefthalf.filled")
-                        .foregroundStyle(inject.requiresSandboxEscape ? Color.orange : Color.secondary)
+                        .foregroundStyle(inject.requiresSandboxEscape ? Palette.warn : Palette.textFaint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("exploit_status_not_started")
                             .font(.footnote.weight(.semibold))
                         Text(NSLocalizedString(inject.exploitHintKey, comment: ""))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Palette.textFaint)
                     }
                     Spacer(minLength: 0)
                     Button("run_exploit") { inject.runExploit() }
@@ -176,11 +236,11 @@ struct SettingView: View {
                 HStack {
                     Text(language.selected.displayName)
                         .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Palette.text)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Palette.textFaint)
                 }
                 .padding(.vertical, 12)
                 .padding(.horizontal, 12)
@@ -191,16 +251,16 @@ struct SettingView: View {
 
     private var support: some View {
         SectionGroup(title: String(localized: "section_support")) {
-            actionRow(String(localized: "support_discord"), tint: .primary) {
+            actionRow(String(localized: "support_discord"), tint: Palette.text) {
                 guard let url = URL(string: supportURL) else { return }
                 UIApplication.shared.open(url)
             }
 
-            actionRow(String(localized: "system_log"), tint: .primary) {
+            actionRow(String(localized: "system_log"), tint: Palette.text) {
                 showLog = true
             }
 
-            actionRow(String(localized: "logout_account"), tint: .red) {
+            actionRow(String(localized: "logout_account"), tint: Palette.bad) {
                 showLogout = true
             }
         }
@@ -215,7 +275,7 @@ struct SettingView: View {
             Spacer(minLength: 8)
             Text(value)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Palette.textDim)
                 .lineLimit(1)
         }
         .padding(.vertical, 10)
@@ -231,7 +291,7 @@ struct SettingView: View {
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Palette.textFaint)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 12)

@@ -8,6 +8,7 @@
 "checking" = "Checking…";
 "offline" = "Offline";
 "unlicensed" = "Unlicensed";
+"plan_premium" = "Premium";
 "log_empty" = "No entries yet";
 "all" = "All";
 "copied" = "Copied";
@@ -40,6 +41,11 @@
 
 /* Injection */
 "inject_active" = "Injection active";
+
+"uninject_keep" = "Uninject — keep aim & ESP";
+"uninject_keep_caption" = "Disconnect panel; aim/ESP stay on next launch";
+"uninject_full" = "Uninject — restore game";
+"uninject_full_caption" = "Removes patch and config from the game";
 "uninject" = "Uninject";
 "injection" = "Injection";
 "inject" = "Inject";
@@ -58,6 +64,7 @@
 "bone" = "Bone";
 "bone_head" = "Head";
 "bone_neck" = "Neck";
+"bone_body" = "Body";
 "hit_chance" = "Hit Chance";
 "section_aimbot_settings" = "AIMBOT SETTINGS";
 "draw_fov" = "Draw Field Of View";
@@ -74,8 +81,23 @@
 "skeleton_esp" = "ESP Skeleton";
 "tracer_esp" = "Top Tracer";
 
+/* Visual tab — enemy box geometry */
+"section_esp_box" = "ENEMY BOX";
+"box_size" = "Box Size";
+"box_offset" = "Drop Down";
+
 /* Setting tab */
 "section_exploit" = "KERNEL EXPLOIT";
+
+"section_anti_ban" = "ANTI-BAN";
+"anti_ban" = "Anti-ban";
+"anti_ban_caption" = "Sweeps panel traces & refreshes session on inject";
+"anti_ban_sweep_now" = "Sweep now";
+"anti_ban_running" = "Sweeping…";
+"anti_ban_idle" = "Last sweep: —";
+"anti_ban_clean" = "Last sweep: clean";
+"anti_ban_summary" = "Last sweep: %d removed, %d flagged";
+
 "section_license_info" = "THÔNG TIN BẢN QUYỀN";
 "setting_license" = "License";
 "validity" = "Hạn dùng";

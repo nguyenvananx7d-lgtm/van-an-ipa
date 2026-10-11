@@ -45,6 +45,12 @@ public final class InjectStore: ObservableObject {
 
     @Published public var wipeReport: WipeRoutine.Report?
 
+    /// Outcome of the most recent anti-ban sweep, shown in the Setting tab.
+    @Published public var antiBanReport: AntiBanRoutine.SweepResult?
+
+    /// A sweep is in flight (drives the spinner in the Setting tab).
+    @Published public var isRunningAntiBan: Bool = false
+
     /// Cooldown backing the foreground re-probe so returning to the app a few
     /// times in a row does not spam the log with identical probe verdicts.
     private var lastForegroundRecheck = Date.distantPast
@@ -64,6 +70,7 @@ public final class InjectStore: ObservableObject {
     private let wiper: WipeRoutine
     private let bridge: ContainerBridge
     private let probe: PostLaunchProbe
+    private let antiBan: AntiBanRoutine
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -79,6 +86,7 @@ public final class InjectStore: ObservableObject {
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
         self.probe = PostLaunchProbe(log: log, bridge: self.bridge, launcher: self.launcher)
+        self.antiBan = .shared
 
         // When the game takes over the screen the injector sits in the
         // background and its scheduled probe is deferred. Re-probe whenever the
@@ -307,6 +315,15 @@ public final class InjectStore: ObservableObject {
             filesWiped = false
             menu.injected.insert(game)
             menu.injectStates[game] = .ready
+            if menu.controls.antiBan {
+                // Anti-ban sweep comes after staging, before launch: the probe
+                // residue is cleared and the session document re-stamped while
+                // the panel still has the container open.
+                isRunningAntiBan = true
+                antiBanReport = await antiBan.run(game: game)
+                await installer.restageConfig(game: game, controls: menu.controls)
+                isRunningAntiBan = false
+            }
             status = "Injected"
 
             try? launcher.launch(game: game)
@@ -334,6 +351,18 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// Soft teardown, paired with the full `uninject`: the app stops managing
+    /// the session (active flag, last install, injected set) but leaves the
+    /// staged patch and config exactly where they are, so aim / ESP keep
+    /// working on the next launch. Never throws — it only detaches state.
+    public func keepFeatures() async {
+        await installer.keepFeatures(game: game)
+        isActive = false
+        lastInstall = nil
+        menu.injected.remove(game)
+        set(.ready, "Removed — aim & ESP kept")
+    }
+
     public func wipe() {
         do {
             let report = try wiper.wipe(game: game)
@@ -346,6 +375,23 @@ public final class InjectStore: ObservableObject {
         } catch {
             set(.failed, error.localizedDescription)
         }
+    }
+
+    /// Run the anti-ban sweep now, and re-stamp the session document so the
+    /// runtime reads a current config. Backed by the sweep the panel runs
+    /// automatically at the front of every inject when the anti-ban switch is
+    /// on; this is the manual trigger and the checkbox's run-on-toggle.
+    public func runAntiBan() async {
+        guard !isRunningAntiBan else { return }
+        isRunningAntiBan = true
+        status = "Running anti-ban sweep…"
+        let sweep = await antiBan.run(game: game)
+        await installer.restageConfig(game: game, controls: menu.controls)
+        antiBanReport = sweep
+        isRunningAntiBan = false
+        status = sweep.removed.isEmpty && sweep.flagged.isEmpty
+            ? "Anti-ban sweep done — clean"
+            : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.flagged.count) flagged"
     }
 
     public func launch() {

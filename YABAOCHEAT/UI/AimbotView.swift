@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// - master → `AimSystemEnabled`
 /// - aim → `AimEnabled`
-/// - bone → `AimTarget`
+/// - bone → `AimTarget` (head `1` / neck `2` / body `3`)
 /// - hit chance → `HeadshotRate`
 /// - draw FOV → `EspFov`
 /// - field of view → `FovSize`
@@ -26,6 +26,7 @@ struct AimbotView: View {
                     options: [
                         SegmentOption(value: "head", title: String(localized: "bone_head")),
                         SegmentOption(value: "neck", title: String(localized: "bone_neck")),
+                        SegmentOption(value: "body", title: String(localized: "bone_body")),
                     ]
                 )
 

@@ -13,7 +13,7 @@ struct InjectView: View {
     @State private var runningTask: Task<Void, Never>?
 
     var body: some View {
-        Card(padding: 18, radius: 20) {
+        Card(padding: 18, radius: 16) {
             VStack(alignment: .leading, spacing: 16) {
                 header
 
@@ -30,15 +30,16 @@ struct InjectView: View {
                 if let status = inject.status {
                     Text(status)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Palette.textDim)
                 }
 
                 if inject.isActive {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Palette.good)
                         Text("inject_active")
                             .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Palette.textDim)
                         Spacer(minLength: 0)
                     }
                 }
@@ -56,6 +57,7 @@ struct InjectView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("injection")
                 .font(.headline)
+                .foregroundStyle(Palette.text)
 
             SegmentedControl(
                 selection: $menu.selectedGame,
@@ -64,7 +66,7 @@ struct InjectView: View {
 
             Text(inject.game.bundleIdentifier)
                 .font(.caption2.monospaced())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Palette.textFaint)
         }
     }
 
@@ -96,7 +98,7 @@ struct InjectView: View {
     }
 
     private var buttons: some View {
-        HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Button {
                 runningTask = Task {
                     await inject.install(
@@ -108,22 +110,50 @@ struct InjectView: View {
                 Text("inject")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .shimmer()
+                    .padding(.vertical, 14)
             }
             .buttonStyle(AccentButtonStyle())
             .disabled(!canInject || runningTask != nil)
 
-            Button {
-                runningTask = Task { await inject.uninject() }
-            } label: {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("uninject")
-                    .font(.headline)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Palette.textFaint)
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+
+                Button {
+                    runningTask = Task { await inject.keepFeatures() }
+                } label: {
+                    VStack(spacing: 2) {
+                        Text("uninject_keep")
+                            .font(.headline)
+                        Text("uninject_keep_caption")
+                            .font(.caption2)
+                            .foregroundStyle(Palette.textDim)
+                    }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 11)
+                }
+                .buttonStyle(AccentButtonStyle(prominent: false))
+                .disabled(runningTask != nil)
+
+                Button {
+                    runningTask = Task { await inject.uninject() }
+                } label: {
+                    VStack(spacing: 2) {
+                        Text("uninject_full")
+                            .font(.headline)
+                        Text("uninject_full_caption")
+                            .font(.caption2)
+                            .foregroundStyle(Palette.textDim)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                }
+                .buttonStyle(AccentButtonStyle(prominent: false, destructive: true))
+                .disabled(runningTask != nil)
             }
-            .buttonStyle(AccentButtonStyle(prominent: false))
-            .disabled(runningTask != nil)
         }
     }
 

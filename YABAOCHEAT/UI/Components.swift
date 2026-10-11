@@ -1,15 +1,15 @@
 import SwiftUI
 
-// Reusable pieces the rest of the UI is built from. Restyled on the theme:
-// opaque machined surfaces instead of ultra-thin material, hairline edges,
-// brass accents held back to where they mean something. Public shapes are
-// unchanged so the panel tabs keep compiling against the same API.
+// Reusable pieces the rest of the UI is built from. The public shapes are
+// unchanged so every panel tab keeps compiling against the same API as before;
+// the surfaces themselves are flat — one plate, one hairline edge, one soft
+// shadow. Nothing glows except the thing you are meant to press.
 
 // MARK: - surfaces
 
 struct Card<Content: View>: View {
     var padding: CGFloat = 16
-    var radius: CGFloat = 18
+    var radius: CGFloat = 16
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -53,7 +53,6 @@ struct StateBadge: View {
             Circle()
                 .fill(tone.color)
                 .frame(width: 6, height: 6)
-                .shadow(color: tone.color.opacity(0.8), radius: 4)
             Text(text)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(tone.color)
@@ -124,27 +123,36 @@ struct Banner: View {
 
 // MARK: - panel rows
 
-/// Titled group the panel tabs are built from: a brass-ticked caption over one
-/// machined card.
+/// Titled group the panel tabs are built from: a small-caps caption over a flat
+/// string of rows, divided by hairlines. No card-inside-a-card.
 struct SectionGroup<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(Palette.accent)
-                    .frame(width: 3, height: 11)
+            HStack(spacing: 8) {
                 Text(title)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Palette.textDim)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Palette.textFaint)
                     .textCase(.uppercase)
+                    .tracking(0.6)
+                Rectangle()
+                    .fill(Palette.hairline)
+                    .frame(height: 1)
             }
-            .padding(.leading, 4)
-            Card(padding: 6, radius: 16) {
-                VStack(alignment: .leading, spacing: 0) { content }
-            }
+            .padding(.horizontal, 2)
+
+            VStack(alignment: .leading, spacing: 0) { content }
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Palette.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Palette.edgeTop.opacity(0.7), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
@@ -163,12 +171,12 @@ struct ToggleRow: View {
                 if let detail {
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(Palette.textDim)
+                        .foregroundStyle(Palette.textFaint)
                 }
             }
         }
-        .padding(.vertical, 11)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
         .rowDivider()
     }
 }
@@ -197,8 +205,8 @@ struct SliderRow: View {
             Slider(value: $value, in: range, step: step)
                 .tint(Palette.accent)
         }
-        .padding(.vertical, 11)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
         .rowDivider()
     }
 }
@@ -224,8 +232,8 @@ struct SegmentRow: View {
                 items: options.map { SegItem(value: $0.value, title: $0.title) }
             )
         }
-        .padding(.vertical, 11)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
         .rowDivider()
     }
 }
@@ -246,7 +254,7 @@ extension Color {
 }
 
 /// Horizontal swatch picker bound to a packed `0xAARRGGBB` value. The selected
-/// swatch gets a brass ring and a held bloom.
+/// swatch gets an amber ring and a held bloom.
 struct SwatchRow: View {
     let label: String
     @Binding var argb: Int
@@ -282,61 +290,8 @@ struct SwatchRow: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.vertical, 11)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
         .rowDivider()
-    }
-}
-
-// MARK: - logo
-
-/// The mark: a milled graphite tile with an engraved brass glyph and a small
-/// live pip. Replaces the blue/purple/cyan gradient, which was the single most
-/// generic element in the app.
-struct Mark: View {
-    var size: CGFloat = 72
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Palette.surfaceHi, Palette.void],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.10), .clear],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: size * 0.40, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Palette.accentHi, Palette.accent],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: Palette.accent.opacity(0.55), radius: size * 0.14)
-        }
-        .frame(width: size, height: size)
-        .overlay(
-            RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                .strokeBorder(Palette.edgeTop, lineWidth: 1)
-        )
-        .overlay(alignment: .topTrailing) {
-            Circle()
-                .fill(Palette.accent)
-                .frame(width: size * 0.11, height: size * 0.11)
-                .shadow(color: Palette.accent.opacity(0.9), radius: 4)
-                .offset(x: size * 0.015, y: -size * 0.015)
-        }
-        .accessibilityHidden(true)
     }
 }

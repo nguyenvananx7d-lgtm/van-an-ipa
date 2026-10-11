@@ -116,8 +116,7 @@ struct LicenseView: View {
             Text("gate_submit")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .shimmer()
+                .padding(.vertical, 16)
         }
         .buttonStyle(AccentButtonStyle())
         .disabled(auth.isRefreshing || key.isEmpty)

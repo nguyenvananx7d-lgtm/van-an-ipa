@@ -21,7 +21,7 @@ struct LogView: View {
                 Spacer()
                 Text("log_empty")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Palette.textDim)
                 Spacer()
             } else {
                 List(entries) { entry in
@@ -56,7 +56,7 @@ struct LogView: View {
             if copied {
                 Label("copied", systemImage: "checkmark")
                     .font(.caption)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Palette.good)
             }
 
             Button {

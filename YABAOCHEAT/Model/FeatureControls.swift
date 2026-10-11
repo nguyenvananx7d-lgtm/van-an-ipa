@@ -57,6 +57,15 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var espColor: Int
     public var espThickness: Int
 
+    /// Enemy-box scale, as a percentage of the runtime's natural box. `100`
+    /// leaves the box exactly as drawn; higher grows it so a tall target is
+    /// framed head to foot. Emitted to the runtime as `EspBoxScale` (ratio).
+    public var espBoxScalePercent: Int
+    /// Pushes the enemy box down by this many screen pixels, so an enlarged box
+    /// still centres on the body rather than hanging off the head. Emitted to
+    /// the runtime as `EspBoxOffset` (pixels).
+    public var espBoxOffsetY: Int
+
     // MARK: panel — visual tab
 
     public var masterEsp: Bool
@@ -104,6 +113,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
+        espBoxScalePercent: Int = 115,
+        espBoxOffsetY: Int = 10,
         masterEsp: Bool = false,
         lineEsp: Bool = false,
         boxEsp: Bool = false,
@@ -139,6 +150,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.fastFireLevel = fastFireLevel
         self.espColor = espColor
         self.espThickness = espThickness
+        self.espBoxScalePercent = espBoxScalePercent
+        self.espBoxOffsetY = espBoxOffsetY
         self.masterEsp = masterEsp
         self.lineEsp = lineEsp
         self.boxEsp = boxEsp
@@ -185,7 +198,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              aimbotType, silentAim, hitChance, aimDistance, drawFov,
              ignoreKnocked, antiBan,
              fastReloadPercent, fastFireLevel,
-             espColor, espThickness,
+             espColor, espThickness, espBoxScalePercent, espBoxOffsetY,
              masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
              healthEsp, healthType, skeletonEsp, tracerEsp, drawEnemyCount, textSize,
              espBounding,
@@ -221,6 +234,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
         espColor          = try c.decodeIfPresent(Int.self, forKey: .espColor) ?? d.espColor
         espThickness      = try c.decodeIfPresent(Int.self, forKey: .espThickness) ?? d.espThickness
+        espBoxScalePercent = try c.decodeIfPresent(Int.self, forKey: .espBoxScalePercent) ?? d.espBoxScalePercent
+        espBoxOffsetY     = try c.decodeIfPresent(Int.self, forKey: .espBoxOffsetY) ?? d.espBoxOffsetY
 
         masterEsp         = try c.decodeIfPresent(Bool.self, forKey: .masterEsp) ?? d.masterEsp
         lineEsp           = try c.decodeIfPresent(Bool.self, forKey: .lineEsp) ?? d.lineEsp
@@ -267,6 +282,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "fastFireLevel": fastFireLevel,
             "espColor": espColor,
             "espThickness": espThickness,
+            "espBoxScalePercent": espBoxScalePercent,
+            "espBoxOffsetY": espBoxOffsetY,
 
             "aimbotType": aimbotType,
             "silentAim": silentAim,
@@ -308,12 +325,24 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // This method is the single place the panel spelling is translated to the
     // runtime spelling.
     //
+    // `EspBoxScale` / `EspBoxOffset` are the one pair here that the shipped
+    // patch has no literal for: box geometry is baked into the runtime's draw
+    // call. They are written so a runtime that reads them grows / drops the
+    // box; an unaware runtime ignores the extra keys, exactly as it ignores the
+    // `server_*` block. Nothing else in the document moves.
+    //
     // Only the switches the panel exposes are emitted here; the keys it does not
     // expose (`NoRecoil`, `SpeedHack`, the guest-reset block, `server_*`, …) are
     // preserved from the shipped document by `PatchPayload.configuration`.
 
     /// The aim / ESP switches from the panel, keyed exactly as the injected
     /// runtime reads them.
+    ///
+    /// `antiBan` and `streamProof` are deliberately not emitted here: neither
+    /// has a literal in the recovered runtime vocabulary. `antiBan` instead
+    /// drives the local trace sweep + session re-stamp (`AntiBanRoutine`) at
+    /// the front of every inject; `streamProof` rides along in the serialized
+    /// payload only.
     public func runtimeConfigDocument() -> [String: Any] {
         [
             // visual ESP
@@ -326,6 +355,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "EspSkeleton":      skeletonEsp,
             "EspTracer":        tracerEsp,
 
+            // enemy-box geometry
+            "EspBoxScale":      Double(espBoxScalePercent) / 100.0,
+            "EspBoxOffset":     espBoxOffsetY,
+
             // aim
             "AimSystemEnabled": isEnabled,
             "AimEnabled":       aimEnabled,
@@ -337,12 +370,19 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     }
 
     /// The runtime reads `AimTarget` as an ordinal, not a word. Recovered from
-    /// the patch: the status line is built from two whole-string branches,
-    /// `Aim system target: HEAD` and `Aim system target: NECK`, and the config
-    /// writer only emits the literals `"AimTarget":1` and `"AimTarget":2`. So
-    /// `1` = head and `2` = neck; there is no body option. `FeatureControls`
-    /// keeps the word for the panel.
-    public var aimTargetOrdinal: Int { aimTarget == "neck" ? 2 : 1 }
+    /// the patch: the status line is built from whole-string branches,
+    /// `Aim system target: HEAD` / `NECK`, and the config writer emits the
+    /// literals `"AimTarget":1` and `"AimTarget":2`. The patch's own menu also
+    /// carries a `Target: BODY` state, which takes the next slot, so:
+    /// `1` = head, `2` = neck, `3` = body. `FeatureControls` keeps the word for
+    /// the panel.
+    public var aimTargetOrdinal: Int {
+        switch aimTarget {
+        case "neck": return 2
+        case "body": return 3
+        default:     return 1
+        }
+    }
 
     /// The recovered `h0` / `a0` pair decomposed from `espColor`. The runtime
     /// reads a colour through these two keys, so splitting here keeps a single
@@ -367,7 +407,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     /// Envelope field `options`: the choice set behind each control.
     public static let selectionOptions: [String: [String]] = [
-        "aim_target":   ["head", "body"],
+        "aim_target":   ["head", "neck", "body"],
         "aimbot_type":  ["aimbot", "silent"],
         "aim_fov_mode": ["strict", "loose"],
         "box_type":     ["corner", "edge"],

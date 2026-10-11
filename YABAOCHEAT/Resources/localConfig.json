@@ -24,6 +24,8 @@
   "system_active" : true,
   "server_line" : true,
   "FovSize" : 60,
+  "EspBoxScale" : 1.15,
+  "EspBoxOffset" : 10,
   "EspName" : false,
   "GhostMode" : false,
   "resetGuest" : false,

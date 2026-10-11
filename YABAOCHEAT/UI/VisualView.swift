@@ -11,6 +11,7 @@ import SwiftUI
 /// - health → `EspHealth`
 /// - skeleton → `EspSkeleton`
 /// - tracer → `EspTracer` (the cheat's "Top tracer")
+/// - box size / drop → `EspBoxScale` / `EspBoxOffset`
 struct VisualView: View {
     @EnvironmentObject var menu: MenuStore
 
@@ -25,6 +26,22 @@ struct VisualView: View {
                 ToggleRow(label: String(localized: "health_esp"), isOn: menu.feature(\.healthEsp))
                 ToggleRow(label: String(localized: "skeleton_esp"), isOn: menu.feature(\.skeletonEsp))
                 ToggleRow(label: String(localized: "tracer_esp"), isOn: menu.feature(\.tracerEsp))
+            }
+
+            SectionGroup(title: String(localized: "section_esp_box")) {
+                SliderRow(
+                    label: String(localized: "box_size"),
+                    value: menu.feature(\.espBoxScalePercent),
+                    range: 50...200,
+                    unit: "%"
+                )
+
+                SliderRow(
+                    label: String(localized: "box_offset"),
+                    value: menu.feature(\.espBoxOffsetY),
+                    range: -60...60,
+                    unit: "px"
+                )
             }
         }
     }

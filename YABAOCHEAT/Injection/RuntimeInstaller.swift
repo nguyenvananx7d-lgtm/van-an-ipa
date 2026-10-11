@@ -193,6 +193,25 @@ public actor RuntimeInstaller {
         log.log(.runtime, "removed patch and config for \(game.rawValue) from \(urls.count) location(s) and released sandbox grants")
     }
 
+    /// Detach the app from the session without disarming the target: the
+    /// staged patch and its `localConfig.json` stay in the container untouched,
+    /// so the next launch still runs with the aim / ESP the panel staged.
+    /// Nothing is removed, flushed, or released — the app simply stops
+    /// claiming the session. Paired with the full `uninject` as the
+    /// "keep aim & ESP" option in the panel.
+    public func keepFeatures(game: Game) {
+        var stagedPatch = 0
+        var stagedConfig = 0
+        switch bridge.resolve(game: game) {
+        case .resolved(let data):
+            stagedPatch = bridge.patchURLs(in: data, game: game).count
+            stagedConfig = bridge.configURLs(in: data, game: game).count
+            log.log(.runtime, "kept \(stagedPatch) patch / \(stagedConfig) config location(s) staged for \(game.rawValue); app detached, aim/ESP stay live")
+        default:
+            log.log(.runtime, "keep for \(game.rawValue): container not resolved — detaching anyway, nothing on disk to touch")
+        }
+    }
+
     /// Re-stage the same patch to force the game to reload it. Used by the reset
     /// command when the target is already running.
     public func reset(game: Game) async throws {
