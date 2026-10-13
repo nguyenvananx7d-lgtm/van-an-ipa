@@ -39,6 +39,13 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     public var aimbotType: String
     public var silentAim: Bool
+    /// Silent-aim bone split, as percentages of the lock. `headRate` is the
+    /// weight for taking the head, `bodyRate` the weight for the body; the
+    /// runtime picks head with probability `headRate / (headRate + bodyRate)`.
+    /// Emitted to the runtime as `HeadRate` (head) and `BodyRate` (body) and
+    /// tuned live from the two sliders that appear under the silent-aim switch.
+    public var headRate: Int
+    public var bodyRate: Int
     public var hitChance: Int
     /// Maximum lock distance in metres.
     public var aimDistance: Int
@@ -104,6 +111,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimFovMode: String = "strict",
         aimbotType: String = "aimbot",
         silentAim: Bool = false,
+        headRate: Int = 80,
+        bodyRate: Int = 20,
         hitChance: Int = 85,
         aimDistance: Int = 200,
         drawFov: Bool = false,
@@ -141,6 +150,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.aimFovMode = aimFovMode
         self.aimbotType = aimbotType
         self.silentAim = silentAim
+        self.headRate = headRate
+        self.bodyRate = bodyRate
         self.hitChance = hitChance
         self.aimDistance = aimDistance
         self.drawFov = drawFov
@@ -195,7 +206,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case isEnabled, aimEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
              headshotValue, headshotPolicy, aimTarget, aimFovMode,
-             aimbotType, silentAim, hitChance, aimDistance, drawFov,
+             aimbotType, silentAim, headRate, bodyRate, hitChance, aimDistance, drawFov,
              ignoreKnocked, antiBan,
              fastReloadPercent, fastFireLevel,
              espColor, espThickness, espBoxScalePercent, espBoxOffsetY,
@@ -223,6 +234,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
         aimbotType        = try c.decodeIfPresent(String.self, forKey: .aimbotType) ?? d.aimbotType
         silentAim         = try c.decodeIfPresent(Bool.self, forKey: .silentAim) ?? d.silentAim
+        headRate          = try c.decodeIfPresent(Int.self, forKey: .headRate) ?? d.headRate
+        bodyRate          = try c.decodeIfPresent(Int.self, forKey: .bodyRate) ?? d.bodyRate
         hitChance         = try c.decodeIfPresent(Int.self, forKey: .hitChance) ?? d.hitChance
         aimDistance       = try c.decodeIfPresent(Int.self, forKey: .aimDistance) ?? d.aimDistance
         drawFov           = try c.decodeIfPresent(Bool.self, forKey: .drawFov) ?? d.drawFov
@@ -287,6 +300,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
             "aimbotType": aimbotType,
             "silentAim": silentAim,
+            "headRate": headRate,
+            "bodyRate": bodyRate,
             "hitChance": hitChance,
             "aimDistance": aimDistance,
             "drawFov": drawFov,
@@ -317,19 +332,22 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // verbatim from the patch's `__cstring`:
     //
     //     EspMaster EspBox EspLine EspName EspDistance EspHealth EspSkeleton
-    //     EspTracer AimSystemEnabled AimEnabled AimTarget HeadshotRate FovSize
-    //     EspFov
+    //     EspTracer AimSystemEnabled AimEnabled AimTarget HeadRate FovSize
+    //     EspFov BodyRate
     //
     // The panel writes camelCase (`masterEsp`, `boxEsp`, `aimTarget`, …), which
     // the runtime does not match, so every switch stayed at the cheat's default.
     // This method is the single place the panel spelling is translated to the
     // runtime spelling.
     //
-    // `EspBoxScale` / `EspBoxOffset` are the one pair here that the shipped
-    // patch has no literal for: box geometry is baked into the runtime's draw
-    // call. They are written so a runtime that reads them grows / drops the
-    // box; an unaware runtime ignores the extra keys, exactly as it ignores the
-    // `server_*` block. Nothing else in the document moves.
+    // `EspBoxScale` / `EspBoxOffset` are keys the shipped patch has no literal
+    // for: box geometry is baked into the runtime's draw call, so it ignores
+    // them, exactly as it ignores the `server_*` block. `HeadRate` / `BodyRate`
+    // *are* read: the patched `SceneEditBoxSelectTool.OnGUI` parses them next to
+    // the cheat's own `HeadshotRate` (which the patch keeps as a fallback when
+    // `HeadRate` is absent) and packs the pair into the silent-aim roll (head in
+    // aux bits 8..15, body in 16..23), so the head-versus-body split is live the
+    // moment silent aim is on. Nothing else in the document moves.
     //
     // Only the switches the panel exposes are emitted here; the keys it does not
     // expose (`NoRecoil`, `SpeedHack`, the guest-reset block, `server_*`, …) are
@@ -340,9 +358,9 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     ///
     /// `antiBan` and `streamProof` are deliberately not emitted here: neither
     /// has a literal in the recovered runtime vocabulary. `antiBan` instead
-    /// drives the local trace sweep + session re-stamp (`AntiBanRoutine`) at
-    /// the front of every inject; `streamProof` rides along in the serialized
-    /// payload only.
+    /// drives the local trace sweep + payload timestamp masking + session
+    /// re-stamp (`AntiBanRoutine`) at the front of every inject; `streamProof`
+    /// rides along in the serialized payload only.
     public func runtimeConfigDocument() -> [String: Any] {
         [
             // visual ESP
@@ -361,9 +379,18 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
             // aim
             "AimSystemEnabled": isEnabled,
-            "AimEnabled":       aimEnabled,
-            "AimTarget":        aimTargetOrdinal,
-            "HeadshotRate":     hitChance,
+            "AimEnabled":       aimEnabled || silentAim,
+            // Silent aim runs on the runtime's mixed-roll target (ordinal `0`):
+            // that is the only state whose head/body split the roll drives.
+            // With silent aim off the panel's chosen bone ordinal is emitted.
+            "AimTarget":        silentAim ? 0 : aimTargetOrdinal,
+            // The runtime's single head/body rate is split in two by the patch.
+            // `HeadRate` (aux bits 8..15) is the head share, `BodyRate`
+            // (aux bits 16..23) the body share, and `get_LastAimingInfoFromWeapon`
+            // rolls  head  iff  roll * (Head + Body) < Head * 100,
+            // with `roll = |instanceID| % 100`.
+            "HeadRate":         headRate,
+            "BodyRate":         bodyRate,
             "FovSize":          Int(aimbotRadiusValue.rounded()),
             "EspFov":           drawFov,
         ]

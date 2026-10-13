@@ -78,14 +78,11 @@ struct LicenseView: View {
             .foregroundStyle(Palette.text)
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Palette.well)
-            )
+            .insetWell(radius: 14)
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(
-                        focused ? Palette.accent.opacity(0.7) : Palette.hairline,
+                        focused ? Palette.accent.opacity(0.7) : Color.clear,
                         lineWidth: 1
                     )
             )

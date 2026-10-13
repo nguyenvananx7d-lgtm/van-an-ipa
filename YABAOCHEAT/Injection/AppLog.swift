@@ -19,6 +19,7 @@ public final class AppLog: ObservableObject {
             case mcm = "MCM"
             case integrity = "INTEGRITY"
             case wipe = "WIPE"
+            case antiBan = "ANTIBAN"
             case live = "LIVE"
             case runtime = "RUNTIME"
             case launch = "LAUNCH"

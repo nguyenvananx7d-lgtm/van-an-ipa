@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Main shell: license gate until the session is valid, then a slim app bar
-/// with the four screens under an underline tab strip.
+/// with the four screens under a bottom navigation bar.
 struct ContentView: View {
     @StateObject private var language = LanguageStore.shared
     @StateObject private var menu = MenuStore.shared
@@ -34,40 +34,35 @@ struct ContentView: View {
         ZStack {
             ThemeBackground()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    topBar
+            // The app bar is pinned and only the active screen scrolls;
+            // navigation lives in the bottom bar, a thumb away. Session state
+            // stays one glance away at the top.
+            VStack(spacing: 0) {
+                header
 
-                    if let msg = auth.revocationMessage {
-                        Banner(kind: .error, message: msg)
-                    }
-
-                    TabStrip(
-                        selection: $selectedTab,
-                        items: [
-                            String(localized: "tab_aimbot"),
-                            String(localized: "tab_visual"),
-                            String(localized: "tab_misc"),
-                            String(localized: "tab_setting"),
-                        ]
-                    )
-
-                    Group {
-                        switch selectedTab {
-                        case 0:  AimbotView()
-                        case 1:  VisualView()
-                        case 2:  MiscView()
-                        default: SettingView()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Metrics.stack) {
+                        if let msg = auth.revocationMessage {
+                            Banner(kind: .error, message: msg)
                         }
-                    }
-                    .transition(.opacity)
 
-                    Spacer(minLength: 40)
+                        Group {
+                            switch selectedTab {
+                            case 0:  AimbotView()
+                            case 1:  VisualView()
+                            case 2:  MiscView()
+                            default: SettingView()
+                            }
+                        }
+                        .transition(.opacity)
+                    }
+                    .padding(.horizontal, Metrics.gutter)
+                    .padding(.top, Metrics.stack)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .animation(.easeInOut(duration: 0.18), value: selectedTab)
         .toggleStyle(MachinedToggleStyle())
         .tint(Palette.accent)
@@ -76,11 +71,38 @@ struct ContentView: View {
 
     // MARK: - app bar
 
-    private var topBar: some View {
-        HStack(spacing: 12) {
-            Mark(size: 36)
+    private var header: some View {
+        topBar
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+            // The bar is pinned above the scroll view rather than over it, and
+            // carries a single hairline where the content clips: no opaque
+            // backdrop, so the themed canvas stays continuous.
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Palette.hairline)
+                    .frame(height: 1)
+            }
+    }
 
-            VStack(alignment: .leading, spacing: 3) {
+    private var bottomBar: some View {
+        BottomTabBar(
+            selection: $selectedTab,
+            items: [
+                TabItem(index: 0, title: String(localized: "tab_aimbot"), symbol: "scope"),
+                TabItem(index: 1, title: String(localized: "tab_visual"), symbol: "eye"),
+                TabItem(index: 2, title: String(localized: "tab_misc"), symbol: "bolt"),
+                TabItem(index: 3, title: String(localized: "tab_setting"), symbol: "slider.horizontal.3"),
+            ]
+        )
+    }
+
+    private var topBar: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Mark(size: 38)
+
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Text("app_title")
                         .font(.title3.weight(.bold))
@@ -98,15 +120,20 @@ struct ContentView: View {
                             .font(.caption2.monospaced())
                             .foregroundStyle(Palette.textFaint)
                             .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                 }
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
-            statusBadge
+            VStack(alignment: .trailing, spacing: 6) {
+                statusBadge
+                if inject.isActive {
+                    StateBadge(text: String(localized: "inject_active"), tone: .good)
+                }
+            }
         }
-        .padding(.bottom, 2)
     }
 
     private var planLabel: String {

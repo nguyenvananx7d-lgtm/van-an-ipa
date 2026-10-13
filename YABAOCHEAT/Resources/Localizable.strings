@@ -24,11 +24,11 @@
 
 /* License gate */
 "license" = "License";
-"gate_hint" = "Nhập license key để tiếp tục";
-"gate_submit" = "Nhập";
+"gate_hint" = "Enter your license key to continue";
+"gate_submit" = "Submit";
 "enter_license_key" = "Enter license key";
 "license_key_hint" = "Your key is stored on this device only";
-"key_placeholder" = "Nhập License Key";
+"key_placeholder" = "Enter license key";
 "activate" = "Activate";
 "expires_at" = "Expires";
 
@@ -41,6 +41,10 @@
 
 /* Injection */
 "inject_active" = "Injection active";
+"state_not_injected" = "Not injected";
+"state_failed" = "Failed";
+"state_unsupported" = "Unsupported";
+"state_unavailable" = "Unavailable";
 
 "uninject_keep" = "Uninject — keep aim & ESP";
 "uninject_keep_caption" = "Disconnect panel; aim/ESP stay on next launch";
@@ -59,7 +63,9 @@
 /* Aimbot tab */
 "section_aimbot_main" = "AIMBOT";
 "master_aimbot" = "Master Aimbot";
-"aim_enabled" = "Aim";
+"silent_aim" = "Silent Aim";
+"head_rate" = "Head Rate";
+"body_rate" = "Body Rate";
 "section_aimbot_type" = "AIMBOT TYPE";
 "bone" = "Bone";
 "bone_head" = "Head";
@@ -75,7 +81,7 @@
 "master_esp" = "Master ESP";
 "line_esp" = "Line ESP";
 "box_esp" = "Box";
-"name_esp" = "Tên địch";
+"name_esp" = "Enemy Name";
 "distance_esp" = "Distance ESP";
 "health_esp" = "Health";
 "skeleton_esp" = "ESP Skeleton";
@@ -91,25 +97,25 @@
 
 "section_anti_ban" = "ANTI-BAN";
 "anti_ban" = "Anti-ban";
-"anti_ban_caption" = "Sweeps panel traces & refreshes session on inject";
+"anti_ban_caption" = "Sweeps panel traces, masks file timestamps & refreshes session on inject";
 "anti_ban_sweep_now" = "Sweep now";
 "anti_ban_running" = "Sweeping…";
 "anti_ban_idle" = "Last sweep: —";
 "anti_ban_clean" = "Last sweep: clean";
-"anti_ban_summary" = "Last sweep: %d removed, %d flagged";
+"anti_ban_summary" = "Last sweep: %d removed, %d masked, %d flagged";
 
-"section_license_info" = "THÔNG TIN BẢN QUYỀN";
+"section_license_info" = "LICENSE INFO";
 "setting_license" = "License";
-"validity" = "Hạn dùng";
+"validity" = "Validity";
 "uuid_label" = "UUID";
-"copy" = "Sao chép";
-"section_compat" = "TƯƠNG THÍCH";
-"ios_version_current" = "Phiên bản iOS hiện tại";
-"section_language" = "NGÔN NGỮ";
-"section_support" = "HỖ TRỢ & HỆ THỐNG";
-"support_discord" = "Liên hệ hỗ trợ (Discord)";
-"system_log" = "Nhật ký hệ thống";
-"logout_account" = "Đăng xuất tài khoản";
+"copy" = "Copy";
+"section_compat" = "COMPATIBILITY";
+"ios_version_current" = "Current iOS version";
+"section_language" = "LANGUAGE";
+"section_support" = "SUPPORT & SYSTEM";
+"support_discord" = "Support (Discord)";
+"system_log" = "System Log";
+"logout_account" = "Log Out";
 
 /* License errors */
 "license_error.valid" = "License valid";

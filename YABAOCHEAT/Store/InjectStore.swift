@@ -86,7 +86,12 @@ public final class InjectStore: ObservableObject {
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
         self.probe = PostLaunchProbe(log: log, bridge: self.bridge, launcher: self.launcher)
-        self.antiBan = .shared
+        // Use the store's own bridge instance, not `AntiBanRoutine.shared`:
+        // `ContainerBridge` keeps the consumed `bad_query` grants on the
+        // instance that resolved the container, so sharing the injector's
+        // bridge means the sweep reuses one grant instead of requesting a
+        // second one (which can be refused while the first is held).
+        self.antiBan = AntiBanRoutine(log: log, bridge: self.bridge, krw: .shared)
 
         // When the game takes over the screen the injector sits in the
         // background and its scheduled probe is deferred. Re-probe whenever the
@@ -112,7 +117,13 @@ public final class InjectStore: ObservableObject {
                 guard let self, self.isActive else { return }
                 let game = self.menu.selectedGame
                 let controls = self.menu.controls
-                Task { await self.installer.restageConfig(game: game, controls: controls) }
+                Task {
+                    await self.installer.restageConfig(game: game, controls: controls)
+                    // The rewrite just bumped the config's mtime; re-mask it so
+                    // a live panel change does not leave a freshly-dated file
+                    // behind between full anti-ban sweeps.
+                    if controls.antiBan { await self.antiBan.conceal(game: game) }
+                }
             }
             .store(in: &cancellables)
     }
@@ -316,12 +327,14 @@ public final class InjectStore: ObservableObject {
             menu.injected.insert(game)
             menu.injectStates[game] = .ready
             if menu.controls.antiBan {
-                // Anti-ban sweep comes after staging, before launch: the probe
-                // residue is cleared and the session document re-stamped while
-                // the panel still has the container open.
+                // Sweep *after* the config re-stamp so the masking pass is the
+                // last thing to touch the payload: the fresh config mtime never
+                // outlives the sweep. The probe residue is cleared and the
+                // session document re-stamped while the panel still has the
+                // container open.
                 isRunningAntiBan = true
-                antiBanReport = await antiBan.run(game: game)
                 await installer.restageConfig(game: game, controls: menu.controls)
+                antiBanReport = await antiBan.run(game: game)
                 isRunningAntiBan = false
             }
             status = "Injected"
@@ -385,13 +398,15 @@ public final class InjectStore: ObservableObject {
         guard !isRunningAntiBan else { return }
         isRunningAntiBan = true
         status = "Running anti-ban sweep…"
-        let sweep = await antiBan.run(game: game)
+        // Re-stamp the session document first, then sweep: the sweep's masking
+        // pass must be the last write so the config's mtime is masked too.
         await installer.restageConfig(game: game, controls: menu.controls)
+        let sweep = await antiBan.run(game: game)
         antiBanReport = sweep
         isRunningAntiBan = false
-        status = sweep.removed.isEmpty && sweep.flagged.isEmpty
+        status = sweep.removed.isEmpty && sweep.masked.isEmpty && sweep.flagged.isEmpty
             ? "Anti-ban sweep done — clean"
-            : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.flagged.count) flagged"
+            : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.masked.count) masked, \(sweep.flagged.count) flagged"
     }
 
     public func launch() {

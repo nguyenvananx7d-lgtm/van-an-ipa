@@ -19,9 +19,15 @@ struct LogView: View {
 
             if entries.isEmpty {
                 Spacer()
-                Text("log_empty")
-                    .font(.footnote)
-                    .foregroundStyle(Palette.textDim)
+                VStack(spacing: 8) {
+                    Image(systemName: "text.alignleft")
+                        .font(.title3)
+                        .foregroundStyle(Palette.textFaint)
+                    Text("log_empty")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.textDim)
+                }
+                .frame(maxWidth: .infinity)
                 Spacer()
             } else {
                 List(entries) { entry in
@@ -125,6 +131,7 @@ struct LogView: View {
         case .mcm:       return Palette.good
         case .integrity: return Palette.warn
         case .wipe:      return Palette.bad
+        case .antiBan:   return Palette.good
         case .live:      return Palette.good
         case .runtime:   return Palette.accentHi
         case .launch:    return Palette.textDim

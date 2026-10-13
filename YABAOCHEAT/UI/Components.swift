@@ -9,7 +9,7 @@ import SwiftUI
 
 struct Card<Content: View>: View {
     var padding: CGFloat = 16
-    var radius: CGFloat = 16
+    var radius: CGFloat = Metrics.cardRadius
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -123,36 +123,49 @@ struct Banner: View {
 
 // MARK: - panel rows
 
-/// Titled group the panel tabs are built from: a small-caps caption over a flat
-/// string of rows, divided by hairlines. No card-inside-a-card.
+/// Titled group the panel tabs are built from: a small-caps caption with a
+/// line-art glyph over a flat string of rows, divided by hairlines. No
+/// card-inside-a-card.
 struct SectionGroup<Content: View>: View {
     let title: String
+    var symbol: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.textFaint)
+                }
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Palette.textFaint)
                     .textCase(.uppercase)
                     .tracking(0.6)
                 Rectangle()
-                    .fill(Palette.hairline)
+                    .fill(
+                        LinearGradient(
+                            colors: [Palette.hairline, Palette.hairline.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .frame(height: 1)
             }
             .padding(.horizontal, 2)
 
             VStack(alignment: .leading, spacing: 0) { content }
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous)
                         .fill(Palette.surface)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous)
                         .strokeBorder(Palette.edgeTop.opacity(0.7), lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous))
         }
     }
 }
@@ -175,8 +188,8 @@ struct ToggleRow: View {
                 }
             }
         }
-        .padding(.vertical, 13)
-        .padding(.horizontal, 14)
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
     }
 }
@@ -187,6 +200,9 @@ struct SliderRow: View {
     var range: ClosedRange<Double> = 0...100
     var step: Double = 1
     var unit: String = ""
+    /// Show the low/high ends under the track. Off by default so a plain
+    /// 0–100 row stays quiet; on for ranges where the ends are the point.
+    var showRange: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -201,12 +217,23 @@ struct SliderRow: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Palette.accent.opacity(0.12)))
+                    .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.22), lineWidth: 1))
             }
             Slider(value: $value, in: range, step: step)
                 .tint(Palette.accent)
+
+            if showRange {
+                HStack {
+                    Text("\(Int(range.lowerBound))")
+                    Spacer(minLength: 8)
+                    Text("\(Int(range.upperBound))")
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Palette.textFaint)
+            }
         }
-        .padding(.vertical, 13)
-        .padding(.horizontal, 14)
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
     }
 }
@@ -232,9 +259,76 @@ struct SegmentRow: View {
                 items: options.map { SegItem(value: $0.value, title: $0.title) }
             )
         }
-        .padding(.vertical, 13)
-        .padding(.horizontal, 14)
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
+    }
+}
+
+// MARK: - action / info rows
+//
+// The two plain shapes a settings list is made of: a tappable row that leads
+// somewhere (chevron) and a read-only row that states a fact. Shared so the
+// Inject and Setting tabs cannot drift apart.
+
+struct ActionRow: View {
+    var symbol: String? = nil
+    let label: String
+    var value: String?
+    var tint: Color = Palette.text
+    var showsChevron: Bool = true
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(tint.opacity(0.9))
+                        .frame(width: 20, alignment: .center)
+                }
+                Text(label)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(tint)
+                Spacer(minLength: 8)
+                if let value {
+                    Text(value)
+                        .font(.caption)
+                        .foregroundStyle(Palette.textDim)
+                        .lineLimit(1)
+                }
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Palette.textFaint)
+                }
+            }
+            .padding(.vertical, Metrics.rowPaddingV)
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Palette.text)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(Palette.textDim)
+                .lineLimit(1)
+        }
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
     }
 }
 
@@ -254,7 +348,7 @@ extension Color {
 }
 
 /// Horizontal swatch picker bound to a packed `0xAARRGGBB` value. The selected
-/// swatch gets an amber ring and a held bloom.
+/// swatch gets an accent ring and a held bloom.
 struct SwatchRow: View {
     let label: String
     @Binding var argb: Int
@@ -290,8 +384,8 @@ struct SwatchRow: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.vertical, 13)
-        .padding(.horizontal, 14)
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
     }
 }

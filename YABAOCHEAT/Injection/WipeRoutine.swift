@@ -34,6 +34,30 @@ public struct WipeRoutine: Sendable {
         ".ffxc_access_probe",
     ]
 
+    /// Residue the panel or the injected runtime may have dropped in the
+    /// container. Unlike `ownedNames` these are optional — they are not always
+    /// present — so they never count toward "wiped clean", but every sweep
+    /// deletes them because a newer client flags any file whose name is not one
+    /// it expects. Covers the probe (`.ffxc*`), the runtime's own debug log,
+    /// and the `testCodePatch*` engagement marker.
+    static let residueNames: Set<String> = [
+        ContainerBridge.accessProbe,
+        "ffxc_debug.log",
+    ]
+    static let residuePrefixes: [String] = [".ffxc"]
+    static let residueSubstrings: [String] = ["testCodePatch"]
+
+    /// True when `name` is a panel/runtime leftover safe to delete. The staged
+    /// patch and config never match this — they are the payload, not residue.
+    /// `testCodePatch` is matched as a substring because the runtime names its
+    /// engagement marker `<something>testCodePatch<something>` (the probe's
+    /// marker scan uses the same `contains` test).
+    static func isResidue(_ name: String) -> Bool {
+        if residueNames.contains(name) { return true }
+        if residuePrefixes.contains(where: { name.hasPrefix($0) }) { return true }
+        return residueSubstrings.contains { name.contains($0) }
+    }
+
     public enum WipeError: Error, Sendable {
         case containerNotFound
         case fileUnavailable
@@ -81,9 +105,29 @@ public struct WipeRoutine: Sendable {
             log.log(.wipe, "\(strays.count) unrecognised file(s) carry the injector signature")
         }
 
+        // Panel/runtime residue (probe, debug log, engagement marker). Removed
+        // on every wipe but never counted toward `filesWiped`: it is optional,
+        // so its absence is the normal case.
+        var residueRemoved = 0
+        for dir in bridge.payloadDirectories(in: data) {
+            guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { continue }
+            for name in names where WipeRoutine.isResidue(name) {
+                let url = dir.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                do {
+                    try FileManager.default.removeItem(at: url)
+                    residueRemoved += 1
+                    log.log(.wipe, "removed residue \(name) from \(dir.lastPathComponent)")
+                } catch {
+                    retained.append("\(dir.lastPathComponent)/\(name)")
+                    log.log(.wipe, "could not remove residue \(name): \(error.localizedDescription)")
+                }
+            }
+        }
+
         let report = Report(removed: Array(removed), retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
         bridge.releaseGrants()
-        log.log(.wipe, "wipe finished: \(removed.count) removed, \(retained.count) retained; sandbox grants released")
+        log.log(.wipe, "wipe finished: \(removed.count) removed, \(residueRemoved) residue, \(retained.count) retained; sandbox grants released")
         return report
     }
 

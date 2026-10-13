@@ -54,33 +54,41 @@ public actor RuntimeInstaller {
         let patchURLs = bridge.patchURLs(in: data, game: game)
         let configURLs = bridge.configURLs(in: data, game: game)
 
-        // The blob this app ships is a 322-byte neutral IFix manifest — it
-        // carries no code. The payload that actually runs is a multi-KB IFix
-        // patch the vendor build installs. If one is already in the container
-        // (left by the vendor build or an earlier install), keep it: writing
-        // the neutral manifest over it is exactly what leaves the game with no
-        // ESP. Prefer the on-disk patch, then our own backup of it, and fall
-        // back to the bundled manifest only when neither exists.
-        let onDiskPatch = RuntimeInstaller.adoptablePatch(in: patchURLs)
-        let backedUpPatch = RuntimeInstaller.adoptablePatch(in: [RuntimeInstaller.backupURL])
-        // A vendor run occasionally stages the real patch outside the four
-        // known names (Library/, tmp/, a Documents subfolder). A whole-container
-        // scan for the pinned payload digest catches those copies too.
-        let hiddenPatch = RuntimeInstaller.whitelistedPatch(in: [data])
-        let activePatch = onDiskPatch ?? backedUpPatch ?? hiddenPatch ?? payload.data
-
-        if let real = onDiskPatch ?? backedUpPatch ?? hiddenPatch {
-            RuntimeInstaller.storeBackup(real)
-            log.log(.runtime, "adopted real patch (\(real.count) bytes, sha256=\(PatchPayload.digest(of: real))) — keeping it instead of the \(payload.data.count)B neutral manifest")
-        } else {
-            // Only the neutral manifest is available; its digest must match the
-            // pin before it reaches the container.
+        // The app now ships the real, populated IFix blob (`expectedLength`
+        // bytes) that carries the aim/ESP overrides and the `HeadRate` /
+        // `BodyRate` silent-aim split directly. It is the payload we want in
+        // the container — always. Adopting a larger on-disk, backed-up, or
+        // vendor blob (a path that predates this, back when the bundle held a
+        // 322-byte neutral manifest) would overwrite those overrides with the
+        // vendor's unpatched code and silently undo the fix. So the bundle wins
+        // whenever it holds the real blob; only a stripped build that does not
+        // falls back to adopting one from the container.
+        let bundledIsRealPatch = payload.data.count == PatchPayload.expectedLength
+        let activePatch: Data
+        if bundledIsRealPatch {
+            // The bundled blob's digest is the pin (server-provided, else the
+            // local pin), so a tampered bundle is refused before any write.
             do {
                 try payload.verify(against: expectedDigest)
             } catch {
                 log.log(.integrity, "payload digest mismatch; refusing to install")
                 throw InstallError.integrityMismatch
             }
+            activePatch = payload.data
+        } else {
+            let onDiskPatch = RuntimeInstaller.adoptablePatch(in: patchURLs)
+            let backedUpPatch = RuntimeInstaller.adoptablePatch(in: [RuntimeInstaller.backupURL])
+            // A vendor run occasionally stages the real patch outside the four
+            // known names (Library/, tmp/, a Documents subfolder). A
+            // whole-container scan for the pinned payload digest catches those.
+            let hiddenPatch = RuntimeInstaller.whitelistedPatch(in: [data])
+            guard let real = onDiskPatch ?? backedUpPatch ?? hiddenPatch else {
+                log.log(.integrity, "bundled payload is not the real blob and no real patch is staged; refusing to install")
+                throw InstallError.integrityMismatch
+            }
+            RuntimeInstaller.storeBackup(real)
+            log.log(.runtime, "adopted real patch (\(real.count) bytes, sha256=\(PatchPayload.digest(of: real))) — bundled resource is not the real blob")
+            activePatch = real
         }
 
         // Clear any previous copy first so a partial write can never be

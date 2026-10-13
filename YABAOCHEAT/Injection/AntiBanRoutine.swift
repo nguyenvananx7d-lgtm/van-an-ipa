@@ -4,23 +4,33 @@ import Foundation
 ///
 /// This is the "anti-ban" the panel can honestly run. It is not a claim that
 /// the game's server-side ban logic is defeated — it is the local half of the
-/// posture, and it does three things:
+/// posture, and it does four things:
 ///
-/// 1. Removes the panel's own residue from the target container: anything
-///    owning the `.ffxc*` probe name that is NOT the staged patch or config.
-///    A probing crash can leave the probe behind; it is ours and only ours to
-///    delete.
+/// 1. Removes the panel's own residue from the target container: the
+///    `.ffxc*` probe names, the runtime's dropped `ffxc_debug.log`, and the
+///    `testCodePatch*` marker the injected runtime writes to prove it engaged.
+///    Those are ours and only ours to delete; the staged patch and the
+///    `localConfig.json` document are never touched (this is the sweep, not the
+///    wipe).
 /// 2. Flushes the page cache *before* the sweep, because anything flushed after
 ///    a delete would write the removed bytes straight back (same ordering rule
 ///    `WipeRoutine` uses).
-/// 3. Flags — never deletes — unrecognised files whose contents carry the
+/// 3. **Masks the on-disk timestamps of the staged payload.** Newer clients
+///    walk the container and flag files whose modification time is newer than
+///    the app's own last-update baseline — an added patch written "seconds ago"
+///    is a giveaway. Every staged copy (both stage names, both payload
+///    directories, plus the config) is re-stamped to the container's
+///    install-time reference (the MCM metadata plist's mtime), so the files
+///    read as old as the app itself instead of "just modified".
+/// 4. Flags — never deletes — unrecognised files whose contents carry the
 ///    panel's Mach-O signature, so the user gets a log line instead of the
 ///    routine guessing about files it cannot attribute.
 ///
-/// The staged patch (`Assembly-CSharp-patch.bytes`, both stage names) and the
-/// `localConfig.json` document are deliberately kept: this is the anti-ban
-/// sweep, not the wipe. Re-stamping the session document is left to the
-/// caller on the main actor, where it can reach the live controls.
+/// Masking limits, stated honestly: `utimes`-visible `mtime`/`ctime` are
+/// userspace-settable via `FileManager`, but the inode change time (`st_ctime`)
+/// advances on *any* metadata write, including this masking itself. A scanner
+/// that stats `ctime` — rather than `mtime` — cannot be fooled from userspace;
+/// only the kernel path could, and it is not used here.
 public actor AntiBanRoutine {
     public static let shared = AntiBanRoutine(log: AppLog.shared, bridge: ContainerBridge.shared, krw: KernelRW.shared)
 
@@ -36,60 +46,157 @@ public actor AntiBanRoutine {
 
     public struct SweepResult: Sendable {
         public let removed: [String]
+        public let masked: [String]
         public let flagged: [String]
-        public init(removed: [String], flagged: [String]) {
+        public init(removed: [String], masked: [String], flagged: [String]) {
             self.removed = removed
+            self.masked = masked
             self.flagged = flagged
         }
     }
 
-    /// Run the sweep. Nothing is thrown: a container that cannot resolve
-    /// simply reports an empty sweep, and per-file failures land in `flagged`.
+    /// Last-resort stamp when the container exposes no install-time reference.
+    /// Deliberately a plainly-old fixed epoch rather than `Date()` so a missing
+    /// reference can never leave the payload looking freshly written.
+    static let fallbackBaseline = Date(timeIntervalSince1970: 1_700_000_000)
+
+    /// Run the full sweep (residue removal + timestamp masking). Nothing is
+    /// thrown: a container that cannot resolve simply reports an empty sweep,
+    /// and per-file failures land in `flagged`.
     public func run(game: Game) async -> SweepResult {
         let data: URL
         switch bridge.resolve(game: game) {
         case .resolved(let d): data = d
         default:
-            log.log(.runtime, "anti-ban sweep for \(game.rawValue): container not resolved — skipped")
-            return SweepResult(removed: [], flagged: [])
+            log.log(.antiBan, "sweep for \(game.rawValue): container not resolved — skipped")
+            return SweepResult(removed: [], masked: [], flagged: [])
         }
 
         krw.flushAll()
         log.log(.kernelRW, "anti-ban: page cache flushed for \(game.rawValue)")
 
-        // Only the access probe is ours to delete here. The patch (both stage
-        // names) and the config are the point of this sweep — they stay.
-        let keep = Set([
-            ContainerBridge.patchName,
-            ContainerBridge.patchInjectionName,
-            "localConfig.json",
-        ])
+        let (removed, removeFailures) = removeResidue(in: data, game: game)
+        let (masked, maskFailures) = conceal(in: data, game: game)
 
+        var flagged = removeFailures + maskFailures
+        if let strays = scanForSignature(in: data) {
+            flagged.append(contentsOf: strays)
+            log.log(.antiBan, "\(strays.count) unrecognised file(s) carry the panel signature")
+        }
+
+        log.log(.antiBan, "sweep finished for \(game.rawValue): removed \(removed.count), masked \(masked.count), flagged \(flagged.count)")
+        return SweepResult(removed: removed, masked: masked, flagged: flagged)
+    }
+
+    /// Re-stamp only. Called after a live `localConfig.json` rewrite so the
+    /// just-bumped mtime does not expose the session to a "file changed
+    /// recently" scanner between full sweeps. No residue removal, no flush.
+    @discardableResult
+    public func conceal(game: Game) -> [String] {
+        guard case .resolved(let data) = bridge.resolve(game: game) else {
+            log.log(.antiBan, "mask for \(game.rawValue): container not resolved — skipped")
+            return []
+        }
+        return conceal(in: data, game: game).masked
+    }
+
+    // MARK: - residue
+
+    /// Delete the panel's own leftovers (probe, runtime debug log, engagement
+    /// marker) from every payload directory. The staged patch and config are
+    /// never matched by `WipeRoutine.isResidue`, so they survive untouched.
+    private func removeResidue(in data: URL, game: Game) -> (removed: [String], failures: [String]) {
+        let fm = FileManager.default
         var removed: [String] = []
-        var flagged: [String] = []
+        var failures: [String] = []
         for dir in bridge.payloadDirectories(in: data) {
-            for name in WipeRoutine.ownedNames where !keep.contains(name) {
+            guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
+            for name in names where WipeRoutine.isResidue(name) {
                 let url = dir.appendingPathComponent(name)
-                guard FileManager.default.fileExists(atPath: url.path) else { continue }
                 do {
-                    try FileManager.default.removeItem(at: url)
+                    try fm.removeItem(at: url)
                     removed.append("\(dir.lastPathComponent)/\(name)")
-                    log.log(.runtime, "anti-ban: removed \(name) from \(dir.lastPathComponent)")
+                    log.log(.antiBan, "removed \(name) from \(dir.lastPathComponent)")
                 } catch {
-                    flagged.append("\(dir.lastPathComponent)/\(name)")
-                    log.log(.runtime, "anti-ban: could not remove \(name): \(error.localizedDescription)")
+                    failures.append("\(dir.lastPathComponent)/\(name)")
+                    log.log(.antiBan, "could not remove \(name): \(error.localizedDescription)")
                 }
             }
         }
-
-        if let strays = scanForSignature(in: data) {
-            flagged.append(contentsOf: strays)
-            log.log(.runtime, "anti-ban: \(strays.count) unrecognised file(s) carry the panel signature")
-        }
-
-        log.log(.runtime, "anti-ban sweep finished for \(game.rawValue): removed \(removed.count), flagged \(flagged.count)")
-        return SweepResult(removed: removed, flagged: flagged)
+        return (removed, failures)
     }
+
+    // MARK: - masking
+
+    /// Stamp every staged payload copy (both stage names in both payload
+    /// directories, plus the config) with the container's install-time
+    /// reference, so an added-file/modified-file scan sees nothing newer than
+    /// the app itself.
+    private func conceal(in data: URL, game: Game) -> (masked: [String], failures: [String]) {
+        let fm = FileManager.default
+        let baseline = baselineDate(in: data)
+        let full: [FileAttributeKey: Any] = [
+            .modificationDate: baseline,
+            .creationDate: baseline,
+        ]
+        let mtimeOnly: [FileAttributeKey: Any] = [.modificationDate: baseline]
+
+        var masked: [String] = []
+        var failures: [String] = []
+        let targets = bridge.patchURLs(in: data, game: game) + bridge.configURLs(in: data, game: game)
+        for url in targets where fm.fileExists(atPath: url.path) {
+            do {
+                try fm.setAttributes(full, ofItemAtPath: url.path)
+                masked.append(url.lastPathComponent)
+            } catch {
+                // Birth-time is not settable on every build; mtime alone still
+                // defeats the common "newer than install" comparison.
+                do {
+                    try fm.setAttributes(mtimeOnly, ofItemAtPath: url.path)
+                    masked.append(url.lastPathComponent)
+                } catch {
+                    failures.append(url.lastPathComponent)
+                    log.log(.antiBan, "mask failed for \(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
+        if !masked.isEmpty {
+            log.log(.antiBan, "masked \(masked.count) payload file(s) to baseline \(Self.iso(baseline))")
+        }
+        return (masked, failures)
+    }
+
+    /// The container's install-time reference. The MCM metadata plist is
+    /// written once when the container is created and is never touched by the
+    /// game, so its mtime is a stable "app installed at" anchor the game's own
+    /// files also carry.
+    private func baselineDate(in data: URL) -> Date {
+        let fm = FileManager.default
+        let parent = data.deletingLastPathComponent()
+        let candidates = [
+            data.appendingPathComponent(ContainerBridge.mcmMetadataPlist),
+            data.appendingPathComponent(ContainerBridge.mcmMetadataPlistWithUnderscore),
+            parent.appendingPathComponent(ContainerBridge.mcmMetadataPlist),
+            parent.appendingPathComponent(ContainerBridge.mcmMetadataPlistWithUnderscore),
+        ]
+        for url in candidates {
+            if let date = (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date {
+                return date
+            }
+        }
+        if let date = (try? fm.attributesOfItem(atPath: data.path))?[.creationDate] as? Date {
+            return date
+        }
+        return AntiBanRoutine.fallbackBaseline
+    }
+
+    private static func iso(_ date: Date) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f.string(from: date)
+    }
+
+    // MARK: - signature scan
 
     /// Find files in the container whose contents mention our Mach-O prefix.
     private func scanForSignature(in data: URL) -> [String]? {

@@ -17,7 +17,7 @@ struct VisualView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionGroup(title: String(localized: "section_esp_main")) {
+            SectionGroup(title: String(localized: "section_esp_main"), symbol: "eye") {
                 ToggleRow(label: String(localized: "master_esp"), isOn: menu.feature(\.masterEsp))
                 ToggleRow(label: String(localized: "line_esp"), isOn: menu.feature(\.lineEsp))
                 ToggleRow(label: String(localized: "box_esp"), isOn: menu.feature(\.boxEsp))
@@ -28,19 +28,21 @@ struct VisualView: View {
                 ToggleRow(label: String(localized: "tracer_esp"), isOn: menu.feature(\.tracerEsp))
             }
 
-            SectionGroup(title: String(localized: "section_esp_box")) {
+            SectionGroup(title: String(localized: "section_esp_box"), symbol: "rectangle.dashed") {
                 SliderRow(
                     label: String(localized: "box_size"),
                     value: menu.feature(\.espBoxScalePercent),
                     range: 50...200,
-                    unit: "%"
+                    unit: "%",
+                    showRange: true
                 )
 
                 SliderRow(
                     label: String(localized: "box_offset"),
                     value: menu.feature(\.espBoxOffsetY),
                     range: -60...60,
-                    unit: "px"
+                    unit: "px",
+                    showRange: true
                 )
             }
         }

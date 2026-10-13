@@ -2,19 +2,19 @@ import SwiftUI
 
 // MARK: - design tokens
 //
-// Ink and signal. One warm amber on a near-black base, flat fills, hairline
+// Ink and signal. One cool cyan on a near-black base, flat fills, hairline
 // borders. No noise, no glass, no rainbow, no glow piled on everything.
 // Hierarchy comes from weight, spacing, and one accent that only exists where
 // a control is live. The effect budget is deliberately small so the panel
 // reads like a tool, not a demo.
 
 enum Palette {
-    // plate — warm ink, hierarchy by value
-    static let void       = Color(hex: 0x0C0D10)   // deepest well
-    static let base       = Color(hex: 0x101216)   // background
-    static let surface    = Color(hex: 0x171A20)   // plates, rows
-    static let surfaceHi  = Color(hex: 0x1F232B)   // raised / active
-    static let well       = Color(hex: 0x0B0D11)   // inset fields, tracks
+    // plate — cool ink, a touch lifted, hierarchy by value
+    static let void       = Color(hex: 0x0D0F14)   // deepest well
+    static let base       = Color(hex: 0x12151B)   // background
+    static let surface    = Color(hex: 0x1A1E26)   // plates, rows
+    static let surfaceHi  = Color(hex: 0x242A34)   // raised / active
+    static let well       = Color(hex: 0x0E1117)   // inset fields, tracks
 
     // edges
     static let hairline   = Color.white.opacity(0.08)
@@ -27,15 +27,30 @@ enum Palette {
     static let textFaint = Color(hex: 0x67707E)
 
     // signal
-    static let accent     = Color(hex: 0xF8A93D)
-    static let accentHi   = Color(hex: 0xFFC46B)
-    static let accentDeep = Color(hex: 0x7C4E12)
+    static let accent     = Color(hex: 0x3FC9E6)
+    static let accentHi   = Color(hex: 0x86E4F6)
+    static let accentDeep = Color(hex: 0x0F4E5C)
 
     // states
     static let good = Color(hex: 0x4CC987)
     static let warn = Color(hex: 0xE2A85B)
     static let bad  = Color(hex: 0xED6A63)
-    static let info = Color(hex: 0x7FB0D8)
+    static let info = Color(hex: 0x8FA6F0)
+}
+
+// MARK: - metrics
+//
+// One spacing and radius scale, so padding does not drift row to row. The
+// numbers are small on purpose: a panel that is dense reads as a tool.
+
+enum Metrics {
+    static let gutter: CGFloat       = 16    // screen horizontal margin
+    static let stack: CGFloat        = 16    // gap between section groups
+    static let cardRadius: CGFloat   = 16
+    static let groupRadius: CGFloat  = 14
+    static let controlRadius: CGFloat = 12
+    static let rowPaddingH: CGFloat  = 14
+    static let rowPaddingV: CGFloat  = 13
 }
 
 extension Color {
@@ -52,10 +67,10 @@ extension Color {
 
 // MARK: - background
 
-/// Flat ink with a barely-there warm tint high-right and a slow fall to void
+/// Flat ink with a barely-there cool tint high-right and a slow fall to void
 /// at the bottom. Static, cheap, quiet.
 struct ThemeBackground: View {
-    var bloom: Double = 0.05
+    var bloom: Double = 0.055
 
     var body: some View {
         ZStack {
@@ -80,9 +95,11 @@ struct ThemeBackground: View {
 // MARK: - plate
 
 /// The house surface: flat fill, one hairline border, one soft shadow. No
-/// gradient, no bloom. `glow` tints the border for the selected state.
+/// gradient, no bloom. `glow` tints the border for the selected state. The only
+/// gradient allowed here is a 3.5%-white sheen on the top edge, which is what
+/// makes a raised plate catch light without looking like frosted glass.
 struct PlateSurface: ViewModifier {
-    var radius: CGFloat = 16
+    var radius: CGFloat = Metrics.cardRadius
     var elevated: Bool = false
     var glow: Color?
 
@@ -91,19 +108,57 @@ struct PlateSurface: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(elevated ? Palette.surfaceHi : Palette.surface)
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.035), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(glow ?? Palette.edgeTop, lineWidth: glow == nil ? 1 : 1.2)
             )
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.35), radius: 12, y: 6)
+            .shadow(color: .black.opacity(0.32), radius: 10, y: 5)
+    }
+}
+
+/// The recessed counterpart to `machined`: a dark well, a shadow under the top
+/// edge and a hairline along the bottom, so tracks and text fields read as cut
+/// into the plate rather than laid on top of it.
+struct InsetSurface: ViewModifier {
+    var radius: CGFloat = Metrics.controlRadius
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(Palette.well)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.55), Palette.hairline],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 
 extension View {
-    func machined(radius: CGFloat = 16, elevated: Bool = false, glow: Color? = nil) -> some View {
+    func machined(radius: CGFloat = Metrics.cardRadius, elevated: Bool = false, glow: Color? = nil) -> some View {
         modifier(PlateSurface(radius: radius, elevated: elevated, glow: glow))
+    }
+
+    func insetWell(radius: CGFloat = Metrics.controlRadius) -> some View {
+        modifier(InsetSurface(radius: radius))
     }
 
     /// Inset hairline under a list-style row.
@@ -112,14 +167,14 @@ extension View {
             Rectangle()
                 .fill(Palette.hairline)
                 .frame(height: 1)
-                .padding(.leading, 14)
+                .padding(.leading, Metrics.rowPaddingH)
         }
     }
 }
 
 // MARK: - buttons
 
-/// Primary = flat amber with dark ink; the only glowing element in the app is
+/// Primary = flat accent with dark ink; the only glowing element in the app is
 /// the one the user is meant to press. Secondary = raised ink plate.
 /// Destructive = the same ink plate, but with a bad-tinted edge and ink so a
 /// removal action is read before it is pressed.
@@ -172,8 +227,8 @@ private struct AccentButtonBody: View {
     }
 }
 
-/// Small inline action: a capsule chip, amber ink on a faint amber wash, or
-/// solid amber when it is the primary affordance in a row.
+/// Small inline action: a capsule chip, accent ink on a faint accent wash, or
+/// solid accent when it is the primary affordance in a row.
 struct ChipButtonStyle: ButtonStyle {
     var filled: Bool = false
 
@@ -203,7 +258,7 @@ private struct ChipButtonBody: View {
 
 // MARK: - toggle
 
-/// Capsule track, amber when armed, graphite when not, with a knob that carries
+/// Capsule track, accent when armed, graphite when not, with a knob that carries
 /// the whole motion. Reads like a physical switch rather than the iOS pill.
 struct MachinedToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -241,7 +296,7 @@ struct SegItem<Value: Hashable>: Identifiable {
 }
 
 /// Flat segmented control: a raised plate slides under the active segment. Used
-/// for in-row choice groups; the screen-level navigation is `TabStrip`.
+/// for in-row choice groups; the screen-level navigation is `BottomTabBar`.
 struct SegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let items: [SegItem<Value>]
@@ -254,11 +309,7 @@ struct SegmentedControl<Value: Hashable>: View {
             }
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Palette.well))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(Palette.hairline, lineWidth: 1)
-        )
+        .insetWell(radius: Metrics.controlRadius)
     }
 
     private func segment(_ item: SegItem<Value>) -> some View {
@@ -294,46 +345,63 @@ struct SegmentedControl<Value: Hashable>: View {
 
 // MARK: - screen-level tabs
 
-/// Underline tab strip for the four screens. The active tab gets ink text and
-/// a short amber rule; nothing slides, nothing glows. Reads as navigation.
-struct TabStrip: View {
+/// One entry in the bottom bar: an index, a label, and a line-art glyph.
+struct TabItem: Identifiable {
+    let index: Int
+    let title: String
+    let symbol: String
+
+    var id: Int { index }
+}
+
+/// Bottom navigation for the four screens. Flat ink bar with a single top
+/// hairline; the active tab switches glyph and label to the accent and nothing
+/// else moves. Reads as navigation chrome, not a widget.
+struct BottomTabBar: View {
     @Binding var selection: Int
-    let items: [String]
+    let items: [TabItem]
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(items.indices, id: \.self) { index in
-                tab(index)
+            ForEach(items) { item in
+                tab(item)
             }
         }
-        .overlay(alignment: .bottom) {
+        .padding(.top, 9)
+        .padding(.bottom, 4)
+        .overlay(alignment: .top) {
             Rectangle()
                 .fill(Palette.hairline)
                 .frame(height: 1)
         }
+        // Solid, not translucent: the bar is chrome, and a hard edge keeps it
+        // from blurring into the scrolling content above it. The fill bleeds
+        // into the home-indicator strip so the bar reads full-height.
+        .background(Palette.void.opacity(0.96), ignoresSafeAreaEdges: .bottom)
     }
 
-    private func tab(_ index: Int) -> some View {
-        let active = selection == index
+    private func tab(_ item: TabItem) -> some View {
+        let active = selection == item.index
         return Button {
-            guard index != selection else { return }
+            guard item.index != selection else { return }
             withAnimation(.easeOut(duration: 0.15)) {
-                selection = index
+                selection = item.index
             }
         } label: {
-            VStack(spacing: 6) {
-                Text(items[index])
-                    .font(.footnote.weight(active ? .semibold : .medium))
-                    .foregroundStyle(active ? Palette.text : Palette.textFaint)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 10)
-                Rectangle()
-                    .fill(active ? Palette.accent : Color.clear)
-                    .frame(height: 2)
+            VStack(spacing: 4) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 17, weight: active ? .semibold : .regular))
+                    .frame(height: 20)
+                Text(item.title)
+                    .font(.caption2.weight(active ? .semibold : .medium))
             }
+            .foregroundStyle(active ? Palette.accent : Palette.textFaint)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 }
 

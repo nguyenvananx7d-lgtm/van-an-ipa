@@ -10,11 +10,13 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app now ships a real, populated IFix patch (67,794 B, targeting
+    /// The app now ships a real, populated IFix patch (69,386 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
-    /// manifest. It carries the ESP/aim method overrides directly, so staging
-    /// it into the container is what turns the features on.
-    public static let expectedLength = 67_794
+    /// manifest. It carries the ESP/aim method overrides directly — including
+    /// the patched `get_LastAimingInfoFromWeapon` two-rate silent-aim split
+    /// (`HeadRate` / `BodyRate`) — so staging it into the container is what
+    /// turns the features on.
+    public static let expectedLength = 69_386
 
     /// SHA-256 of the vendor's real IFix patch (76,348 B), recovered from the
     /// vendor journal's `active` field and the live container dump. Pinned here
@@ -91,12 +93,14 @@ public struct PatchPayload: Sendable {
     /// The configuration document the injected runtime reads on wake.
     ///
     /// The runtime parses a single flat object in its **own** key spelling
-    /// (`EspMaster`, `AimSystemEnabled`, `HeadshotRate`, `server_aim`, …). The
+    /// (`EspMaster`, `AimSystemEnabled`, `HeadRate`, `server_aim`, …). The
     /// cheat ships that document as `localConfig.json`, so it is used as the
     /// base: every key the panel does not expose — `NoRecoil`, `SpeedHack`,
-    /// `GhostMode`, the guest-reset block, the `server_*` grants, and the
-    /// `meomeo` / `sig` / `token` / `ts` session fields — keeps the value the
-    /// cheat shipped with.
+    /// `GhostMode`, the `server_*` grants, and the `meomeo` / `sig` / `token` /
+    /// `ts` session fields — keeps the value the cheat shipped with. The
+    /// guest-reset block is disabled: the blob never runs it, and this document
+    /// drops the `reset_guest` / `resetGuest` / `resetGuestBeforeLogin` keys and
+    /// sets `ShowGuestBtn` to `false` so the reset button is never drawn.
     ///
     /// The panel's aim / ESP switches are then overlaid on top in the same key
     /// spelling, so a checkbox and the document always agree. `testCodePatch`

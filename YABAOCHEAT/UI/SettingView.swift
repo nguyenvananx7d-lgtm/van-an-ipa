@@ -14,12 +14,12 @@ struct SettingView: View {
     @State private var copied: Bool = false
 
     /// Swap for the real invite when the server side settles.
-    private let supportURL = "https://discord.com/invite/vortexarena"
+    private let supportURL = "https://discord.gg/hcx7aP4XSp"
 
     private var device: DeviceIdentityProvider { .shared }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Metrics.stack) {
             exploit
             antiBanSection
             licenseInfo
@@ -61,18 +61,27 @@ struct SettingView: View {
     /// Kernel-exploit controls, moved here from the Inject screen. The chain is
     /// auto-run at the front of every inject; this is the manual fallback and
     /// the status read-out.
+    @ViewBuilder
     private var exploit: some View {
-        SectionGroup(title: String(localized: "section_exploit")) {
-            exploitRow
+        // Nothing to offer when this build is outside the chain's support; an
+        // empty bordered group would just be a hole in the list.
+        if case .unsupported = inject.exploitStatus {
+            EmptyView()
+        } else {
+            SectionGroup(title: String(localized: "section_exploit"), symbol: "cpu") {
+                exploitRow
+            }
         }
     }
 
     /// Anti-ban: the checkbox drives a trace sweep of the panel's own residue
-    /// in the container (probe leftovers, signature strays) and a session
-    /// re-stamp. The same sweep also runs at the front of every inject while
-    /// the switch is on. The staged patch and config are never touched.
+    /// in the container (probe leftovers, runtime debug log, engagement marker,
+    /// signature strays), a timestamp-masking pass over the staged payload so
+    /// a changed-file scan sees nothing newer than the app itself, and a
+    /// session re-stamp. The same sweep also runs at the front of every inject
+    /// while the switch is on. The staged patch and config are never removed.
     private var antiBanSection: some View {
-        SectionGroup(title: String(localized: "section_anti_ban")) {
+        SectionGroup(title: String(localized: "section_anti_ban"), symbol: "shield.lefthalf.filled") {
             ToggleRow(
                 label: String(localized: "anti_ban"),
                 detail: String(localized: "anti_ban_caption"),
@@ -100,8 +109,8 @@ struct SettingView: View {
                 .buttonStyle(ChipButtonStyle())
                 .disabled(inject.isRunningAntiBan)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .padding(.horizontal, Metrics.rowPaddingH)
             .rowDivider()
         }
     }
@@ -110,12 +119,13 @@ struct SettingView: View {
         guard let report = inject.antiBanReport else {
             return String(localized: "anti_ban_idle")
         }
-        if report.removed.isEmpty && report.flagged.isEmpty {
+        if report.removed.isEmpty && report.masked.isEmpty && report.flagged.isEmpty {
             return String(localized: "anti_ban_clean")
         }
         return String(
             format: String(localized: "anti_ban_summary"),
             report.removed.count,
+            report.masked.count,
             report.flagged.count
         )
     }
@@ -192,11 +202,11 @@ struct SettingView: View {
     }
 
     private var licenseInfo: some View {
-        SectionGroup(title: String(localized: "section_license_info")) {
-            infoRow(String(localized: "setting_license"),
+        SectionGroup(title: String(localized: "section_license_info"), symbol: "checkmark.seal") {
+            InfoRow(label: String(localized: "setting_license"),
                     value: auth.status.displayKey ?? "—")
 
-            infoRow(String(localized: "validity"),
+            InfoRow(label: String(localized: "validity"),
                     value: expiryRemaining)
 
             HStack(spacing: 10) {
@@ -205,7 +215,7 @@ struct SettingView: View {
                 Spacer(minLength: 8)
                 Text(device.credentialId)
                     .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Palette.textDim)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Button {
@@ -216,87 +226,41 @@ struct SettingView: View {
                 }
                 .buttonStyle(ChipButtonStyle())
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
+            .padding(.vertical, Metrics.rowPaddingV)
+            .padding(.horizontal, Metrics.rowPaddingH)
         }
     }
 
     private var compatibility: some View {
-        SectionGroup(title: String(localized: "section_compat")) {
-            infoRow(String(localized: "ios_version_current"),
+        SectionGroup(title: String(localized: "section_compat"), symbol: "iphone") {
+            InfoRow(label: String(localized: "ios_version_current"),
                     value: "iOS \(device.iOSVersion)")
         }
     }
 
     private var languageSection: some View {
-        SectionGroup(title: String(localized: "section_language")) {
-            Button {
+        SectionGroup(title: String(localized: "section_language"), symbol: "textformat") {
+            ActionRow(symbol: "globe", label: language.selected.displayName) {
                 language.hasChosen = false
-            } label: {
-                HStack {
-                    Text(language.selected.displayName)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(Palette.text)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Palette.textFaint)
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 12)
             }
-            .buttonStyle(.plain)
         }
     }
 
     private var support: some View {
-        SectionGroup(title: String(localized: "section_support")) {
-            actionRow(String(localized: "support_discord"), tint: Palette.text) {
+        SectionGroup(title: String(localized: "section_support"), symbol: "questionmark.circle") {
+            ActionRow(symbol: "bubble.left.and.bubble.right", label: String(localized: "support_discord")) {
                 guard let url = URL(string: supportURL) else { return }
                 UIApplication.shared.open(url)
             }
 
-            actionRow(String(localized: "system_log"), tint: Palette.text) {
+            ActionRow(symbol: "doc.text.magnifyingglass", label: String(localized: "system_log")) {
                 showLog = true
             }
 
-            actionRow(String(localized: "logout_account"), tint: Palette.bad) {
+            ActionRow(symbol: "rectangle.portrait.and.arrow.right", label: String(localized: "logout_account"), tint: Palette.bad) {
                 showLogout = true
             }
         }
-    }
-
-    // MARK: - rows
-
-    private func infoRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.body.weight(.medium))
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.caption)
-                .foregroundStyle(Palette.textDim)
-                .lineLimit(1)
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-    }
-
-    private func actionRow(_ label: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(label)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(tint)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Palette.textFaint)
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
-        }
-        .buttonStyle(.plain)
     }
 
     /// "30d 6h 52m" style countdown, as the mockup shows it.
