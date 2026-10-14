@@ -38,6 +38,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: panel — aimbot tab
 
     public var aimbotType: String
+    /// Silent aim / "magic bullet". Emitted as `SilentAim`, and it also arms
+    /// `AimEnabled` with the mixed-roll `AimTarget` the head/body split drives.
     public var silentAim: Bool
     /// Silent-aim bone split, as percentages of the lock. `headRate` is the
     /// weight for taking the head, `bodyRate` the weight for the body; the
@@ -95,6 +97,52 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     public var streamProof: Bool
 
+    // MARK: panel — misc features
+
+    /// The cheat's own non-ESP / non-aim switches. They already ride in the
+    /// shipped `localConfig.json` under the runtime's spelling; surfacing them
+    /// here is what lets the panel drive them instead of leaving them frozen at
+    /// the value the document shipped with. Keys: `NoRecoil`, `GhostMode`,
+    /// `SpeedHack`, `CamXa`, `CamXaFloat`, `BuffDame` (the cheat's spelling),
+    /// `FastParachute`.
+    public var noRecoil: Bool
+    public var ghostMode: Bool
+    /// The runtime reads `SpeedHack` as a number, `1` on / `0` off.
+    public var speedHack: Bool
+    public var camXa: Bool
+    /// Distance the extended camera pushes to, emitted as `CamXaFloat`.
+    public var camXaFloat: Double
+    public var buffDamage: Bool
+    public var fastParachute: Bool
+
+    // MARK: panel — ESP extras
+
+    /// Fan of arrows ringing the screen toward every enemy. Key `Esp360Arrows`.
+    public var esp360Arrows: Bool
+    /// Where the ESP line is anchored: `top` | `bottom` | `crosshair`.
+    public var lineTarget: String
+
+    // MARK: panel — aim extras
+
+    /// Silent-aim target: `mixed` | `head` | `body`.
+    public var silentAimTarget: String
+    /// Scoped-only lock. Key `SniperScope`.
+    public var sniperScope: Bool
+
+    // MARK: panel — colour
+
+    /// Which elements take the palette colour.
+    public var fovColor: Bool
+    public var lineTracerColor: Bool
+    public var box2dColor: Bool
+    public var skeletonColor: Bool
+    /// Named palette: `default` | `red` | `green` | `blue` | `yellow` | `cyan`
+    /// | `pink` | `orange` | `purple` | `white`.
+    public var espPalette: String
+    public var rainbow: Bool
+    public var allRainbow: Bool
+    public var resetAllColors: Bool
+
     /// Every switch starts OFF: the profile ships with nothing enabled and the
     /// player opts into each feature. Value controls (sliders, bone) keep
     /// sensible non-zero defaults so the moment a switch is turned on it does
@@ -137,7 +185,26 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         drawEnemyCount: Bool = false,
         textSize: Int = 14,
         espBounding: Int = 2,
-        streamProof: Bool = false
+        streamProof: Bool = false,
+        noRecoil: Bool = false,
+        ghostMode: Bool = false,
+        speedHack: Bool = false,
+        camXa: Bool = false,
+        camXaFloat: Double = 1.5,
+        buffDamage: Bool = false,
+        fastParachute: Bool = false,
+        esp360Arrows: Bool = false,
+        lineTarget: String = "bottom",
+        silentAimTarget: String = "mixed",
+        sniperScope: Bool = false,
+        fovColor: Bool = false,
+        lineTracerColor: Bool = false,
+        box2dColor: Bool = false,
+        skeletonColor: Bool = false,
+        espPalette: String = "default",
+        rainbow: Bool = false,
+        allRainbow: Bool = false,
+        resetAllColors: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.aimEnabled = aimEnabled
@@ -177,6 +244,25 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.textSize = textSize
         self.espBounding = espBounding
         self.streamProof = streamProof
+        self.noRecoil = noRecoil
+        self.ghostMode = ghostMode
+        self.speedHack = speedHack
+        self.camXa = camXa
+        self.camXaFloat = camXaFloat
+        self.buffDamage = buffDamage
+        self.fastParachute = fastParachute
+        self.esp360Arrows = esp360Arrows
+        self.lineTarget = lineTarget
+        self.silentAimTarget = silentAimTarget
+        self.sniperScope = sniperScope
+        self.fovColor = fovColor
+        self.lineTracerColor = lineTracerColor
+        self.box2dColor = box2dColor
+        self.skeletonColor = skeletonColor
+        self.espPalette = espPalette
+        self.rainbow = rainbow
+        self.allRainbow = allRainbow
+        self.resetAllColors = resetAllColors
     }
 
     // MARK: - persistence
@@ -213,7 +299,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
              healthEsp, healthType, skeletonEsp, tracerEsp, drawEnemyCount, textSize,
              espBounding,
-             streamProof
+             streamProof,
+             noRecoil, ghostMode, speedHack, camXa, camXaFloat, buffDamage, fastParachute,
+             esp360Arrows, lineTarget, silentAimTarget, sniperScope,
+             fovColor, lineTracerColor, box2dColor, skeletonColor, espPalette,
+             rainbow, allRainbow, resetAllColors
     }
 
     /// Profiles written by an older build decode field by field rather than
@@ -265,6 +355,27 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         espBounding       = try c.decodeIfPresent(Int.self, forKey: .espBounding) ?? d.espBounding
 
         streamProof       = try c.decodeIfPresent(Bool.self, forKey: .streamProof) ?? d.streamProof
+
+        noRecoil          = try c.decodeIfPresent(Bool.self, forKey: .noRecoil) ?? d.noRecoil
+        ghostMode         = try c.decodeIfPresent(Bool.self, forKey: .ghostMode) ?? d.ghostMode
+        speedHack         = try c.decodeIfPresent(Bool.self, forKey: .speedHack) ?? d.speedHack
+        camXa             = try c.decodeIfPresent(Bool.self, forKey: .camXa) ?? d.camXa
+        camXaFloat        = try c.decodeIfPresent(Double.self, forKey: .camXaFloat) ?? d.camXaFloat
+        buffDamage        = try c.decodeIfPresent(Bool.self, forKey: .buffDamage) ?? d.buffDamage
+        fastParachute     = try c.decodeIfPresent(Bool.self, forKey: .fastParachute) ?? d.fastParachute
+
+        esp360Arrows      = try c.decodeIfPresent(Bool.self, forKey: .esp360Arrows) ?? d.esp360Arrows
+        lineTarget        = try c.decodeIfPresent(String.self, forKey: .lineTarget) ?? d.lineTarget
+        silentAimTarget   = try c.decodeIfPresent(String.self, forKey: .silentAimTarget) ?? d.silentAimTarget
+        sniperScope       = try c.decodeIfPresent(Bool.self, forKey: .sniperScope) ?? d.sniperScope
+        fovColor          = try c.decodeIfPresent(Bool.self, forKey: .fovColor) ?? d.fovColor
+        lineTracerColor   = try c.decodeIfPresent(Bool.self, forKey: .lineTracerColor) ?? d.lineTracerColor
+        box2dColor        = try c.decodeIfPresent(Bool.self, forKey: .box2dColor) ?? d.box2dColor
+        skeletonColor     = try c.decodeIfPresent(Bool.self, forKey: .skeletonColor) ?? d.skeletonColor
+        espPalette        = try c.decodeIfPresent(String.self, forKey: .espPalette) ?? d.espPalette
+        rainbow           = try c.decodeIfPresent(Bool.self, forKey: .rainbow) ?? d.rainbow
+        allRainbow        = try c.decodeIfPresent(Bool.self, forKey: .allRainbow) ?? d.allRainbow
+        resetAllColors    = try c.decodeIfPresent(Bool.self, forKey: .resetAllColors) ?? d.resetAllColors
     }
 
     // MARK: - payload setters
@@ -322,6 +433,27 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "espBounding": espBounding,
 
             "streamProof": streamProof,
+
+            "noRecoil": noRecoil,
+            "ghostMode": ghostMode,
+            "speedHack": speedHack,
+            "camXa": camXa,
+            "camXaFloat": camXaFloat,
+            "buffDamage": buffDamage,
+            "fastParachute": fastParachute,
+
+            "esp360Arrows": esp360Arrows,
+            "lineTarget": lineTarget,
+            "silentAimTarget": silentAimTarget,
+            "sniperScope": sniperScope,
+            "fovColor": fovColor,
+            "lineTracerColor": lineTracerColor,
+            "box2dColor": box2dColor,
+            "skeletonColor": skeletonColor,
+            "espPalette": espPalette,
+            "rainbow": rainbow,
+            "allRainbow": allRainbow,
+            "resetAllColors": resetAllColors,
         ]
     }
 
@@ -380,6 +512,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             // aim
             "AimSystemEnabled": isEnabled,
             "AimEnabled":       aimEnabled || silentAim,
+            "SilentAim":        silentAim,
+            // Legit aim *is* the aim assist here: the panel's aim master. Emitted
+            // under both spellings so a runtime that reads either one sees it.
+            "LegitAimbot":      isEnabled,
             // Silent aim runs on the runtime's mixed-roll target (ordinal `0`):
             // that is the only state whose head/body split the roll drives.
             // With silent aim off the panel's chosen bone ordinal is emitted.
@@ -393,6 +529,49 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "BodyRate":         bodyRate,
             "FovSize":          Int(aimbotRadiusValue.rounded()),
             "EspFov":           drawFov,
+
+            // aim FOV circle + sniper scope
+            "AimFovCircle":     drawFov,
+            "AimFovRadius":     Int(aimbotRadiusValue.rounded()),
+            "SniperScope":      sniperScope,
+
+            // silent-aim target — exactly one of the three is on
+            "AimTargetMixed":   silentAimTarget == "mixed",
+            "AimTargetHead":    silentAimTarget == "head",
+            "AimTargetBody":    silentAimTarget == "body",
+
+            // headshot rate, mirroring the head/body split the sliders drive
+            "HeadshotRate100":  headRate >= 100,
+            "HeadshotRate75":   headRate == 75,
+            "HeadshotRate50":   headRate == 50,
+            "HeadshotRate25":   headRate == 25,
+            "HeadshotRate0":    headRate <= 0,
+
+            // ESP extras
+            "Esp360Arrows":        esp360Arrows,
+            "EnemyCount":          drawEnemyCount,
+            "LineTargetTop":       lineTarget == "top",
+            "LineTargetBottom":    lineTarget == "bottom",
+            "LineTargetCrosshair": lineTarget == "crosshair",
+
+            // colour targets + named palette + chroma
+            "FovColor":         fovColor,
+            "LineTracerColor":  lineTracerColor,
+            "Box2DColor":       box2dColor,
+            "SkeletonColor":    skeletonColor,
+            "ColorDefault":     espPalette == "default",
+            "ColorRed":         espPalette == "red",
+            "ColorGreen":       espPalette == "green",
+            "ColorBlue":        espPalette == "blue",
+            "ColorYellow":      espPalette == "yellow",
+            "ColorCyan":        espPalette == "cyan",
+            "ColorPink":        espPalette == "pink",
+            "ColorOrange":      espPalette == "orange",
+            "ColorPurple":      espPalette == "purple",
+            "ColorWhite":       espPalette == "white",
+            "Rainbow":          rainbow,
+            "AllRainbow":       allRainbow,
+            "ResetAllColors":   resetAllColors,
         ]
     }
 

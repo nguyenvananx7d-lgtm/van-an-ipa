@@ -389,3 +389,88 @@ struct SwatchRow: View {
         .rowDivider()
     }
 }
+
+/// Named palette entry for `PaletteRow`. `argb` is nil for the "Default" slot,
+/// which draws as an empty well rather than a colour.
+struct PaletteOption: Identifiable, Hashable, Sendable {
+    let value: String
+    let title: String
+    let argb: Int?
+
+    var id: String { value }
+    var color: Color { argb.map { Color(argb: $0) } ?? Palette.well }
+
+    static let defaults: [PaletteOption] = [
+        PaletteOption(value: "default", title: "Default", argb: nil),
+        PaletteOption(value: "red",     title: "Red",     argb: 0xFFFF0000),
+        PaletteOption(value: "green",   title: "Green",   argb: 0xFF00FF00),
+        PaletteOption(value: "blue",    title: "Blue",    argb: 0xFF0000FF),
+        PaletteOption(value: "yellow",  title: "Yellow",  argb: 0xFFFFFF00),
+        PaletteOption(value: "cyan",    title: "Cyan",    argb: 0xFF00FFFF),
+        PaletteOption(value: "pink",    title: "Pink",    argb: 0xFFFF69B4),
+        PaletteOption(value: "orange",  title: "Orange",  argb: 0xFFFFA500),
+        PaletteOption(value: "purple",  title: "Purple",  argb: 0xFF800080),
+        PaletteOption(value: "white",   title: "White",   argb: 0xFFFFFFFF),
+    ]
+}
+
+/// Wrapping palette picker. Ten chips never fit one segment row, so they lay
+/// out five across with the name under each dot — the same shape as the
+/// swatch ramp, just labelled.
+struct PaletteRow: View {
+    let label: String
+    @Binding var selection: String
+    var options: [PaletteOption] = PaletteOption.defaults
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(label)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Palette.text)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(options) { option in
+                    let active = option.value == selection
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                            selection = option.value
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle().fill(option.color)
+                                if option.argb == nil {
+                                    Image(systemName: "nosign")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Palette.textFaint)
+                                }
+                                Circle().strokeBorder(
+                                    active ? Palette.accent : Color.white.opacity(0.14),
+                                    lineWidth: active ? 2.5 : 1
+                                )
+                            }
+                            .frame(width: 30, height: 30)
+                            .shadow(color: active ? Palette.accent.opacity(0.45) : .clear, radius: 7)
+                            .scaleEffect(active ? 1.06 : 1)
+
+                            Text(option.title)
+                                .font(.caption2.weight(active ? .semibold : .regular))
+                                .foregroundStyle(active ? Palette.text : Palette.textFaint)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option.title)
+                }
+            }
+        }
+        .padding(.vertical, Metrics.rowPaddingV)
+        .padding(.horizontal, Metrics.rowPaddingH)
+        .rowDivider()
+    }
+}

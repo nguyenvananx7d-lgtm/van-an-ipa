@@ -64,6 +64,12 @@
 "section_aimbot_main" = "AIMBOT";
 "master_aimbot" = "Master Aimbot";
 "silent_aim" = "Silent Aim";
+"legit_aim" = "Legit Aim";
+"silent_aim_target" = "Silent Aim Target";
+"target_mixed" = "Mixed";
+"target_head" = "Head";
+"target_body" = "Body";
+"sniper_scope" = "Sniper Scope";
 "head_rate" = "Head Rate";
 "body_rate" = "Body Rate";
 "section_aimbot_type" = "AIMBOT TYPE";
@@ -86,11 +92,31 @@
 "health_esp" = "Health";
 "skeleton_esp" = "ESP Skeleton";
 "tracer_esp" = "Top Tracer";
+"esp360_arrows" = "ESP 360 Arrows";
+"enemy_count" = "Enemy Count";
+
+/* Visual tab — line target */
+"section_line_target" = "LINE TARGET";
+"line_target" = "Line Target";
+"line_top" = "Top";
+"line_bottom" = "Bottom";
+"line_crosshair" = "Crosshair";
 
 /* Visual tab — enemy box geometry */
 "section_esp_box" = "ENEMY BOX";
 "box_size" = "Box Size";
 "box_offset" = "Drop Down";
+
+/* Visual tab — colour */
+"section_color" = "COLOR";
+"fov_color" = "FOV Color";
+"line_tracer_color" = "Line Tracer Color";
+"box2d_color" = "Box 2D Color";
+"skeleton_color" = "Skeleton Color";
+"palette" = "Palette";
+"rainbow" = "Rainbow (Chroma)";
+"all_rainbow" = "All Rainbow";
+"reset_all_colors" = "Reset All Colors";
 
 /* Setting tab */
 "section_exploit" = "KERNEL EXPLOIT";

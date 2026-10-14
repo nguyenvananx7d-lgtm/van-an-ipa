@@ -3,9 +3,12 @@ import SwiftUI
 /// Aimbot tab. Only the switches the injected runtime actually reads are shown
 /// here, so every row does something:
 ///
-/// - master → `AimSystemEnabled`
-/// - silent aim → forces `AimTarget` to the mixed-roll mode (`0`) and arms
-///   `AimEnabled`
+/// - legit aim → `LegitAimbot` (the aim assist / master; also emits
+///   `AimSystemEnabled` so a runtime that reads the older spelling still arms)
+/// - silent aim → `SilentAim`; forces `AimTarget` to the mixed-roll mode (`0`)
+///   and arms `AimEnabled`
+/// - silent aim target → `AimTargetMixed` / `AimTargetHead` / `AimTargetBody`
+/// - sniper scope → `SniperScope`
 /// - head / body rate → `HeadRate` / `BodyRate`, the silent-aim bone split
 ///   (`headRate / (headRate + bodyRate)` is the head probability)
 /// - bone → `AimTarget` (head `1` / neck `2` / body `3`), used when silent aim
@@ -22,10 +25,20 @@ struct AimbotView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionGroup(title: String(localized: "section_aimbot_main"), symbol: "scope") {
-                ToggleRow(label: String(localized: "master_aimbot"), isOn: menu.feature(\.isEnabled))
+                ToggleRow(label: String(localized: "legit_aim"), isOn: menu.feature(\.isEnabled))
                 ToggleRow(label: String(localized: "silent_aim"), isOn: menu.feature(\.silentAim))
 
                 if menu.controls.silentAim {
+                    SegmentRow(
+                        label: String(localized: "silent_aim_target"),
+                        selection: menu.feature(\.silentAimTarget),
+                        options: [
+                            SegmentOption(value: "mixed", title: String(localized: "target_mixed")),
+                            SegmentOption(value: "head", title: String(localized: "target_head")),
+                            SegmentOption(value: "body", title: String(localized: "target_body")),
+                        ]
+                    )
+
                     SliderRow(
                         label: String(localized: "head_rate"),
                         value: menu.feature(\.headRate),
@@ -53,6 +66,7 @@ struct AimbotView: View {
 
             SectionGroup(title: String(localized: "section_aimbot_settings"), symbol: "slider.horizontal.3") {
                 ToggleRow(label: String(localized: "draw_fov"), isOn: menu.feature(\.drawFov))
+                ToggleRow(label: String(localized: "sniper_scope"), isOn: menu.feature(\.sniperScope))
 
                 SliderRow(
                     label: String(localized: "field_of_view"),

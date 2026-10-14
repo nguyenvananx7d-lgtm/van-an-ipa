@@ -10,13 +10,19 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app now ships a real, populated IFix patch (69,386 B, targeting
+    /// The app ships a real, populated IFix patch (151,730 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
     /// manifest. It carries the ESP/aim method overrides directly — including
     /// the patched `get_LastAimingInfoFromWeapon` two-rate silent-aim split
-    /// (`HeadRate` / `BodyRate`) — so staging it into the container is what
+    /// (`HeadRate` / `BodyRate`), the 360° arrow ring, the enemy counter and
+    /// the colour/chroma block — so staging it into the container is what
     /// turns the features on.
-    public static let expectedLength = 69_386
+    ///
+    /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
+    /// treats a bundle whose length matches this value as the payload to write,
+    /// and only falls back to adopting a staged copy when the bundle does not
+    /// match. Keep it in step with the resource or injection is refused.
+    public static let expectedLength = 151_730
 
     /// SHA-256 of the vendor's real IFix patch (76,348 B), recovered from the
     /// vendor journal's `active` field and the live container dump. Pinned here
