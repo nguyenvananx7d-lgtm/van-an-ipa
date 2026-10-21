@@ -42,6 +42,8 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Metrics.stack) {
+                        pageHeading
+
                         if let msg = auth.revocationMessage {
                             Banner(kind: .error, message: msg)
                         }
@@ -100,7 +102,7 @@ struct ContentView: View {
 
     private var topBar: some View {
         HStack(alignment: .center, spacing: 12) {
-            Mark(size: 38)
+            Mark(size: 36)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -133,6 +135,47 @@ struct ContentView: View {
                     StateBadge(text: String(localized: "inject_active"), tone: .good)
                 }
             }
+        }
+    }
+
+    private var pageHeading: some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("controls")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Palette.textFaint)
+
+                Text(selectedTabTitle)
+                    .font(.system(size: 29, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                    .contentTransition(.opacity)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 7) {
+                Text("0\(selectedTab + 1)")
+                    .font(.system(size: 17, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Palette.textFaint)
+                Capsule()
+                    .fill(Palette.accent)
+                    .frame(width: 22, height: 2)
+            }
+            .padding(.bottom, 3)
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+        .padding(.bottom, 2)
+    }
+
+    private var selectedTabTitle: String {
+        switch selectedTab {
+        case 0: return String(localized: "tab_aimbot")
+        case 1: return String(localized: "tab_visual")
+        case 2: return String(localized: "tab_misc")
+        default: return String(localized: "tab_setting")
         }
     }
 

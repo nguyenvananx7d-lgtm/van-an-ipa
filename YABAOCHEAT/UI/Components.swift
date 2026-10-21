@@ -137,21 +137,15 @@ struct SectionGroup<Content: View>: View {
                 if let symbol {
                     Image(systemName: symbol)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.textFaint)
+                        .foregroundStyle(Palette.accent.opacity(0.8))
                 }
                 Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Palette.textFaint)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.textDim)
                     .textCase(.uppercase)
-                    .tracking(0.6)
+                    .tracking(0.9)
                 Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Palette.hairline, Palette.hairline.opacity(0)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(Palette.hairline)
                     .frame(height: 1)
             }
             .padding(.horizontal, 2)

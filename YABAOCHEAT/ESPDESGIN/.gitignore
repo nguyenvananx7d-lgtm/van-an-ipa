@@ -1,0 +1,11 @@
+build/*
+!build/.gitkeep
+generated/ESPLogic.cs
+generated/bindings.json
+generated/bindings.tsv
+dist/Assembly-CSharp-patch.bytes
+dist/Assembly-CSharp-patch.report.json
+dist/Assembly-CSharp-patch.verify.json
+dist/Assembly-CSharp-patch.manifest.json
+tools/__pycache__/
+*.pyc

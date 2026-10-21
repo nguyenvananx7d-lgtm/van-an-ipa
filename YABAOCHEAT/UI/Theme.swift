@@ -2,34 +2,31 @@ import SwiftUI
 
 // MARK: - design tokens
 //
-// Ink and signal. One cool cyan on a near-black base, flat fills, hairline
-// borders. No noise, no glass, no rainbow, no glow piled on everything.
-// Hierarchy comes from weight, spacing, and one accent that only exists where
-// a control is live. The effect budget is deliberately small so the panel
-// reads like a tool, not a demo.
+// Warm graphite, quiet surfaces and one sea-glass accent reserved for live
+// controls. Hierarchy comes from spacing and type, not decorative effects.
 
 enum Palette {
-    // plate — cool ink, a touch lifted, hierarchy by value
-    static let void       = Color(hex: 0x0D0F14)   // deepest well
-    static let base       = Color(hex: 0x12151B)   // background
-    static let surface    = Color(hex: 0x1A1E26)   // plates, rows
-    static let surfaceHi  = Color(hex: 0x242A34)   // raised / active
-    static let well       = Color(hex: 0x0E1117)   // inset fields, tracks
+    // Deep black surfaces with a muted sea-glass accent for active controls.
+    static let void       = Color(hex: 0x08090A)
+    static let base       = Color(hex: 0x0D0F11)
+    static let surface    = Color(hex: 0x15181B)
+    static let surfaceHi  = Color(hex: 0x1D2124)
+    static let well       = Color(hex: 0x090B0D)
 
     // edges
-    static let hairline   = Color.white.opacity(0.08)
-    static let edgeTop    = Color.white.opacity(0.12)
-    static let edgeBottom = Color.black.opacity(0.50)
+    static let hairline   = Color.white.opacity(0.085)
+    static let edgeTop    = Color.white.opacity(0.10)
+    static let edgeBottom = Color.black.opacity(0.42)
 
     // type
-    static let text      = Color(hex: 0xF1F2F5)
-    static let textDim   = Color(hex: 0xA2A9B4)
-    static let textFaint = Color(hex: 0x67707E)
+    static let text      = Color(hex: 0xF0F1EC)
+    static let textDim   = Color(hex: 0xADB2B0)
+    static let textFaint = Color(hex: 0x7D8582)
 
     // signal
-    static let accent     = Color(hex: 0x3FC9E6)
-    static let accentHi   = Color(hex: 0x86E4F6)
-    static let accentDeep = Color(hex: 0x0F4E5C)
+    static let accent     = Color(hex: 0x70B9AA)
+    static let accentHi   = Color(hex: 0x9BD3C6)
+    static let accentDeep = Color(hex: 0x244A42)
 
     // states
     static let good = Color(hex: 0x4CC987)
@@ -44,13 +41,13 @@ enum Palette {
 // numbers are small on purpose: a panel that is dense reads as a tool.
 
 enum Metrics {
-    static let gutter: CGFloat       = 16    // screen horizontal margin
-    static let stack: CGFloat        = 16    // gap between section groups
-    static let cardRadius: CGFloat   = 16
-    static let groupRadius: CGFloat  = 14
-    static let controlRadius: CGFloat = 12
-    static let rowPaddingH: CGFloat  = 14
-    static let rowPaddingV: CGFloat  = 13
+    static let gutter: CGFloat       = 18
+    static let stack: CGFloat        = 18
+    static let cardRadius: CGFloat   = 14
+    static let groupRadius: CGFloat  = 12
+    static let controlRadius: CGFloat = 10
+    static let rowPaddingH: CGFloat  = 15
+    static let rowPaddingV: CGFloat  = 14
 }
 
 extension Color {
@@ -67,26 +64,10 @@ extension Color {
 
 // MARK: - background
 
-/// Flat ink with a barely-there cool tint high-right and a slow fall to void
-/// at the bottom. Static, cheap, quiet.
+/// A flat graphite canvas keeps the controls and their state in focus.
 struct ThemeBackground: View {
-    var bloom: Double = 0.055
-
     var body: some View {
-        ZStack {
-            Palette.base
-            RadialGradient(
-                colors: [Palette.accent.opacity(bloom), .clear],
-                center: UnitPoint(x: 0.92, y: 0.0),
-                startRadius: 0,
-                endRadius: 480
-            )
-            LinearGradient(
-                colors: [Color.white.opacity(0.02), .clear, Palette.void.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        Palette.base
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }
@@ -94,10 +75,8 @@ struct ThemeBackground: View {
 
 // MARK: - plate
 
-/// The house surface: flat fill, one hairline border, one soft shadow. No
-/// gradient, no bloom. `glow` tints the border for the selected state. The only
-/// gradient allowed here is a 3.5%-white sheen on the top edge, which is what
-/// makes a raised plate catch light without looking like frosted glass.
+/// The house surface: flat fill, a restrained edge and soft separation.
+/// `glow` tints the border for the selected state.
 struct PlateSurface: ViewModifier {
     var radius: CGFloat = Metrics.cardRadius
     var elevated: Bool = false
@@ -121,7 +100,7 @@ struct PlateSurface: ViewModifier {
                     .strokeBorder(glow ?? Palette.edgeTop, lineWidth: glow == nil ? 1 : 1.2)
             )
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.32), radius: 10, y: 5)
+            .shadow(color: .black.opacity(0.20), radius: 8, y: 3)
     }
 }
 
@@ -174,8 +153,7 @@ extension View {
 
 // MARK: - buttons
 
-/// Primary = flat accent with dark ink; the only glowing element in the app is
-/// the one the user is meant to press. Secondary = raised ink plate.
+/// Primary = flat accent with dark ink. Secondary = raised graphite plate.
 /// Destructive = the same ink plate, but with a bad-tinted edge and ink so a
 /// removal action is read before it is pressed.
 struct AccentButtonStyle: ButtonStyle {
@@ -204,7 +182,7 @@ private struct AccentButtonBody: View {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .strokeBorder(Palette.accentHi.opacity(0.35), lineWidth: 0.5)
                         )
-                        .shadow(color: Palette.accent.opacity(isEnabled ? 0.22 : 0), radius: 10, y: 4)
+                        .shadow(color: Palette.accent.opacity(isEnabled ? 0.12 : 0), radius: 6, y: 2)
                 } else if destructive {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Palette.surfaceHi)
@@ -367,8 +345,8 @@ struct BottomTabBar: View {
                 tab(item)
             }
         }
-        .padding(.top, 9)
-        .padding(.bottom, 4)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Palette.hairline)
@@ -388,15 +366,21 @@ struct BottomTabBar: View {
                 selection = item.index
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 Image(systemName: item.symbol)
                     .font(.system(size: 17, weight: active ? .semibold : .regular))
-                    .frame(height: 20)
+                    .frame(height: 21)
                 Text(item.title)
                     .font(.caption2.weight(active ? .semibold : .medium))
             }
-            .foregroundStyle(active ? Palette.accent : Palette.textFaint)
+            .foregroundStyle(active ? Palette.text : Palette.textFaint)
             .frame(maxWidth: .infinity)
+            .padding(.top, 5)
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(active ? Palette.accent : .clear)
+                    .frame(width: 20, height: 2)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -415,13 +399,7 @@ struct Mark: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Palette.surfaceHi, Palette.surface],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(Palette.surfaceHi)
             RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
                 .strokeBorder(Palette.edgeTop, lineWidth: 1)
             ReticleGlyph(size: size * 0.54)
