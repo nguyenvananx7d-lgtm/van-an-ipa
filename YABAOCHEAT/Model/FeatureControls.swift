@@ -20,10 +20,13 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: aimbot
 
     public var isEnabled: Bool
+<<<<<<< HEAD
     /// Second aim gate the runtime reads under its own key (`AimEnabled`).
     /// Surfaced separately so `AimSystemEnabled` (`isEnabled`) and `AimEnabled`
     /// can be toggled independently.
     public var aimEnabled: Bool
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     /// Head radius the assist locks onto.
     public var radiusValue: Double
     /// Field-of-view radius for the aim assist, distinct from the head radius.
@@ -38,6 +41,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: panel — aimbot tab
 
     public var aimbotType: String
+<<<<<<< HEAD
     /// Silent aim / "magic bullet". Emitted as `SilentAim`, and it also arms
     /// `AimEnabled` with the mixed-roll `AimTarget` the head/body split drives.
     public var silentAim: Bool
@@ -48,6 +52,9 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// tuned live from the two sliders that appear under the silent-aim switch.
     public var headRate: Int
     public var bodyRate: Int
+=======
+    public var silentAim: Bool
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public var hitChance: Int
     /// Maximum lock distance in metres.
     public var aimDistance: Int
@@ -66,6 +73,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var espColor: Int
     public var espThickness: Int
 
+<<<<<<< HEAD
     /// Enemy-box scale, as a percentage of the runtime's natural box. `100`
     /// leaves the box exactly as drawn; higher grows it so a tall target is
     /// framed head to foot. Emitted to the runtime as `EspBoxScale` (ratio).
@@ -75,6 +83,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// the runtime as `EspBoxOffset` (pixels).
     public var espBoxOffsetY: Int
 
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     // MARK: panel — visual tab
 
     public var masterEsp: Bool
@@ -86,9 +96,12 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var healthEsp: Bool
     public var healthType: String
     public var skeletonEsp: Bool
+<<<<<<< HEAD
     /// Tracer line to the enemy. The runtime key is `EspTracer`; the cheat's own
     /// menu labels it "Top tracer".
     public var tracerEsp: Bool
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public var drawEnemyCount: Bool
     public var textSize: Int
     public var espBounding: Int
@@ -97,6 +110,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     public var streamProof: Bool
 
+<<<<<<< HEAD
     // MARK: panel — misc features
 
     /// The cheat's own non-ESP / non-aim switches. They already ride in the
@@ -154,22 +168,37 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimbotRadiusValue: Double = 90.0,
         radiusPolicy: ControlPolicy = .value,
         headshotValue: Bool = false,
+=======
+    public init(
+        isEnabled: Bool = true,
+        radiusValue: Double = 0,
+        aimbotRadiusValue: Double = 90.0,
+        radiusPolicy: ControlPolicy = .value,
+        headshotValue: Bool = true,
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         headshotPolicy: ControlPolicy = .value,
         aimTarget: String = "head",
         aimFovMode: String = "strict",
         aimbotType: String = "aimbot",
         silentAim: Bool = false,
+<<<<<<< HEAD
         headRate: Int = 80,
         bodyRate: Int = 20,
         hitChance: Int = 85,
         aimDistance: Int = 200,
         drawFov: Bool = false,
+=======
+        hitChance: Int = 85,
+        aimDistance: Int = 200,
+        drawFov: Bool = true,
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         ignoreKnocked: Bool = false,
         antiBan: Bool = false,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
+<<<<<<< HEAD
         espBoxScalePercent: Int = 115,
         espBoxOffsetY: Int = 10,
         masterEsp: Bool = false,
@@ -208,6 +237,23 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     ) {
         self.isEnabled = isEnabled
         self.aimEnabled = aimEnabled
+=======
+        masterEsp: Bool = true,
+        lineEsp: Bool = true,
+        boxEsp: Bool = true,
+        boxType: String = "corner",
+        nameEsp: Bool = true,
+        distanceEsp: Bool = true,
+        healthEsp: Bool = true,
+        healthType: String = "right",
+        skeletonEsp: Bool = true,
+        drawEnemyCount: Bool = true,
+        textSize: Int = 14,
+        espBounding: Int = 2,
+        streamProof: Bool = false
+    ) {
+        self.isEnabled = isEnabled
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         self.radiusValue = radiusValue
         self.aimbotRadiusValue = aimbotRadiusValue
         self.radiusPolicy = radiusPolicy
@@ -217,8 +263,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.aimFovMode = aimFovMode
         self.aimbotType = aimbotType
         self.silentAim = silentAim
+<<<<<<< HEAD
         self.headRate = headRate
         self.bodyRate = bodyRate
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         self.hitChance = hitChance
         self.aimDistance = aimDistance
         self.drawFov = drawFov
@@ -228,8 +277,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.fastFireLevel = fastFireLevel
         self.espColor = espColor
         self.espThickness = espThickness
+<<<<<<< HEAD
         self.espBoxScalePercent = espBoxScalePercent
         self.espBoxOffsetY = espBoxOffsetY
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         self.masterEsp = masterEsp
         self.lineEsp = lineEsp
         self.boxEsp = boxEsp
@@ -239,11 +291,15 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.healthEsp = healthEsp
         self.healthType = healthType
         self.skeletonEsp = skeletonEsp
+<<<<<<< HEAD
         self.tracerEsp = tracerEsp
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         self.drawEnemyCount = drawEnemyCount
         self.textSize = textSize
         self.espBounding = espBounding
         self.streamProof = streamProof
+<<<<<<< HEAD
         self.noRecoil = noRecoil
         self.ghostMode = ghostMode
         self.speedHack = speedHack
@@ -263,16 +319,26 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.rainbow = rainbow
         self.allRainbow = allRainbow
         self.resetAllColors = resetAllColors
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     // MARK: - persistence
 
     /// Controls live in `UserDefaults` under a per-game prefix so the two titles
+<<<<<<< HEAD
     /// keep separate profiles. The `.v5` suffix forces the all-off profile onto
     /// installs that already saved a default-enabled blob under `.v4`, so the
     /// switches do not come back pre-ticked after an update.
     public static func defaultsKey(for game: Game) -> String {
         game.defaultsKeyPrefix + "controls.v5"
+=======
+    /// keep separate profiles. The `.v4` suffix forces the Sophia-style
+    /// default-enabled profile onto installs that already saved an older (all-
+    /// off) controls blob under `.v3`.
+    public static func defaultsKey(for game: Game) -> String {
+        game.defaultsKeyPrefix + "controls.v4"
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     public static func load(for game: Game) -> FeatureControls {
@@ -290,6 +356,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - wire shape
 
     private enum CodingKeys: String, CodingKey {
+<<<<<<< HEAD
         case isEnabled, aimEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
              headshotValue, headshotPolicy, aimTarget, aimFovMode,
              aimbotType, silentAim, headRate, bodyRate, hitChance, aimDistance, drawFov,
@@ -304,6 +371,18 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              esp360Arrows, lineTarget, silentAimTarget, sniperScope,
              fovColor, lineTracerColor, box2dColor, skeletonColor, espPalette,
              rainbow, allRainbow, resetAllColors
+=======
+        case isEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
+             headshotValue, headshotPolicy, aimTarget, aimFovMode,
+             aimbotType, silentAim, hitChance, aimDistance, drawFov,
+             ignoreKnocked, antiBan,
+             fastReloadPercent, fastFireLevel,
+             espColor, espThickness,
+             masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
+             healthEsp, healthType, skeletonEsp, drawEnemyCount, textSize,
+             espBounding,
+             streamProof
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     /// Profiles written by an older build decode field by field rather than
@@ -313,7 +392,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         let d = FeatureControls()
 
         isEnabled         = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? d.isEnabled
+<<<<<<< HEAD
         aimEnabled        = try c.decodeIfPresent(Bool.self, forKey: .aimEnabled) ?? d.aimEnabled
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         radiusValue       = try c.decodeIfPresent(Double.self, forKey: .radiusValue) ?? d.radiusValue
         aimbotRadiusValue = try c.decodeIfPresent(Double.self, forKey: .aimbotRadiusValue) ?? d.aimbotRadiusValue
         radiusPolicy      = try c.decodeIfPresent(ControlPolicy.self, forKey: .radiusPolicy) ?? d.radiusPolicy
@@ -324,8 +406,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
         aimbotType        = try c.decodeIfPresent(String.self, forKey: .aimbotType) ?? d.aimbotType
         silentAim         = try c.decodeIfPresent(Bool.self, forKey: .silentAim) ?? d.silentAim
+<<<<<<< HEAD
         headRate          = try c.decodeIfPresent(Int.self, forKey: .headRate) ?? d.headRate
         bodyRate          = try c.decodeIfPresent(Int.self, forKey: .bodyRate) ?? d.bodyRate
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         hitChance         = try c.decodeIfPresent(Int.self, forKey: .hitChance) ?? d.hitChance
         aimDistance       = try c.decodeIfPresent(Int.self, forKey: .aimDistance) ?? d.aimDistance
         drawFov           = try c.decodeIfPresent(Bool.self, forKey: .drawFov) ?? d.drawFov
@@ -337,8 +422,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
         espColor          = try c.decodeIfPresent(Int.self, forKey: .espColor) ?? d.espColor
         espThickness      = try c.decodeIfPresent(Int.self, forKey: .espThickness) ?? d.espThickness
+<<<<<<< HEAD
         espBoxScalePercent = try c.decodeIfPresent(Int.self, forKey: .espBoxScalePercent) ?? d.espBoxScalePercent
         espBoxOffsetY     = try c.decodeIfPresent(Int.self, forKey: .espBoxOffsetY) ?? d.espBoxOffsetY
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
         masterEsp         = try c.decodeIfPresent(Bool.self, forKey: .masterEsp) ?? d.masterEsp
         lineEsp           = try c.decodeIfPresent(Bool.self, forKey: .lineEsp) ?? d.lineEsp
@@ -349,12 +437,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         healthEsp         = try c.decodeIfPresent(Bool.self, forKey: .healthEsp) ?? d.healthEsp
         healthType        = try c.decodeIfPresent(String.self, forKey: .healthType) ?? d.healthType
         skeletonEsp       = try c.decodeIfPresent(Bool.self, forKey: .skeletonEsp) ?? d.skeletonEsp
+<<<<<<< HEAD
         tracerEsp         = try c.decodeIfPresent(Bool.self, forKey: .tracerEsp) ?? d.tracerEsp
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         drawEnemyCount    = try c.decodeIfPresent(Bool.self, forKey: .drawEnemyCount) ?? d.drawEnemyCount
         textSize          = try c.decodeIfPresent(Int.self, forKey: .textSize) ?? d.textSize
         espBounding       = try c.decodeIfPresent(Int.self, forKey: .espBounding) ?? d.espBounding
 
         streamProof       = try c.decodeIfPresent(Bool.self, forKey: .streamProof) ?? d.streamProof
+<<<<<<< HEAD
 
         noRecoil          = try c.decodeIfPresent(Bool.self, forKey: .noRecoil) ?? d.noRecoil
         ghostMode         = try c.decodeIfPresent(Bool.self, forKey: .ghostMode) ?? d.ghostMode
@@ -376,6 +468,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         rainbow           = try c.decodeIfPresent(Bool.self, forKey: .rainbow) ?? d.rainbow
         allRainbow        = try c.decodeIfPresent(Bool.self, forKey: .allRainbow) ?? d.allRainbow
         resetAllColors    = try c.decodeIfPresent(Bool.self, forKey: .resetAllColors) ?? d.resetAllColors
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     // MARK: - payload setters
@@ -406,6 +500,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "fastFireLevel": fastFireLevel,
             "espColor": espColor,
             "espThickness": espThickness,
+<<<<<<< HEAD
             "espBoxScalePercent": espBoxScalePercent,
             "espBoxOffsetY": espBoxOffsetY,
 
@@ -413,6 +508,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "silentAim": silentAim,
             "headRate": headRate,
             "bodyRate": bodyRate,
+=======
+
+            "aimbotType": aimbotType,
+            "silentAim": silentAim,
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             "hitChance": hitChance,
             "aimDistance": aimDistance,
             "drawFov": drawFov,
@@ -433,6 +533,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "espBounding": espBounding,
 
             "streamProof": streamProof,
+<<<<<<< HEAD
 
             "noRecoil": noRecoil,
             "ghostMode": ghostMode,
@@ -454,12 +555,15 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "rainbow": rainbow,
             "allRainbow": allRainbow,
             "resetAllColors": resetAllColors,
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         ]
     }
 
     // MARK: - runtime configuration document
     //
     // `localConfig.json` is read back by the injected IFix runtime, not by this
+<<<<<<< HEAD
     // app. The keys it actually parses are the cheat's own spelling — recovered
     // verbatim from the patch's `__cstring`:
     //
@@ -590,6 +694,65 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         }
     }
 
+=======
+    // app. The names are the ones recovered from `__cstring`
+    // (`RecoveredVocabulary.RuntimeConfig`): flat, top-level, camelCase. The
+    // panel keys ride in the same map so a runtime that learns them picks them
+    // up; the shipped blob ignores what it does not know.
+    //
+    // The earlier output nested everything under `controls` with snake_case
+    // keys, so the runtime — which reads top-level camelCase — found nothing.
+
+    /// Flat key/value map the injected runtime overlays onto its own state.
+    public func runtimeConfigDocument() -> [String: Any] {
+        [
+            // recovered runtime keys — exact spelling
+            "aimbotRadius":      aimbotRadiusValue,
+            "radius":            radiusValue,
+            "fastReloadPercent": fastReloadPercent,
+            "fastFireLevel":     fastFireLevel,
+            "espColor":          espColor,
+            "espThickness":      espThickness,
+            "aimFovMode":        aimFovMode,
+            "h0":                colorRGB,
+            "a0":                colorAlpha,
+
+            // behavioural switches
+            "enabled":           isEnabled,
+            "headshot":          headshotValue,
+            "aimTarget":         aimTarget,
+            "aim_target":        aimTarget,
+
+            // aimbot panel
+            "aimbotType":        aimbotType,
+            "silentAim":         silentAim,
+            "hitChance":         hitChance,
+            "aimDistance":       aimDistance,
+            "drawFov":           drawFov,
+            "ignoreKnocked":     ignoreKnocked,
+            "antiBan":           antiBan,
+
+            // visual panel
+            "masterEsp":         masterEsp,
+            "lineEsp":           lineEsp,
+            "boxEsp":            boxEsp,
+            "boxType":           boxType,
+            "nameEsp":           nameEsp,
+            "distanceEsp":       distanceEsp,
+            "healthEsp":         healthEsp,
+            "healthType":        healthType,
+            "skeletonEsp":       skeletonEsp,
+            "drawEnemyCount":    drawEnemyCount,
+            "textSize":          textSize,
+            "espBounding":       espBounding,
+
+            "streamProof":       streamProof,
+            "radiusPolicy":      radiusPolicy.rawValue,
+            "headshotPolicy":    headshotPolicy.rawValue,
+        ]
+    }
+
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     /// The recovered `h0` / `a0` pair decomposed from `espColor`. The runtime
     /// reads a colour through these two keys, so splitting here keeps a single
     /// `espColor` change visible even if `espColor` itself is ignored.
@@ -613,7 +776,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
 
     /// Envelope field `options`: the choice set behind each control.
     public static let selectionOptions: [String: [String]] = [
+<<<<<<< HEAD
         "aim_target":   ["head", "neck", "body"],
+=======
+        "aim_target":   ["head", "body"],
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         "aimbot_type":  ["aimbot", "silent"],
         "aim_fov_mode": ["strict", "loose"],
         "box_type":     ["corner", "edge"],

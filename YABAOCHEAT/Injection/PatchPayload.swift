@@ -3,6 +3,7 @@ import CryptoKit
 
 /// The IL2CPP metadata patch that gets dropped into the target game.
 ///
+<<<<<<< HEAD
 /// The shipped payload is a real, populated IFix patch `Assembly-CSharp-patch.bytes`.
 /// It is not generated at runtime — it is a fixed blob whose SHA-256 is pinned in
 /// the licensing handshake, so a tampered payload is refused before it is written
@@ -28,6 +29,15 @@ public struct PatchPayload: Sendable {
     /// vendor journal's `active` field and the live container dump. Pinned here
     /// so a copy hidden anywhere in the container can be adopted by digest.
     public static let vendorPatchSHA256 = "2f86dddbf0c7a1664151f0c8b3c7115c36597e92dc70a2895b3f7943f89f3718"
+=======
+/// The shipped payload is a 322-byte `Assembly-CSharp-patch.bytes`. It is not
+/// generated at runtime — it is a fixed blob whose SHA-256 is pinned in the
+/// licensing handshake, so a tampered payload is refused before it is written
+/// anywhere.
+public struct PatchPayload: Sendable {
+    /// Byte length of the blob shipped in the app bundle.
+    public static let expectedLength = 322
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 
@@ -66,6 +76,7 @@ public struct PatchPayload: Sendable {
         return PatchPayload(data: data)
     }
 
+<<<<<<< HEAD
     /// The configuration document shipped alongside the patch, if any. This is
     /// the cheat's own `localConfig.json`, staged byte for byte.
     public static func bundledConfiguration() -> Data? {
@@ -75,6 +86,8 @@ public struct PatchPayload: Sendable {
         return data
     }
 
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public enum PayloadError: Error, Sendable {
         case missingResource
         case invalidNeutral
@@ -98,6 +111,7 @@ public struct PatchPayload: Sendable {
 
     /// The configuration document the injected runtime reads on wake.
     ///
+<<<<<<< HEAD
     /// The runtime parses a single flat object in its **own** key spelling
     /// (`EspMaster`, `AimSystemEnabled`, `HeadRate`, `server_aim`, …). The
     /// cheat ships that document as `localConfig.json`, so it is used as the
@@ -112,10 +126,27 @@ public struct PatchPayload: Sendable {
     /// spelling, so a checkbox and the document always agree. `testCodePatch`
     /// is the recovered marker the runtime reads to know the code patch may
     /// apply.
+=======
+    /// Shape is what the runtime actually parses: a single flat map carrying
+    /// the recovered camelCase keys (`aimbotRadius`, `aimFovMode`, `espColor`,
+    /// …) at the top level, wrapped in the catalogue envelope
+    /// (`version` / `sections` / `options` / `selected` / `anchors`) that
+    /// `RuntimeConfiguration` decodes. It keys off `id` / `selected` / `version`.
+    ///
+    /// Two recovered artifacts ride in the same document:
+    ///
+    /// - `RecoveredVocabulary.patchProbeDocument` (`{"testCodePatch":true}`) —
+    ///   the marker the runtime reads to know the code patch may take effect.
+    /// - The `controls` object carries the recovered camelCase keys **and** the
+    ///   original snake_case command names (`aim_fov_mode`,
+    ///   `fast_reload_percent`, …), so a reader that consumes either spelling
+    ///   finds the same values it finds flat.
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     ///
     /// Static because it is a pure function of the controls — the live-config
     /// path re-stages it without needing the patch blob in hand.
     public static func configuration(for game: Game, controls: FeatureControls) -> Data {
+<<<<<<< HEAD
         // Base: the cheat's own document. Empty only if the resource was
         // stripped, in which case the overlay stands on its own.
         var document: [String: Any] = [:]
@@ -134,6 +165,43 @@ public struct PatchPayload: Sendable {
             withJSONObject: document,
             options: [.prettyPrinted, .sortedKeys]
         )) ?? Data("{}".utf8)
+=======
+        let flat = controls.runtimeConfigDocument()
+
+        // The recovered probe document, merged so the runtime sees the marker
+        // wherever it looks for it in `localConfig.json`.
+        let probe: [String: Any] = (try? JSONSerialization.jsonObject(
+            with: Data(RecoveredVocabulary.patchProbeDocument.utf8)
+        ) as? [String: Any]) ?? [:]
+
+        var document: [String: Any] = [
+            "version":   String(ProtocolConstants.protocolVersion),
+            "signature": KernelRW.signature,
+            "game":      game.rawValue,
+
+            "sections":  FeatureControls.panelSections,
+            "options":   FeatureControls.selectionOptions,
+            "selected":  controls.selectedControlIDs,
+            "anchors":   FeatureControls.anchors,
+
+            "setters":   controls.setterNames,
+        ]
+
+        document.merge(probe) { _, new in new }
+
+        // Flat wins — this is the level the runtime reads.
+        for (key, value) in flat { document[key] = value }
+
+        // Forward-compatible mirror: the object form carries both the recovered
+        // camelCase keys and the original snake_case command payload keys.
+        let nested = controls.commandPayload()
+            .merging(flat) { _, new in new }
+            .merging(probe) { _, new in new }
+        document["controls"] = nested
+
+        return (try? JSONSerialization.data(withJSONObject: document, options: [.sortedKeys]))
+            ?? Data("{}".utf8)
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 

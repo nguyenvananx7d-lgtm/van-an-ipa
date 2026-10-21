@@ -1,21 +1,74 @@
 import SwiftUI
 
+<<<<<<< HEAD
 // Reusable pieces the rest of the UI is built from. The public shapes are
 // unchanged so every panel tab keeps compiling against the same API as before;
 // the surfaces themselves are flat — one plate, one hairline edge, one soft
 // shadow. Nothing glows except the thing you are meant to press.
+=======
+// Reusable pieces the rest of the UI is built from. Each modifier here has a
+// matching field in the reflection metadata, which is how the names were
+// recovered: `_reduceMotion`, `_reduceTransparency`, `_sweep`, `padding`,
+// `radius`, `compact`.
+
+// MARK: - motion
+
+/// Sweep gradient used as the app's accent. Animates slowly so it reads as
+/// ambient rather than as a spinner.
+struct SweepGradient: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let colors: [Color]
+    var period: Double = 6
+
+    @State private var phase: Double = 0
+
+    var body: some View {
+        LinearGradient(
+            colors: colors,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .offset(x: reduceMotion ? 0 : phase)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: period).repeatForever(autoreverses: true)) {
+                phase = 240
+            }
+        }
+    }
+}
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 // MARK: - surfaces
 
 struct Card<Content: View>: View {
+<<<<<<< HEAD
     var padding: CGFloat = 16
     var radius: CGFloat = Metrics.cardRadius
+=======
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var padding: CGFloat = 16
+    var radius: CGFloat = 18
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(padding)
+<<<<<<< HEAD
             .machined(radius: radius)
+=======
+            .background {
+                if reduceTransparency {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+                } else {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
@@ -40,15 +93,23 @@ struct StateBadge: View {
 
         var color: Color {
             switch self {
+<<<<<<< HEAD
             case .neutral: return Palette.textDim
             case .good:    return Palette.good
             case .busy:    return Palette.warn
             case .bad:     return Palette.bad
+=======
+            case .neutral: return .secondary
+            case .good:    return .green
+            case .busy:    return .orange
+            case .bad:     return .red
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             }
         }
     }
 
     var body: some View {
+<<<<<<< HEAD
         HStack(spacing: 6) {
             Circle()
                 .fill(tone.color)
@@ -61,6 +122,14 @@ struct StateBadge: View {
         .padding(.vertical, 4)
         .background(Capsule().fill(tone.color.opacity(0.10)))
         .overlay(Capsule().strokeBorder(tone.color.opacity(0.25), lineWidth: 1))
+=======
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(tone.color.opacity(0.18)))
+            .foregroundStyle(tone.color)
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
@@ -72,9 +141,15 @@ struct Banner: View {
 
         var color: Color {
             switch self {
+<<<<<<< HEAD
             case .info:    return Palette.info
             case .warning: return Palette.warn
             case .error:   return Palette.bad
+=======
+            case .info:    return .blue
+            case .warning: return .orange
+            case .error:   return .red
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             }
         }
 
@@ -94,6 +169,7 @@ struct Banner: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: kind.symbol)
                 .foregroundStyle(kind.color)
+<<<<<<< HEAD
                 .padding(.top, 1)
             Text(message)
                 .font(.footnote)
@@ -118,21 +194,37 @@ struct Banner: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(kind.color.opacity(0.22), lineWidth: 1)
         )
+=======
+            Text(message)
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(kind.color.opacity(0.12)))
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
 // MARK: - panel rows
 
+<<<<<<< HEAD
 /// Titled group the panel tabs are built from: a small-caps caption with a
 /// line-art glyph over a flat string of rows, divided by hairlines. No
 /// card-inside-a-card.
 struct SectionGroup<Content: View>: View {
     let title: String
     var symbol: String? = nil
+=======
+/// Titled group the panel tabs are built from: caption header over one card.
+struct SectionGroup<Content: View>: View {
+    let title: String
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+<<<<<<< HEAD
             HStack(spacing: 7) {
                 if let symbol {
                     Image(systemName: symbol)
@@ -160,6 +252,16 @@ struct SectionGroup<Content: View>: View {
                         .strokeBorder(Palette.edgeTop.opacity(0.7), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.groupRadius, style: .continuous))
+=======
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.leading, 4)
+            Card(padding: 6, radius: 16) {
+                VStack(alignment: .leading, spacing: 0) { content }
+            }
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         }
     }
 }
@@ -174,6 +276,7 @@ struct ToggleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.body.weight(.medium))
+<<<<<<< HEAD
                     .foregroundStyle(Palette.text)
                 if let detail {
                     Text(detail)
@@ -185,6 +288,17 @@ struct ToggleRow: View {
         .padding(.vertical, Metrics.rowPaddingV)
         .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
+=======
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
@@ -194,6 +308,7 @@ struct SliderRow: View {
     var range: ClosedRange<Double> = 0...100
     var step: Double = 1
     var unit: String = ""
+<<<<<<< HEAD
     /// Show the low/high ends under the track. Off by default so a plain
     /// 0–100 row stays quiet; on for ranges where the ends are the point.
     var showRange: Bool = false
@@ -229,6 +344,23 @@ struct SliderRow: View {
         .padding(.vertical, Metrics.rowPaddingV)
         .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
+=======
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.body.weight(.medium))
+                Spacer(minLength: 8)
+                Text("\(Int(value.rounded()))\(unit)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: $value, in: range, step: step)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
@@ -244,6 +376,7 @@ struct SegmentRow: View {
     let options: [SegmentOption]
 
     var body: some View {
+<<<<<<< HEAD
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.body.weight(.medium))
@@ -323,6 +456,20 @@ struct InfoRow: View {
         }
         .padding(.vertical, Metrics.rowPaddingV)
         .padding(.horizontal, Metrics.rowPaddingH)
+=======
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.body.weight(.medium))
+            Picker("", selection: $selection) {
+                ForEach(options) { option in
+                    Text(option.title).tag(option.value)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 }
 
@@ -341,14 +488,21 @@ extension Color {
     }
 }
 
+<<<<<<< HEAD
 /// Horizontal swatch picker bound to a packed `0xAARRGGBB` value. The selected
 /// swatch gets an accent ring and a held bloom.
+=======
+/// Horizontal swatch picker bound to a packed `0xAARRGGBB` value. The ramp
+/// comes from `ColorSwatch.defaults`, which mirrors the set the payload ships
+/// with, so a picked colour is one the runtime already knows.
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 struct SwatchRow: View {
     let label: String
     @Binding var argb: Int
     var swatches: [ColorSwatch] = ColorSwatch.defaults
 
     var body: some View {
+<<<<<<< HEAD
         VStack(alignment: .leading, spacing: 10) {
             Text(label)
                 .font(.body.weight(.medium))
@@ -356,6 +510,13 @@ struct SwatchRow: View {
             HStack(spacing: 12) {
                 ForEach(swatches) { swatch in
                     let selected = argb == swatch.argb
+=======
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.body.weight(.medium))
+            HStack(spacing: 10) {
+                ForEach(swatches) { swatch in
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
                     Button {
                         argb = swatch.argb
                     } label: {
@@ -364,6 +525,7 @@ struct SwatchRow: View {
                             .frame(width: 28, height: 28)
                             .overlay(
                                 Circle().strokeBorder(
+<<<<<<< HEAD
                                     selected ? Palette.accent : Color.white.opacity(0.12),
                                     lineWidth: selected ? 2.5 : 1
                                 )
@@ -371,6 +533,12 @@ struct SwatchRow: View {
                             .shadow(color: selected ? Palette.accent.opacity(0.5) : .clear, radius: 8)
                             .scaleEffect(selected ? 1.08 : 1)
                             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selected)
+=======
+                                    argb == swatch.argb ? Color.primary : Color.black.opacity(0.15),
+                                    lineWidth: argb == swatch.argb ? 2.5 : 1
+                                )
+                            )
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(swatch.name)
@@ -378,6 +546,7 @@ struct SwatchRow: View {
                 Spacer(minLength: 0)
             }
         }
+<<<<<<< HEAD
         .padding(.vertical, Metrics.rowPaddingV)
         .padding(.horizontal, Metrics.rowPaddingH)
         .rowDivider()
@@ -468,3 +637,33 @@ struct PaletteRow: View {
         .rowDivider()
     }
 }
+=======
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+    }
+}
+
+// MARK: - logo
+
+struct Mark: View {
+    var size: CGFloat = 72
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [.purple, .blue, .cyan],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210

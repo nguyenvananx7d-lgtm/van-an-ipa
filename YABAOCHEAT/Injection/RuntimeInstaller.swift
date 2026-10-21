@@ -51,6 +51,7 @@ public actor RuntimeInstaller {
         case .bridgeUnavailable: throw InstallError.processResetUnavailable
         }
 
+<<<<<<< HEAD
         let patchURLs = bridge.patchURLs(in: data, game: game)
         let configURLs = bridge.configURLs(in: data, game: game)
 
@@ -91,6 +92,20 @@ public actor RuntimeInstaller {
             activePatch = real
         }
 
+=======
+        // The digest is checked before anything touches the filesystem. A bad
+        // payload must never reach the game's container, not even transiently.
+        do {
+            try payload.verify(against: expectedDigest)
+        } catch {
+            log.log(.integrity, "payload digest mismatch; refusing to install")
+            throw InstallError.integrityMismatch
+        }
+
+        let patchURLs = bridge.patchURLs(in: data, game: game)
+        let configURLs = bridge.configURLs(in: data, game: game)
+
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         // Clear any previous copy first so a partial write can never be
         // mistaken for a good one on the next pass.
         for url in patchURLs + configURLs {
@@ -99,9 +114,15 @@ public actor RuntimeInstaller {
 
         do {
             for url in patchURLs {
+<<<<<<< HEAD
                 try activePatch.write(to: url, options: .atomic)
             }
             log.log(.runtime, "staged patch (\(activePatch.count) bytes) in \(patchURLs.count) location(s)")
+=======
+                try payload.data.write(to: url, options: .atomic)
+            }
+            log.log(.runtime, "staged patch (\(payload.data.count) bytes) in \(patchURLs.count) location(s)")
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         } catch {
             for url in patchURLs { try? FileManager.default.removeItem(at: url) }
             log.log(.runtime, "patch write failed: \(error.localizedDescription)")
@@ -123,7 +144,11 @@ public actor RuntimeInstaller {
         let elapsed = await confirmStaging(
             game: game,
             patchURLs: patchURLs,
+<<<<<<< HEAD
             digest: PatchPayload.digest(of: activePatch),
+=======
+            digest: payload.sha256,
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             monitorMs: monitorMs
         )
 
@@ -201,6 +226,7 @@ public actor RuntimeInstaller {
         log.log(.runtime, "removed patch and config for \(game.rawValue) from \(urls.count) location(s) and released sandbox grants")
     }
 
+<<<<<<< HEAD
     /// Detach the app from the session without disarming the target: the
     /// staged patch and its `localConfig.json` stay in the container untouched,
     /// so the next launch still runs with the aim / ESP the panel staged.
@@ -220,12 +246,15 @@ public actor RuntimeInstaller {
         }
     }
 
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     /// Re-stage the same patch to force the game to reload it. Used by the reset
     /// command when the target is already running.
     public func reset(game: Game) async throws {
         log.log(.runtime, "reset requested for \(game.rawValue)")
         try await uninject(game: game)
     }
+<<<<<<< HEAD
 
     // MARK: - real patch
 
@@ -297,4 +326,6 @@ public actor RuntimeInstaller {
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return docs.appendingPathComponent("ffxc_real_patch.bytes")
     }
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 }

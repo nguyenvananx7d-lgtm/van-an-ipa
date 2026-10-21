@@ -16,10 +16,14 @@ DerivedData/
 .DS_Store
 
 # local drops, not source
+<<<<<<< HEAD
 VortexArena-FromSources-Repo.zip
 ảnh lỗi/
 image.png
 IMG_*.png
+=======
+DeltaFromSources-Repo.zip
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 # editors
 .vscode/

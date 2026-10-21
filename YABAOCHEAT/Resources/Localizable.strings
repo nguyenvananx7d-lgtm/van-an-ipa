@@ -2,13 +2,20 @@
 "status" = "Status";
 "controls" = "Controls";
 "log" = "Log";
+<<<<<<< HEAD
 "app_title" = "Vortex Arena";
+=======
+"app_title" = "DELTA CLIENT";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 "version" = "Version";
 "license_valid" = "License valid";
 "checking" = "Checking…";
 "offline" = "Offline";
 "unlicensed" = "Unlicensed";
+<<<<<<< HEAD
 "plan_premium" = "Premium";
+=======
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 "log_empty" = "No entries yet";
 "all" = "All";
 "copied" = "Copied";
@@ -18,17 +25,29 @@
 /* Tabs */
 "tab_aimbot" = "Aimbot";
 "tab_visual" = "Visual";
+<<<<<<< HEAD
 "tab_misc" = "Inject";
+=======
+"tab_misc" = "Misc";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 "tab_setting" = "Setting";
 "welcome_back" = "Welcome %@ back! Have a good day.";
 
 /* License gate */
 "license" = "License";
+<<<<<<< HEAD
 "gate_hint" = "Enter your license key to continue";
 "gate_submit" = "Submit";
 "enter_license_key" = "Enter license key";
 "license_key_hint" = "Your key is stored on this device only";
 "key_placeholder" = "Enter license key";
+=======
+"gate_hint" = "Nhập license key để tiếp tục";
+"gate_submit" = "Nhập";
+"enter_license_key" = "Enter license key";
+"license_key_hint" = "Your key is stored on this device only";
+"key_placeholder" = "Nhập License Key";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 "activate" = "Activate";
 "expires_at" = "Expires";
 
@@ -41,6 +60,7 @@
 
 /* Injection */
 "inject_active" = "Injection active";
+<<<<<<< HEAD
 "state_not_injected" = "Not injected";
 "state_failed" = "Failed";
 "state_unsupported" = "Unsupported";
@@ -53,6 +73,20 @@
 "uninject" = "Uninject";
 "injection" = "Injection";
 "inject" = "Inject";
+=======
+"uninject" = "Remove";
+"injection" = "Injection";
+"inject" = "Inject";
+"wipe" = "Wipe";
+"launch" = "Launch";
+
+/* Clean-launch diagnostic */
+"clean_launch_diagnostic" = "Launch clean (diagnostic)";
+
+/* Catalog fallback */
+"controls_unavailable" = "No controls";
+"controls_unavailable_hint" = "The deployment has not published a control catalog yet.";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 /* Container states */
 "container_resolved" = "Container resolved";
@@ -63,6 +97,7 @@
 /* Aimbot tab */
 "section_aimbot_main" = "AIMBOT";
 "master_aimbot" = "Master Aimbot";
+<<<<<<< HEAD
 "silent_aim" = "Silent Aim";
 "legit_aim" = "Legit Aim";
 "silent_aim_target" = "Silent Aim Target";
@@ -83,10 +118,33 @@
 "field_of_view" = "Field Of View";
 
 /* Visual tab */
+=======
+"section_antiban" = "ANTI-BAN";
+"anti_ban" = "Anti-Ban";
+"section_aimbot_type" = "AIMBOT TYPE";
+"aimbot_type" = "Type";
+"aimbot_type_normal" = "Aimbot";
+"aimbot_type_silent" = "Aimbot Silent";
+"bone" = "Bone";
+"bone_head" = "Head";
+"bone_body" = "Body";
+"hit_chance" = "Hit Chance";
+"silent_aim" = "Silent";
+"section_aimbot_settings" = "AIMBOT SETTINGS";
+"draw_fov" = "Draw Field Of View";
+"field_of_view" = "Field Of View";
+"aimbot_distance" = "Aimbot Distance";
+"ignore_knocked" = "Ignore Knocked";
+
+/* Visual tab */
+"section_esp_color" = "ESP COLOR";
+"esp_color" = "Color";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 "section_esp_main" = "ESP MAIN";
 "master_esp" = "Master ESP";
 "line_esp" = "Line ESP";
 "box_esp" = "Box";
+<<<<<<< HEAD
 "name_esp" = "Enemy Name";
 "distance_esp" = "Distance ESP";
 "health_esp" = "Health";
@@ -142,6 +200,39 @@
 "support_discord" = "Support (Discord)";
 "system_log" = "System Log";
 "logout_account" = "Log Out";
+=======
+"box_type" = "Box Type";
+"box_type_corner" = "Corner";
+"box_type_edge" = "Edge";
+"name_esp" = "ESP Name";
+"distance_esp" = "Distance ESP";
+"health_esp" = "Health";
+"health_type" = "Health Type";
+"health_type_left" = "Left";
+"health_type_right" = "Right";
+"skeleton_esp" = "ESP Skeleton";
+"draw_enemy_count" = "Draw Count Enemies";
+"section_visual_sliders" = "VISUAL SLIDERS";
+"text_size" = "Text Size";
+"bounding_2d" = "2D Bounding";
+"esp_thickness" = "Thickness";
+
+/* Setting tab */
+"section_privacy" = "QUYỀN RIÊNG";
+"stream_proof" = "Stream Proof";
+"section_license_info" = "THÔNG TIN BẢN QUYỀN";
+"setting_license" = "License";
+"validity" = "Hạn dùng";
+"uuid_label" = "UUID";
+"copy" = "Sao chép";
+"section_compat" = "TƯƠNG THÍCH";
+"ios_version_current" = "Phiên bản iOS hiện tại";
+"section_language" = "NGÔN NGỮ";
+"section_support" = "HỖ TRỢ & HỆ THỐNG";
+"support_discord" = "Liên hệ hỗ trợ (Discord)";
+"system_log" = "Nhật ký hệ thống";
+"logout_account" = "Đăng xuất tài khoản";
+>>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 /* License errors */
 "license_error.valid" = "License valid";
