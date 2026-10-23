@@ -37,8 +37,6 @@ public final class AppLog: ObservableObject {
 
 
     public static let capacity = 1500
-
-    public static let capacity = 500
     public static let fileName = "ffxc_debug.log"
 
     @Published public private(set) var entries: [Entry] = []
