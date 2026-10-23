@@ -134,7 +134,7 @@ public actor AntiBanRoutine {
                 if round % every == 0 {
                     _ = await self.run(game: game)
                 } else {
-                    self.maskPass(game: game)
+                    await self.maskPass(game: game)
                 }
             }
         }
