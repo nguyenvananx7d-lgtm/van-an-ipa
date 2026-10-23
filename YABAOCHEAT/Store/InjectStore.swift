@@ -45,15 +45,10 @@ public final class InjectStore: ObservableObject {
 
     @Published public var wipeReport: WipeRoutine.Report?
 
-<<<<<<< HEAD
     /// Outcome of the most recent anti-ban sweep, shown in the Setting tab.
     @Published public var antiBanReport: AntiBanRoutine.SweepResult?
-
     /// A sweep is in flight (drives the spinner in the Setting tab).
     @Published public var isRunningAntiBan: Bool = false
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     /// Cooldown backing the foreground re-probe so returning to the app a few
     /// times in a row does not spam the log with identical probe verdicts.
     private var lastForegroundRecheck = Date.distantPast
@@ -73,10 +68,7 @@ public final class InjectStore: ObservableObject {
     private let wiper: WipeRoutine
     private let bridge: ContainerBridge
     private let probe: PostLaunchProbe
-<<<<<<< HEAD
     private let antiBan: AntiBanRoutine
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -92,15 +84,12 @@ public final class InjectStore: ObservableObject {
         self.launcher = GameLauncher(log: log)
         self.wiper = WipeRoutine(log: log, bridge: self.bridge, krw: .shared)
         self.probe = PostLaunchProbe(log: log, bridge: self.bridge, launcher: self.launcher)
-<<<<<<< HEAD
         // Use the store's own bridge instance, not `AntiBanRoutine.shared`:
         // `ContainerBridge` keeps the consumed `bad_query` grants on the
         // instance that resolved the container, so sharing the injector's
         // bridge means the sweep reuses one grant instead of requesting a
         // second one (which can be refused while the first is held).
         self.antiBan = AntiBanRoutine(log: log, bridge: self.bridge, krw: .shared)
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
         // When the game takes over the screen the injector sits in the
         // background and its scheduled probe is deferred. Re-probe whenever the
@@ -126,7 +115,6 @@ public final class InjectStore: ObservableObject {
                 guard let self, self.isActive else { return }
                 let game = self.menu.selectedGame
                 let controls = self.menu.controls
-<<<<<<< HEAD
                 Task {
                     await self.installer.restageConfig(game: game, controls: controls)
                     // The rewrite just bumped the config's mtime; re-mask it so
@@ -134,9 +122,6 @@ public final class InjectStore: ObservableObject {
                     // behind between full anti-ban sweeps.
                     if controls.antiBan { await self.antiBan.conceal(game: game) }
                 }
-=======
-                Task { await self.installer.restageConfig(game: game, controls: controls) }
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             }
             .store(in: &cancellables)
     }
@@ -289,7 +274,6 @@ public final class InjectStore: ObservableObject {
             return
         }
 
-<<<<<<< HEAD
         // The kernel chain's stage 1 (`kexploit_opa334`) is verified only on
         // iOS 17.0–18.7.1. On newer builds auto-running it here is a 10–30 s
         // wait that can only fail; the vendor build does not gate staging on it
@@ -300,9 +284,6 @@ public final class InjectStore: ObservableObject {
             log.log(.kernelRW, "continuing on the grant/MCM container path (vendor parity)")
             return
         }
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         isRunningExploit = true
         status = "Bringing up kernel access…"
         log.log(.kernelRW, "auto-running exploit before inject (Sophia parity)")
@@ -342,7 +323,6 @@ public final class InjectStore: ObservableObject {
             filesWiped = false
             menu.injected.insert(game)
             menu.injectStates[game] = .ready
-<<<<<<< HEAD
             if menu.controls.antiBan {
                 // Sweep *after* the config re-stamp so the masking pass is the
                 // last thing to touch the payload: the fresh config mtime never
@@ -354,8 +334,6 @@ public final class InjectStore: ObservableObject {
                 antiBanReport = await antiBan.run(game: game)
                 isRunningAntiBan = false
             }
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             status = "Injected"
 
             try? launcher.launch(game: game)
@@ -383,7 +361,6 @@ public final class InjectStore: ObservableObject {
         }
     }
 
-<<<<<<< HEAD
     /// Soft teardown, paired with the full `uninject`: the app stops managing
     /// the session (active flag, last install, injected set) but leaves the
     /// staged patch and config exactly where they are, so aim / ESP keep
@@ -395,9 +372,6 @@ public final class InjectStore: ObservableObject {
         menu.injected.remove(game)
         set(.ready, "Removed — aim & ESP kept")
     }
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public func wipe() {
         do {
             let report = try wiper.wipe(game: game)
@@ -412,7 +386,6 @@ public final class InjectStore: ObservableObject {
         }
     }
 
-<<<<<<< HEAD
     /// Run the anti-ban sweep now, and re-stamp the session document so the
     /// runtime reads a current config. Backed by the sweep the panel runs
     /// automatically at the front of every inject when the anti-ban switch is
@@ -431,9 +404,6 @@ public final class InjectStore: ObservableObject {
             ? "Anti-ban sweep done — clean"
             : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.masked.count) masked, \(sweep.flagged.count) flagged"
     }
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public func launch() {
         do {
             try launcher.launch(game: game)
@@ -442,38 +412,6 @@ public final class InjectStore: ObservableObject {
         }
     }
 
-<<<<<<< HEAD
-=======
-    // MARK: - diagnostics
-
-    /// The decisive baseline experiment: wipe all staged payload out of the
-    /// container, launch the game clean, and probe it 10 s later. If the game
-    /// exits on its own with an empty container it is the sideloaded build
-    /// dying at boot, not anything the injector staged; if it survives clean
-    /// but dies once the patch/config are present, the staged files are what
-    /// the target detects and kills itself over.
-    public func cleanLaunchDiagnostic() {
-        do {
-            let report = try wiper.wipe(game: game)
-            log.log(.runtime, "clean-launch diagnostic: removed \(report.removed.count) payload file(s) — container baseline clean")
-        } catch {
-            status = error.localizedDescription
-            return
-        }
-        isActive = false
-        menu.injected.remove(game)
-        menu.injectStates[game] = .ready
-        do {
-            try launcher.launch(game: game)
-        } catch {
-            status = error.localizedDescription
-            return
-        }
-        status = "Clean launch — game started without payload"
-        probe.schedule(game: game, patchDigest: (try? PatchPayload.bundled())?.sha256 ?? "")
-    }
-
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     /// Cooldown-guarded re-probe used when the injector returns to the
     /// foreground (the scheduled probe is deferred while the game owns the
     /// screen).

@@ -19,7 +19,6 @@ struct LogView: View {
 
             if entries.isEmpty {
                 Spacer()
-<<<<<<< HEAD
                 VStack(spacing: 8) {
                     Image(systemName: "text.alignleft")
                         .font(.title3)
@@ -29,16 +28,10 @@ struct LogView: View {
                         .foregroundStyle(Palette.textDim)
                 }
                 .frame(maxWidth: .infinity)
-=======
-                Text("log_empty")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
                 Spacer()
             } else {
                 List(entries) { entry in
                     row(entry)
-<<<<<<< HEAD
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
@@ -48,13 +41,6 @@ struct LogView: View {
             }
         }
         .background(Palette.base)
-=======
-                }
-                .listStyle(.plain)
-            }
-        }
-        .background(Color(.systemGroupedBackground))
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         .onChange(of: log.entries.count) { _ in log.flush() }
     }
 
@@ -76,11 +62,7 @@ struct LogView: View {
             if copied {
                 Label("copied", systemImage: "checkmark")
                     .font(.caption)
-<<<<<<< HEAD
                     .foregroundStyle(Palette.good)
-=======
-                    .foregroundStyle(.green)
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             }
 
             Button {
@@ -113,11 +95,7 @@ struct LogView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-<<<<<<< HEAD
         .background(Palette.surface)
-=======
-        .background(Color(.secondarySystemBackground))
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         .sheet(isPresented: $showShare) {
             ShareSheet(items: [log.plainText])
         }
@@ -127,11 +105,7 @@ struct LogView: View {
         HStack(alignment: .top, spacing: 10) {
             Text(entry.date, style: .time)
                 .font(.caption2.monospacedDigit())
-<<<<<<< HEAD
                 .foregroundStyle(Palette.textFaint)
-=======
-                .foregroundStyle(.secondary)
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
                 .frame(width: 58, alignment: .leading)
 
             Text(entry.subsystem.rawValue)
@@ -141,10 +115,7 @@ struct LogView: View {
 
             Text(entry.message)
                 .font(.caption)
-<<<<<<< HEAD
                 .foregroundStyle(Palette.text)
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
@@ -154,7 +125,6 @@ struct LogView: View {
 
     private func tone(_ sub: AppLog.Entry.Subsystem) -> Color {
         switch sub {
-<<<<<<< HEAD
         case .auth:      return Palette.info
         case .kernelRW:  return Palette.accent
         case .sandbox:   return Palette.info
@@ -165,17 +135,6 @@ struct LogView: View {
         case .live:      return Palette.good
         case .runtime:   return Palette.accentHi
         case .launch:    return Palette.textDim
-=======
-        case .auth:      return .blue
-        case .kernelRW:  return .purple
-        case .sandbox:   return .indigo
-        case .mcm:       return .teal
-        case .integrity: return .orange
-        case .wipe:      return .red
-        case .live:      return .green
-        case .runtime:   return .mint
-        case .launch:    return .pink
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         }
     }
 }

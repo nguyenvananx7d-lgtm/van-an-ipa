@@ -1,9 +1,7 @@
 import Foundation
 import UIKit
-<<<<<<< HEAD
+
 import Darwin
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 /// Starts or restarts the target game after a successful install.
 public struct GameLauncher: Sendable {
@@ -23,7 +21,7 @@ public struct GameLauncher: Sendable {
     /// `terminateFirst` matters: a warm start keeps the old runtime mapped, so a
     /// fresh patch would be loaded by nobody.
     ///
-<<<<<<< HEAD
+
     /// Launch mirrors the vendor build (`Sophia`): open the title by its URL
     /// scheme and never gate on `canOpenURL` — a `canOpenURL` refusal only
     /// proves the scheme is missing from the caller's queries whitelist, and an
@@ -36,13 +34,11 @@ public struct GameLauncher: Sendable {
     /// (`SBSLaunchApplicationWithIdentifier` via dlsym, then the app workspace),
     /// and the early process re-checks plus the 10 s post-launch probe are what
     /// verify an attempt really landed a running game.
-=======
     /// Launch tries the URL-scheme path first and falls back to asking the app
     /// workspace to launch by bundle id. A `canOpenURL` refusal is not proof the
     /// game is absent — some titles register no launchable scheme, so a fallback
     /// that does not depend on scheme registration is required before reporting
     /// the game as not installed.
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     @MainActor
     public func launch(game: Game, terminateFirst: Bool = true) throws {
         if terminateFirst, let running = runningPID(for: game) {
@@ -53,12 +49,10 @@ public struct GameLauncher: Sendable {
             Thread.sleep(forTimeInterval: 0.6)
         }
 
-<<<<<<< HEAD
         let candidates = schemeCandidates(for: game)
         log.log(.launch, "requesting open of \(game.bundleIdentifier) via \(candidates.joined(separator: ", "))")
         tryOpen(schemes: candidates, game: game)
     }
-
     /// Registered deep-link spellings to try, most likely first. Free Fire's
     /// own invite/share surface opens through `dtsgff://`; the plain bundle-id
     /// scheme is not registered by the title on several builds, so it must not
@@ -71,7 +65,6 @@ public struct GameLauncher: Sendable {
         }
         return list
     }
-
     @MainActor
     private func tryOpen(schemes: [String], game: Game) {
         guard let first = schemes.first else {
@@ -95,7 +88,6 @@ public struct GameLauncher: Sendable {
             }
         }
     }
-
     /// Every scheme refused — fall back to the private launch APIs.
     @MainActor
     private func openViaSystemAPI(_ game: Game) {
@@ -115,7 +107,6 @@ public struct GameLauncher: Sendable {
         }
         scheduleLaunchChecks()
     }
-
     /// Early process-table re-checks after an attempt, so the log distinguishes
     /// "no process ever came up" from "game opened then died quickly" long
     /// before the 10 s post-launch probe.
@@ -132,32 +123,6 @@ public struct GameLauncher: Sendable {
                 }
             }
         }
-=======
-        let url = URL(string: "\(game.bundleIdentifier)://")!
-        if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url, options: [:]) { [self] ok in
-                if ok {
-                    log.log(.launch, "launched \(game.bundleIdentifier)")
-                } else {
-                    log.log(.launch, "launch refused for \(game.bundleIdentifier)")
-                }
-                logFireProcs("after scheme launch")
-            }
-            return
-        }
-
-        // No URL scheme: some titles (or some sideload setups) never register
-        // one. Ask the workspace to open by bundle id instead. The app is only
-        // reported missing if that also fails.
-        if openViaWorkspace(game) {
-            log.log(.launch, "launched \(game.bundleIdentifier) via workspace")
-            logFireProcs("after workspace launch")
-            return
-        }
-
-        log.log(.launch, "\(game.bundleIdentifier) not installed or not launchable")
-        throw LaunchError.gameNotInstalled
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     /// Whether the target is currently running.
@@ -175,7 +140,6 @@ public struct GameLauncher: Sendable {
             .map { "\($0.pid):\($0.comm)" }
     }
 
-<<<<<<< HEAD
     /// Launch by bundle id through SpringBoardServices, resolved at runtime so
     /// the private framework is never linked. This is the launch route vendor
     /// injectors use on modern iOS; it needs the `springboard.launchapplications`
@@ -192,12 +156,6 @@ public struct GameLauncher: Sendable {
         let launch = unsafeBitCast(sym, to: SBSLaunch.self)
         let error = launch(game.bundleIdentifier as CFString, false)
         return error == 0
-=======
-    private func logFireProcs(_ context: String) {
-        let procs = fireProcs()
-        guard !procs.isEmpty else { return }
-        log.log(.launch, "fire-named procs \(context): \(procs.joined(separator: ", "))")
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     }
 
     /// Launch by bundle id through `LSApplicationWorkspace`. Private API, so it
@@ -236,19 +194,14 @@ public struct GameLauncher: Sendable {
     /// process but its own, so a bundle-id lookup would report the target dead
     /// even while it sat open on screen. The kernel proc table entry (pid +
     /// short name `p_comm`) is what a jailed app can actually read for other
-<<<<<<< HEAD
     /// processes, so this is the only check a verdict may rely on. And even
     /// that can miss a Unity title whose main binary is not named after the
     /// product (e.g. `Unity-iPhone`), which is what the probe's process-table
     /// sample exists to expose.
-=======
-    /// processes, so this is the only check a verdict may rely on.
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public func runningDescription(for game: Game) -> String? {
         runningProcesses().first.map { "pid \($0.pid) (\($0.comm))" }
     }
 
-<<<<<<< HEAD
     /// Sample of the process table for diagnostics.
     ///
     /// Prefers processes whose `p_comm` looks game-adjacent (Free Fire, Garena,
@@ -264,7 +217,6 @@ public struct GameLauncher: Sendable {
         let shown = broad.isEmpty ? Array(all.prefix(min(limit, all.count))) : Array(broad.prefix(limit))
         return shown.map { "\($0.pid):\($0.comm)" }
     }
-
     /// Broader matcher used only to *report* what is running. Deliberately wider
     /// than `wantedCommFragments` (which gates cold-start kills) — a false
     /// positive here only adds a line to the log; a false positive in the kill
@@ -272,9 +224,6 @@ public struct GameLauncher: Sendable {
     private static let diagnosticCommFragments = [
         "fire", "freefire", "garena", "unity", "dts", "ff", "game",
     ]
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     struct Proc {
         let pid: pid_t
         let comm: String

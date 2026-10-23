@@ -8,6 +8,14 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcresult
+
+# Xcode user state
+xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# js tooling (ffxc-auth)
+node_modules/
 
 # swift package
 .build/
@@ -16,15 +24,18 @@ DerivedData/
 .DS_Store
 
 # local drops, not source
-<<<<<<< HEAD
+
 VortexArena-FromSources-Repo.zip
 ảnh lỗi/
 image.png
 IMG_*.png
-=======
+
 DeltaFromSources-Repo.zip
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
 
 # editors
 .vscode/
 .idea/
+
+# local tooling trees, not part of the IPA
+ESPDESGIN/
+

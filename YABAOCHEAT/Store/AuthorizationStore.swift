@@ -1,55 +1,41 @@
-<<<<<<< HEAD
 import Foundation
 import SwiftUI
-
 /// Owns the license session: validates a key, keeps it alive, and tears it down
 /// on logout or revocation.
 @MainActor
 public final class AuthorizationStore: ObservableObject {
     public static let shared = AuthorizationStore()
-
     // MARK: state
-
     @Published public private(set) var status: AuthorizationStatus = .unknown
     @Published public private(set) var isRefreshing: Bool = false
-
     /// Set when the server takes the session away; shown as a banner until the
     /// user acts on it.
     @Published public var revocationMessage: String?
-
     /// Consecutive transport failures. Reset by any successful check.
     public private(set) var networkErrorCount: Int = 0
-
     /// Set when a launch-time integrity check fails. Sticky for the run: it is
     /// a property of the binary, so no later `.valid` may clear it.
     private var integrityBlocked: Bool = false
-
     /// In-flight revalidation, so a manual refresh cannot stack up behind a
     /// scheduled one.
     public private(set) var revalidationTask: Task<Void, Never>?
-
     @Published public private(set) var isDarkMode: Bool = true
     @Published public private(set) var languageSelected: Bool = false
-
     @Published public private(set) var catalog: [ControlDescriptor] = []
     @Published public private(set) var expectedPatchSHA256: String?
     @Published public private(set) var expectedNeutralSHA256: String?
     @Published public private(set) var patchOpenMonitorMs: Int = 2_000
     @Published public private(set) var sessionToken: String?
-
     private let log: AppLog
     private let menu: MenuStore
     private let live: LiveUpdate
-
     private init(log: AppLog = .shared, menu: MenuStore = .shared) {
         self.log = log
         self.menu = menu
         self.live = LiveUpdate(log: log)
         observeNotifications()
     }
-
     // MARK: - entry points
-
     /// Validate a key the user typed. On success the key is persisted and the
     /// session starts.
     ///
@@ -60,11 +46,9 @@ public final class AuthorizationStore: ObservableObject {
     public func submit(key: String) async {
         isRefreshing = true
         defer { isRefreshing = false }
-
         let pins = PatchPayload.localPins()
         expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
         expectedNeutralSHA256 = pins.neutral
-
         let resp = LicenseResponse(
             status: "valid",
             message: nil,
@@ -82,7 +66,6 @@ public final class AuthorizationStore: ObservableObject {
         )
         adopt(resp, startHeartbeat: false)
     }
-
     /// Re-check the stored key, if there is one. Called on launch and whenever
     /// the app returns to the foreground.
     public func revalidate() {
@@ -92,7 +75,6 @@ public final class AuthorizationStore: ObservableObject {
             await self.performRevalidation()
         }
     }
-
     private func performRevalidation() async {
         guard let key = try? SecureStore.licenseKey(), !key.isEmpty else {
             apply(.unknown)
@@ -100,7 +82,6 @@ public final class AuthorizationStore: ObservableObject {
         }
         await submit(key: key)
     }
-
     /// End the session locally and drop the stored key.
     public func logout() {
         revalidationTask?.cancel()
@@ -117,13 +98,10 @@ public final class AuthorizationStore: ObservableObject {
         apply(.unknown)
         log.log(.auth, "logged out")
     }
-
     // MARK: - adopting a response
-
     private func adopt(_ response: LicenseResponse, startHeartbeat: Bool = true) {
         networkErrorCount = 0
         revocationMessage = nil
-
         if let code = response.errorCode {
             if code.invalidatesKey {
                 SecureStore.clearLicenseKey()
@@ -132,7 +110,6 @@ public final class AuthorizationStore: ObservableObject {
             apply(.invalid(code))
             return
         }
-
         // An integrity failure is a verdict on the binary, not on the key. It is
         // recorded once per launch and must not lose a race against the
         // foreground revalidation, which otherwise lands on top of it and
@@ -143,7 +120,6 @@ public final class AuthorizationStore: ObservableObject {
             apply(.invalid(.integrityFailed))
             return
         }
-
         // Deployment policy: digest pins and the monitor window come from here,
         // so a compromised response cannot relax the pre-flight checks.
         if let deployment = response.deployment {
@@ -156,7 +132,6 @@ public final class AuthorizationStore: ObservableObject {
                 log.log(.auth, "server speaks protocol v\(deployment.protocolVersion); this build speaks v\(ProtocolConstants.protocolVersion)")
             }
         }
-
         if let descriptors = response.catalog, !descriptors.isEmpty {
             catalog = descriptors
             let sections = response.metadata?["sections"] ?? [:]
@@ -167,7 +142,6 @@ public final class AuthorizationStore: ObservableObject {
                     .map { $0.value }
             )
         }
-
         if let session = response.session, !session.isEmpty {
             sessionToken = session
             if startHeartbeat {
@@ -184,7 +158,6 @@ public final class AuthorizationStore: ObservableObject {
                 log.log(.auth, "local session; heartbeat not started")
             }
         }
-
         apply(.valid(
             plan: response.plan ?? "—",
             displayKey: response.licenseLabel ?? "—",
@@ -192,7 +165,6 @@ public final class AuthorizationStore: ObservableObject {
         ))
         log.log(.auth, "authorized")
     }
-
     private func acceptHeartbeat(_ response: LicenseResponse) async {
         await MainActor.run {
             if let code = response.errorCode {
@@ -209,14 +181,11 @@ public final class AuthorizationStore: ObservableObject {
             }
         }
     }
-
     private func apply(_ new: AuthorizationStatus) {
         status = new
         isDarkMode = new.plan?.isEmpty == false
     }
-
     // MARK: - notifications
-
     private func observeNotifications() {
         NotificationCenter.default.addObserver(
             forName: Notifications.authorizationRevoked, object: nil, queue: .main
@@ -232,7 +201,6 @@ public final class AuthorizationStore: ObservableObject {
                 }
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: Notifications.integrityFailed, object: nil, queue: .main
         ) { [weak self] _ in
@@ -244,9 +212,7 @@ public final class AuthorizationStore: ObservableObject {
             }
         }
     }
-
     // MARK: - dates
-
     /// The server sends ISO-8601 with or without fractional seconds; both are
     /// accepted, and a malformed date is treated as absent rather than fatal.
     static func parseDate(_ raw: String?) -> Date? {
@@ -257,263 +223,3 @@ public final class AuthorizationStore: ObservableObject {
         return ISO8601DateFormatter().date(from: raw)
     }
 }
-=======
-import Foundation
-import SwiftUI
-
-/// Owns the license session: validates a key, keeps it alive, and tears it down
-/// on logout or revocation.
-@MainActor
-public final class AuthorizationStore: ObservableObject {
-    public static let shared = AuthorizationStore()
-
-    // MARK: state
-
-    @Published public private(set) var status: AuthorizationStatus = .unknown
-    @Published public private(set) var isRefreshing: Bool = false
-
-    /// Set when the server takes the session away; shown as a banner until the
-    /// user acts on it.
-    @Published public var revocationMessage: String?
-
-    /// Consecutive transport failures. Reset by any successful check.
-    public private(set) var networkErrorCount: Int = 0
-
-    /// Set when a launch-time integrity check fails. Sticky for the run: it is
-    /// a property of the binary, so no later `.valid` may clear it.
-    private var integrityBlocked: Bool = false
-
-    /// In-flight revalidation, so a manual refresh cannot stack up behind a
-    /// scheduled one.
-    public private(set) var revalidationTask: Task<Void, Never>?
-
-    @Published public private(set) var isDarkMode: Bool = true
-    @Published public private(set) var languageSelected: Bool = false
-
-    @Published public private(set) var catalog: [ControlDescriptor] = []
-    @Published public private(set) var expectedPatchSHA256: String?
-    @Published public private(set) var expectedNeutralSHA256: String?
-    @Published public private(set) var patchOpenMonitorMs: Int = 2_000
-    @Published public private(set) var sessionToken: String?
-
-    private let log: AppLog
-    private let menu: MenuStore
-    private let live: LiveUpdate
-
-    private init(log: AppLog = .shared, menu: MenuStore = .shared) {
-        self.log = log
-        self.menu = menu
-        self.live = LiveUpdate(log: log)
-        observeNotifications()
-    }
-
-    // MARK: - entry points
-
-    /// Validate a key the user typed. On success the key is persisted and the
-    /// session starts.
-    ///
-    /// This build answers locally: no round trip, no server-pinned digests. The
-    /// pins therefore come from the bundle itself, and the heartbeat stays off —
-    /// polling the real endpoint with a session the server never issued would
-    /// only get the session dropped a few heartbeats in.
-    public func submit(key: String) async {
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        let pins = PatchPayload.localPins()
-        expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
-        expectedNeutralSHA256 = pins.neutral
-
-        let resp = LicenseResponse(
-            status: "valid",
-            message: nil,
-            plan: "Vortex Arena",
-            expiresAt: nil,
-            metadata: nil,
-            session: "bypass",
-            sessionTtl: nil,
-            sessionExpiresAt: nil,
-            catalog: nil,
-            deployment: nil,
-            command: nil,
-            credential: nil,
-            licenseLabel: key
-        )
-        adopt(resp, startHeartbeat: false)
-    }
-
-    /// Re-check the stored key, if there is one. Called on launch and whenever
-    /// the app returns to the foreground.
-    public func revalidate() {
-        revalidationTask?.cancel()
-        revalidationTask = Task { [weak self] in
-            guard let self else { return }
-            await self.performRevalidation()
-        }
-    }
-
-    private func performRevalidation() async {
-        guard let key = try? SecureStore.licenseKey(), !key.isEmpty else {
-            apply(.unknown)
-            return
-        }
-        await submit(key: key)
-    }
-
-    /// End the session locally and drop the stored key.
-    public func logout() {
-        revalidationTask?.cancel()
-        revalidationTask = nil
-        Task { await self.live.stop() }
-        SecureStore.clearLicenseKey()
-        sessionToken = nil
-        catalog = []
-        expectedPatchSHA256 = nil
-        expectedNeutralSHA256 = nil
-        menu.apply(catalog: [], sections: [])
-        revocationMessage = nil
-        networkErrorCount = 0
-        apply(.unknown)
-        log.log(.auth, "logged out")
-    }
-
-    // MARK: - adopting a response
-
-    private func adopt(_ response: LicenseResponse, startHeartbeat: Bool = true) {
-        networkErrorCount = 0
-        revocationMessage = nil
-
-        if let code = response.errorCode {
-            if code.invalidatesKey {
-                SecureStore.clearLicenseKey()
-                revocationMessage = response.message ?? code.localizedDescription
-            }
-            apply(.invalid(code))
-            return
-        }
-
-        // An integrity failure is a verdict on the binary, not on the key. It is
-        // recorded once per launch and must not lose a race against the
-        // foreground revalidation, which otherwise lands on top of it and
-        // reports a healthy session over a failed check.
-        if integrityBlocked {
-            revocationMessage = String(localized: "license_error.integrityFailed")
-            log.log(.auth, "integrity failure standing; session not adopted")
-            apply(.invalid(.integrityFailed))
-            return
-        }
-
-        // Deployment policy: digest pins and the monitor window come from here,
-        // so a compromised response cannot relax the pre-flight checks.
-        if let deployment = response.deployment {
-            if let digests = response.metadata?["digests"] {
-                expectedPatchSHA256 = digests["patch"]
-                expectedNeutralSHA256 = digests["neutral"]
-            }
-            patchOpenMonitorMs = ProtocolConstants.Policy.fallback.patchOpenMonitorMs
-            if deployment.protocolVersion > ProtocolConstants.protocolVersion {
-                log.log(.auth, "server speaks protocol v\(deployment.protocolVersion); this build speaks v\(ProtocolConstants.protocolVersion)")
-            }
-        }
-
-        if let descriptors = response.catalog, !descriptors.isEmpty {
-            catalog = descriptors
-            let sections = response.metadata?["sections"] ?? [:]
-            menu.apply(
-                catalog: descriptors,
-                sections: sections
-                    .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
-                    .map { $0.value }
-            )
-        }
-
-        if let session = response.session, !session.isEmpty {
-            sessionToken = session
-            if startHeartbeat {
-                let heartbeat = response.deployment?.heartbeatSeconds
-                    ?? ProtocolConstants.Policy.fallback.heartbeatSeconds
-                let live = self.live
-                Task {
-                    await live.start(session: session, interval: heartbeat) { [weak self] update in
-                        // Runs off the main actor; hop back before touching state.
-                        Task { await self?.acceptHeartbeat(update) }
-                    }
-                }
-            } else {
-                log.log(.auth, "local session; heartbeat not started")
-            }
-        }
-
-        apply(.valid(
-            plan: response.plan ?? "—",
-            displayKey: response.licenseLabel ?? "—",
-            expiresAt: Self.parseDate(response.expiresAt) ?? Date().addingTimeInterval(86_400)
-        ))
-        log.log(.auth, "authorized")
-    }
-
-    private func acceptHeartbeat(_ response: LicenseResponse) async {
-        await MainActor.run {
-            if let code = response.errorCode {
-                if code.invalidatesKey {
-                    self.revocationMessage = response.message ?? code.localizedDescription
-                    self.apply(.invalid(code))
-                }
-                return
-            }
-            self.networkErrorCount = 0
-            if let plan = response.plan, let key = response.licenseLabel,
-               let expires = Self.parseDate(response.expiresAt) {
-                self.apply(.valid(plan: plan, displayKey: key, expiresAt: expires))
-            }
-        }
-    }
-
-    private func apply(_ new: AuthorizationStatus) {
-        status = new
-        isDarkMode = new.plan?.isEmpty == false
-    }
-
-    // MARK: - notifications
-
-    private func observeNotifications() {
-        NotificationCenter.default.addObserver(
-            forName: Notifications.authorizationRevoked, object: nil, queue: .main
-        ) { [weak self] note in
-            guard let self else { return }
-            let reason = note.object as? String ?? "revoked"
-            Task { @MainActor in
-                if reason == "networkError" {
-                    self.apply(.offline(since: Date(), lastError: .network))
-                } else {
-                    self.revocationMessage = reason
-                    self.apply(.invalid(.revoked))
-                }
-            }
-        }
-
-        NotificationCenter.default.addObserver(
-            forName: Notifications.integrityFailed, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.integrityBlocked = true
-                self.revocationMessage = String(localized: "license_error.integrityFailed")
-                self.apply(.invalid(.integrityFailed))
-            }
-        }
-    }
-
-    // MARK: - dates
-
-    /// The server sends ISO-8601 with or without fractional seconds; both are
-    /// accepted, and a malformed date is treated as absent rather than fatal.
-    static func parseDate(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = withFraction.date(from: raw) { return d }
-        return ISO8601DateFormatter().date(from: raw)
-    }
-}
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210

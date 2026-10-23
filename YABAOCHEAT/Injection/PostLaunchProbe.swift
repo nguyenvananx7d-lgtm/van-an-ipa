@@ -53,7 +53,6 @@ public struct PostLaunchProbe: Sendable {
         if let detail = launcher.runningDescription(for: game) {
             log.log(.runtime, "\(label): target still running (\(detail))")
         } else {
-<<<<<<< HEAD
             // Name matching can miss a Unity build whose main binary is not
             // named after the product. Never claim death on a miss — dump the
             // process table so the game's actual comm shows up in the log.
@@ -62,13 +61,6 @@ public struct PostLaunchProbe: Sendable {
                 log.log(.runtime, "\(label): process table unreadable (KERN_PROC returned nothing)")
             } else {
                 log.log(.runtime, "\(label): target not matched by name — running: \(sample.joined(separator: ", "))")
-=======
-            let fires = launcher.fireProcs()
-            if fires.isEmpty {
-                log.log(.runtime, "\(label): target HAS EXITED (no fire-named process running)")
-            } else {
-                log.log(.runtime, "\(label): target HAS EXITED — fire-named procs: \(fires.joined(separator: ", "))")
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
             }
         }
 
@@ -136,7 +128,6 @@ public struct PostLaunchProbe: Sendable {
             verdicts.append("markers: \(markers.joined(separator: ", "))")
         }
 
-<<<<<<< HEAD
         // The injected runtime's own debug log (`Documents/ffxc_debug.log`) is
         // the ground truth for whether it engaged: when a run wrote one, show
         // the tail so the verdict carries what the game's side actually saw.
@@ -145,9 +136,6 @@ public struct PostLaunchProbe: Sendable {
             let tail = String(text.suffix(220)).replacingOccurrences(of: "\n", with: " ⏎ ")
             verdicts.append("ffxc_debug.log tail: \(tail)")
         }
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         log.log(.runtime, "probe \(dir.lastPathComponent): \(verdicts.joined(separator: ", "))")
     }
 

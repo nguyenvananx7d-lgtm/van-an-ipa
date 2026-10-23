@@ -19,10 +19,9 @@ public final class AppLog: ObservableObject {
             case mcm = "MCM"
             case integrity = "INTEGRITY"
             case wipe = "WIPE"
-<<<<<<< HEAD
+
             case antiBan = "ANTIBAN"
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
+
             case live = "LIVE"
             case runtime = "RUNTIME"
             case launch = "LAUNCH"
@@ -36,11 +35,10 @@ public final class AppLog: ObservableObject {
         }
     }
 
-<<<<<<< HEAD
+
     public static let capacity = 1500
-=======
+
     public static let capacity = 500
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public static let fileName = "ffxc_debug.log"
 
     @Published public private(set) var entries: [Entry] = []

@@ -1,12 +1,28 @@
 ﻿name: Build VortexArena IPA
+
 on:
   push:
     branches: [ main ]
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-latest
+    timeout-minutes: 30
+
+    env:
+      SCHEME: YABAOCHEAT
+      PROJECT: VortexArena.xcodeproj
+      APP: build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,84 +35,109 @@ jobs:
         run: |
           set -eo pipefail
           plutil -lint YABAOCHEAT/Resources/Localizable.strings
+          plutil -lint YABAOCHEAT/Info.plist
+
+      - name: Reject conflict markers
+        shell: bash
+        run: |
+          set -eo pipefail
+          if grep -rnE '^(<{7}|={7}|>{7})' YABAOCHEAT project.yml; then
+            echo "::error::merge conflict markers left in source"
+            exit 1
+          fi
+          echo "no conflict markers"
 
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml --project .
 
-      - name: Build unsigned IPA
+      - name: Build unsigned archive
         shell: bash
         run: |
           set -eo pipefail
           mkdir -p build
-          # OTHER_LDFLAGS: -sectcreate embeds the entitlements plist into the
-          # Mach-O as the __entitlements section at link time, so no external
-          # signing tool is needed and the section survives an unsigned build.
-          # TrollStore/permasigner-style installers read __entitlements back and
-          # grant no-sandbox + springboard/frontboard launch at install time —
-          # exactly the parity the working "Sophia" build has. Without it the
-          # app installs sandboxed and can never touch the game container.
-          xcodebuild -project VortexArena.xcodeproj -scheme YABAOCHEAT -configuration Release -sdk iphoneos -archivePath build/VortexArena.xcarchive archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO OTHER_LDFLAGS='$(inherited) -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker YABAOCHEAT.entitlements'
+          # -sectcreate embeds YABAOCHEAT.entitlements into __TEXT,__entitlements.
+          # TrollStore-family installers read entitlements from the code
+          # signature, not from that section, so the section is only a fallback
+          # for tools that scan the Mach-O. The codesign step below is the
+          # channel that actually matters.
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/VortexArena.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            OTHER_LDFLAGS='$(inherited) -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker YABAOCHEAT.entitlements'
 
       - name: Verify bundle contents
         shell: bash
         run: |
           set -eo pipefail
-          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
-          for f in Localizable.strings Assembly-CSharp-patch.bytes client_public_key.der; do
-            if [ ! -f "$APP/$f" ]; then
-              echo "::error::required resource missing from bundle: $f"
-              exit 1
-            fi
+          for f in Localizable.strings Assembly-CSharp-patch.bytes client_public_key.der localConfig.json; do
+            test -f "$APP/$f" || { echo "::error::required resource missing from bundle: $f"; exit 1; }
             echo "ok $f"
           done
 
-      - name: Sign with entitlements (codesign)
+      - name: Sign ad-hoc with entitlements
         shell: bash
         run: |
           set -eo pipefail
-          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
           cp YABAOCHEAT/Resources/embedded.mobileprovision "$APP/embedded.mobileprovision"
-          ls -l "$APP/embedded.mobileprovision"
-          # Sign the whole app ad-hoc with the entitlements embedded in the code
-          # signature. This is exactly the channel the working "Sophia" build
-          # carries them in (ldid-style blob inside the Mach-O); TrollStore /
-          # permasigner-family installers read entitlements from the signature
-          # and re-sign with them, so on-device the app runs unsandboxed +
-          # platform. The __entitlements section alone is not read by those
-          # installers — that is why the previous build still logged
-          # no-sandbox=false container-manager=false.
           codesign --force --sign - --entitlements YABAOCHEAT.entitlements "$APP"
-          echo "codesign ok"
+          codesign -dv --verbose=2 "$APP" 2>&1 | head -20
 
-      - name: Verify installed entitlements channel
+      - name: Verify entitlements channel
         shell: bash
         run: |
           set -eo pipefail
-          APP=build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
-          test -f "$APP/embedded.mobileprovision" || { echo "::error::embedded.mobileprovision missing"; exit 1; }
-          # Secondary channel: the __entitlements section survives in the Mach-O.
-          for key in com.apple.private.security.no-sandbox com.apple.springboard.launchapplications com.apple.frontboard.launchapplications com.apple.multitasking.termination; do
-            grep -aq "$key" "$APP/YABAOCHEAT" || { echo "::error::key missing from binary: $key"; exit 1; }
-          done
-          # Primary channel: the code signature the install tool reads back.
           ent="$(codesign -d --entitlements - "$APP" 2>/dev/null || true)"
           echo "$ent"
-          for key in com.apple.private.security.no-sandbox com.apple.springboard.launchapplications com.apple.frontboard.launchapplications com.apple.multitasking.termination com.apple.private.security.container-manager; do
+          for key in \
+            com.apple.private.security.no-sandbox \
+            com.apple.springboard.launchapplications \
+            com.apple.frontboard.launchapplications \
+            com.apple.multitasking.termination \
+            com.apple.private.security.container-manager; do
             grep -q "$key" <<<"$ent" || { echo "::error::entitlement not in code signature: $key"; exit 1; }
+          done
+          for key in \
+            com.apple.private.security.no-sandbox \
+            com.apple.springboard.launchapplications; do
+            grep -aq "$key" "$APP/YABAOCHEAT" || { echo "::error::key missing from __entitlements section: $key"; exit 1; }
           done
 
       - name: Package IPA
         shell: bash
         run: |
           set -eo pipefail
+          rm -rf build/Payload
           mkdir -p build/Payload
-          cp -R build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app build/Payload/
+          cp -R "$APP" build/Payload/
           cd build
-          zip -r ../VortexArena-unsigned.ipa Payload
+          zip -qry ../VortexArena-unsigned.ipa Payload
           cd ..
+          unzip -l VortexArena-unsigned.ipa | tail -20
+          ls -lh VortexArena-unsigned.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: VortexArena-unsigned.ipa
+          name: VortexArena-unsigned
           path: VortexArena-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VortexArena-build-log
+          path: |
+            build/**/*.log
+            build/**/*.xcactivitylog
+          if-no-files-found: ignore
+          retention-days: 7

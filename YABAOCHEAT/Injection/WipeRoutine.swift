@@ -34,7 +34,6 @@ public struct WipeRoutine: Sendable {
         ".ffxc_access_probe",
     ]
 
-<<<<<<< HEAD
     /// Residue the panel or the injected runtime may have dropped in the
     /// container. Unlike `ownedNames` these are optional — they are not always
     /// present — so they never count toward "wiped clean", but every sweep
@@ -47,7 +46,6 @@ public struct WipeRoutine: Sendable {
     ]
     static let residuePrefixes: [String] = [".ffxc"]
     static let residueSubstrings: [String] = ["testCodePatch"]
-
     /// True when `name` is a panel/runtime leftover safe to delete. The staged
     /// patch and config never match this — they are the payload, not residue.
     /// `testCodePatch` is matched as a substring because the runtime names its
@@ -58,9 +56,6 @@ public struct WipeRoutine: Sendable {
         if residuePrefixes.contains(where: { name.hasPrefix($0) }) { return true }
         return residueSubstrings.contains { name.contains($0) }
     }
-
-=======
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
     public enum WipeError: Error, Sendable {
         case containerNotFound
         case fileUnavailable
@@ -108,7 +103,6 @@ public struct WipeRoutine: Sendable {
             log.log(.wipe, "\(strays.count) unrecognised file(s) carry the injector signature")
         }
 
-<<<<<<< HEAD
         // Panel/runtime residue (probe, debug log, engagement marker). Removed
         // on every wipe but never counted toward `filesWiped`: it is optional,
         // so its absence is the normal case.
@@ -128,15 +122,9 @@ public struct WipeRoutine: Sendable {
                 }
             }
         }
-
         let report = Report(removed: Array(removed), retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
         bridge.releaseGrants()
         log.log(.wipe, "wipe finished: \(removed.count) removed, \(residueRemoved) residue, \(retained.count) retained; sandbox grants released")
-=======
-        let report = Report(removed: Array(removed), retained: retained, filesWiped: removed.count == WipeRoutine.ownedNames.count)
-        bridge.releaseGrants()
-        log.log(.wipe, "wipe finished: \(removed.count) removed, \(retained.count) retained; sandbox grants released")
->>>>>>> b0d56334c5649e0874daa34370ceed5e421e6210
         return report
     }
 
