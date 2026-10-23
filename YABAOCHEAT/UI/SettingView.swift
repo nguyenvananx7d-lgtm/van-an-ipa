@@ -52,6 +52,8 @@ struct SettingView: View {
         .onChange(of: menu.controls.antiBan) { newValue in
             if newValue {
                 Task { await inject.runAntiBan() }
+            } else {
+                Task { await inject.stopAntiBanGuard() }
             }
         }
     }
@@ -107,9 +109,20 @@ struct SettingView: View {
                 .buttonStyle(ChipButtonStyle())
                 .disabled(inject.isRunningAntiBan)
             }
-            .padding(.vertical, 11)
-            .padding(.horizontal, Metrics.rowPaddingH)
-            .rowDivider()
+            if inject.isGuardingAntiBan {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.caption)
+                        .foregroundStyle(Palette.good)
+                    Text("anti_ban_live_guard")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.textDim)
+                    Spacer(minLength: 8)
+                }
+                .padding(.vertical, 11)
+                .padding(.horizontal, Metrics.rowPaddingH)
+                .rowDivider()
+            }
         }
     }
     private var lastAntiBanText: String {

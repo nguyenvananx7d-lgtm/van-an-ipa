@@ -49,6 +49,8 @@ public final class InjectStore: ObservableObject {
     @Published public var antiBanReport: AntiBanRoutine.SweepResult?
     /// A sweep is in flight (drives the spinner in the Setting tab).
     @Published public var isRunningAntiBan: Bool = false
+    /// The in-play guard is active (re-stamps + residue removal on a timer).
+    @Published public var isGuardingAntiBan: Bool = false
     /// Cooldown backing the foreground re-probe so returning to the app a few
     /// times in a row does not spam the log with identical probe verdicts.
     private var lastForegroundRecheck = Date.distantPast
@@ -332,6 +334,8 @@ public final class InjectStore: ObservableObject {
                 isRunningAntiBan = true
                 await installer.restageConfig(game: game, controls: menu.controls)
                 antiBanReport = await antiBan.run(game: game)
+                await antiBan.beginGuard(game: game)
+                isGuardingAntiBan = true
                 isRunningAntiBan = false
             }
             status = "Injected"
@@ -350,6 +354,7 @@ public final class InjectStore: ObservableObject {
     // MARK: - teardown
 
     public func uninject() async {
+        await stopAntiBanGuard()
         do {
             try await installer.uninject(game: game)
             isActive = false
@@ -366,6 +371,7 @@ public final class InjectStore: ObservableObject {
     /// staged patch and config exactly where they are, so aim / ESP keep
     /// working on the next launch. Never throws — it only detaches state.
     public func keepFeatures() async {
+        await stopAntiBanGuard()
         await installer.keepFeatures(game: game)
         isActive = false
         lastInstall = nil
@@ -373,6 +379,7 @@ public final class InjectStore: ObservableObject {
         set(.ready, "Removed — aim & ESP kept")
     }
     public func wipe() {
+        Task { await stopAntiBanGuard() }
         do {
             let report = try wiper.wipe(game: game)
             wipeReport = report
@@ -399,11 +406,24 @@ public final class InjectStore: ObservableObject {
         await installer.restageConfig(game: game, controls: menu.controls)
         let sweep = await antiBan.run(game: game)
         antiBanReport = sweep
+        if isActive && menu.controls.antiBan {
+            // Keep the guard running for the rest of the session, not just
+            // until the next manual sweep.
+            await antiBan.beginGuard(game: game)
+            isGuardingAntiBan = true
+        }
         isRunningAntiBan = false
         status = sweep.removed.isEmpty && sweep.masked.isEmpty && sweep.flagged.isEmpty
             ? "Anti-ban sweep done — clean"
             : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.masked.count) masked, \(sweep.flagged.count) flagged"
     }
+    /// Stop the in-play guard. Called when the switch goes off or the session
+    /// is torn down; safe to call when no guard is running.
+    public func stopAntiBanGuard() async {
+        await antiBan.endGuard()
+        isGuardingAntiBan = false
+    }
+
     public func launch() {
         do {
             try launcher.launch(game: game)

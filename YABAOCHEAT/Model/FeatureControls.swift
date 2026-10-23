@@ -134,6 +134,26 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var rainbow: Bool
     public var allRainbow: Bool
     public var resetAllColors: Bool
+    // MARK: panel - extra ESP / aim tuning
+    /// Furthest enemy drawn by the ESP, in metres. Key `EspMaxDistance`.
+    public var espMaxDistance: Int
+    /// When off the ESP draws through walls (`IsVisible` filter disabled).
+    public var espVisibleOnly: Bool
+    /// Filled box behind the corner frame. Key `EspBoxFill`.
+    public var espBoxFill: Bool
+    public var espBoxFillAlpha: Double
+    /// Marker over the head. Key `EspHeadDot`.
+    public var espHeadDot: Bool
+    /// Keep drawing knocked enemies. Key `EspShowDowned`.
+    public var espShowDowned: Bool
+    /// Multiplier for the ESP text size. Key `EspTextScale`.
+    public var espTextScale: Double
+    /// Vertical aim offset (0.8 = chest, ~1.5 = head). Key `AimHeight`.
+    public var aimHeight: Double
+    /// Aim smoothing factor, lower is snappier. Key `AimSmooth`.
+    public var aimSmooth: Double
+    /// Aim only at enemies the game marks visible. Key `AimVisibleOnly`.
+    public var aimVisibleOnly: Bool
     /// Every switch starts OFF: the profile ships with nothing enabled and the
     /// player opts into each feature. Value controls (sliders, bone) keep
     /// sensible non-zero defaults so the moment a switch is turned on it does
@@ -195,7 +215,17 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         espPalette: String = "default",
         rainbow: Bool = false,
         allRainbow: Bool = false,
-        resetAllColors: Bool = false
+        resetAllColors: Bool = false,
+        espMaxDistance: Int = 250,
+        espVisibleOnly: Bool = true,
+        espBoxFill: Bool = false,
+        espBoxFillAlpha: Double = 0.18,
+        espHeadDot: Bool = false,
+        espShowDowned: Bool = true,
+        espTextScale: Double = 1.0,
+        aimHeight: Double = 0.8,
+        aimSmooth: Double = 0.18,
+        aimVisibleOnly: Bool = true
     ) {
         self.isEnabled = isEnabled
         self.aimEnabled = aimEnabled
@@ -254,6 +284,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.rainbow = rainbow
         self.allRainbow = allRainbow
         self.resetAllColors = resetAllColors
+        self.espMaxDistance = espMaxDistance
+        self.espVisibleOnly = espVisibleOnly
+        self.espBoxFill = espBoxFill
+        self.espBoxFillAlpha = espBoxFillAlpha
+        self.espHeadDot = espHeadDot
+        self.espShowDowned = espShowDowned
+        self.espTextScale = espTextScale
+        self.aimHeight = aimHeight
+        self.aimSmooth = aimSmooth
+        self.aimVisibleOnly = aimVisibleOnly
     }
 
     // MARK: - persistence
@@ -294,7 +334,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              noRecoil, ghostMode, speedHack, camXa, camXaFloat, buffDamage, fastParachute,
              esp360Arrows, lineTarget, silentAimTarget, sniperScope,
              fovColor, lineTracerColor, box2dColor, skeletonColor, espPalette,
-             rainbow, allRainbow, resetAllColors
+             rainbow, allRainbow, resetAllColors,
+             espMaxDistance, espVisibleOnly, espBoxFill, espBoxFillAlpha,
+             espHeadDot, espShowDowned, espTextScale, aimHeight, aimSmooth,
+             aimVisibleOnly
     }
 
     /// Profiles written by an older build decode field by field rather than
@@ -365,6 +408,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         rainbow           = try c.decodeIfPresent(Bool.self, forKey: .rainbow) ?? d.rainbow
         allRainbow        = try c.decodeIfPresent(Bool.self, forKey: .allRainbow) ?? d.allRainbow
         resetAllColors    = try c.decodeIfPresent(Bool.self, forKey: .resetAllColors) ?? d.resetAllColors
+        espMaxDistance    = try c.decodeIfPresent(Int.self, forKey: .espMaxDistance) ?? d.espMaxDistance
+        espVisibleOnly    = try c.decodeIfPresent(Bool.self, forKey: .espVisibleOnly) ?? d.espVisibleOnly
+        espBoxFill        = try c.decodeIfPresent(Bool.self, forKey: .espBoxFill) ?? d.espBoxFill
+        espBoxFillAlpha   = try c.decodeIfPresent(Double.self, forKey: .espBoxFillAlpha) ?? d.espBoxFillAlpha
+        espHeadDot        = try c.decodeIfPresent(Bool.self, forKey: .espHeadDot) ?? d.espHeadDot
+        espShowDowned     = try c.decodeIfPresent(Bool.self, forKey: .espShowDowned) ?? d.espShowDowned
+        espTextScale      = try c.decodeIfPresent(Double.self, forKey: .espTextScale) ?? d.espTextScale
+        aimHeight         = try c.decodeIfPresent(Double.self, forKey: .aimHeight) ?? d.aimHeight
+        aimSmooth         = try c.decodeIfPresent(Double.self, forKey: .aimSmooth) ?? d.aimSmooth
+        aimVisibleOnly    = try c.decodeIfPresent(Bool.self, forKey: .aimVisibleOnly) ?? d.aimVisibleOnly
     }
 
     // MARK: - payload setters
@@ -440,6 +493,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "rainbow": rainbow,
             "allRainbow": allRainbow,
             "resetAllColors": resetAllColors,
+            "espMaxDistance": espMaxDistance,
+            "espVisibleOnly": espVisibleOnly,
+            "espBoxFill": espBoxFill,
+            "espBoxFillAlpha": espBoxFillAlpha,
+            "espHeadDot": espHeadDot,
+            "espShowDowned": espShowDowned,
+            "espTextScale": espTextScale,
+            "aimHeight": aimHeight,
+            "aimSmooth": aimSmooth,
+            "aimVisibleOnly": aimVisibleOnly,
         ]
     }
 
@@ -550,6 +613,20 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "Rainbow":          rainbow,
             "AllRainbow":       allRainbow,
             "ResetAllColors":   resetAllColors,
+            // extra ESP / aim tuning (read by the rebuilt patch)
+            "EspMaxDistance":   espMaxDistance,
+            "EspVisibleOnly":   espVisibleOnly,
+            "EspBoxFill":       espBoxFill,
+            "EspBoxFillAlpha":  espBoxFillAlpha,
+            "EspHeadDot":       espHeadDot,
+            "EspShowDowned":    espShowDowned,
+            "IgnoreKnocked":    ignoreKnocked,
+            "EspTextScale":     espTextScale,
+            "AimHeight":        aimHeight,
+            "AimSmooth":        aimSmooth,
+            "AimMaxDistance":   aimDistance,
+            "AimDistance":      aimDistance,
+            "AimVisibleOnly":   aimVisibleOnly,
         ]
     }
     /// The runtime reads `AimTarget` as an ordinal, not a word. Recovered from

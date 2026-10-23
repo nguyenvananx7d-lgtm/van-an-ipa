@@ -100,6 +100,63 @@ public actor AntiBanRoutine {
         return conceal(in: data, game: game).masked
     }
 
+    // MARK: - live guard
+
+    /// Keeps the on-disk posture steady *while* the game runs.
+    ///
+    /// A one-shot sweep only proves the container was clean at inject time.
+    /// During a session the injected runtime rewrites `localConfig.json` on
+    /// every panel change, appends to its debug log and drops its engagement
+    /// marker on launch, so the files a "written after install" scan looks for
+    /// go fresh again within seconds of play. The guard closes that gap:
+    ///
+    /// - every `tick` seconds: flush the page cache, delete residue and
+    ///   re-stamp the staged patch + config to the container baseline;
+    /// - every `fullEvery` ticks: the complete sweep, signature walk included.
+    ///
+    /// Only one guard runs at a time; `endGuard()` fires on teardown and when
+    /// the switch is turned off.
+    private var guardTask: Task<Void, Never>?
+
+    public var isGuarding: Bool { guardTask != nil }
+
+    public func beginGuard(game: Game, tick: TimeInterval = 20, fullEvery: Int = 15) {
+        guard guardTask == nil else { return }
+        let interval = max(5, tick)
+        let every = max(1, fullEvery)
+        log.log(.antiBan, "live guard on for \(game.rawValue): stamp every \(Int(interval))s, full sweep every \(every * Int(interval))s")
+        guardTask = Task { [weak self] in
+            var round = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                guard let self, !Task.isCancelled else { return }
+                round += 1
+                if round % every == 0 {
+                    _ = await self.run(game: game)
+                } else {
+                    self.maskPass(game: game)
+                }
+            }
+        }
+    }
+
+    public func endGuard() {
+        guard guardTask != nil else { return }
+        guardTask?.cancel()
+        guardTask = nil
+        log.log(.antiBan, "live guard stopped")
+    }
+
+    /// Light pass: flush, drop residue, re-stamp. No signature walk.
+    private func maskPass(game: Game) {
+        guard case .resolved(let data) = bridge.resolve(game: game) else { return }
+        krw.flushAll()
+        _ = removeResidue(in: data, game: game)
+        let masked = conceal(in: data, game: game).masked
+        if !masked.isEmpty {
+            log.log(.antiBan, "live guard re-stamped \(masked.count) file(s)")
+        }
+    }
     // MARK: - residue
 
     /// Delete the panel's own leftovers (probe, runtime debug log, engagement

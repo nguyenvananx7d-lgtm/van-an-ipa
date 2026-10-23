@@ -171,3 +171,18 @@
 "retry_exploit" = "Run again";
 "exploit_needs_sandbox" = "Required on this iOS — unlocks the sandbox so the game container can be scanned";
 "exploit_optional_hint" = "Optional on this iOS — injection works via the MCM token without it";
+
+/* ESP advanced + aim tuning */
+"section_esp_advanced" = "ESP advanced";
+"esp_visible_only" = "Only visible enemies";
+"esp_show_downed" = "Show knocked enemies";
+"esp_head_dot" = "Head marker";
+"esp_box_fill" = "Filled box";
+"esp_box_fill_alpha" = "Fill opacity";
+"esp_max_distance" = "Max ESP distance";
+"esp_text_scale" = "Text size";
+"aim_visible_only" = "Only visible targets";
+"aim_distance" = "Max aim distance";
+"aim_height" = "Aim height";
+"aim_smooth" = "Aim smoothing";
+"anti_ban_live_guard" = "Live guard - masking while you play";

@@ -57,6 +57,35 @@ struct VisualView: View {
                     showRange: true
                 )
             }
+            SectionGroup(title: String(localized: "section_esp_advanced"), symbol: "square.stack.3d.up") {
+                ToggleRow(label: String(localized: "esp_visible_only"), isOn: menu.feature(\.espVisibleOnly))
+                ToggleRow(label: String(localized: "esp_show_downed"), isOn: menu.feature(\.espShowDowned))
+                ToggleRow(label: String(localized: "esp_head_dot"), isOn: menu.feature(\.espHeadDot))
+                ToggleRow(label: String(localized: "esp_box_fill"), isOn: menu.feature(\.espBoxFill))
+                SliderRow(
+                    label: String(localized: "esp_max_distance"),
+                    value: menu.feature(\.espMaxDistance),
+                    range: 20...500,
+                    unit: "m",
+                    showRange: true
+                )
+                if menu.controls.espBoxFill {
+                    SliderRow(
+                        label: String(localized: "esp_box_fill_alpha"),
+                        value: menu.feature(\.espBoxFillAlpha),
+                        range: 0.05...0.9,
+                        step: 0.01,
+                        showRange: true
+                    )
+                }
+                SliderRow(
+                    label: String(localized: "esp_text_scale"),
+                    value: menu.feature(\.espTextScale),
+                    range: 0.5...1.6,
+                    step: 0.05,
+                    showRange: true
+                )
+            }
             SectionGroup(title: String(localized: "section_color"), symbol: "paintpalette") {
                 ToggleRow(label: String(localized: "fov_color"), isOn: menu.feature(\.fovColor))
                 ToggleRow(label: String(localized: "line_tracer_color"), isOn: menu.feature(\.lineTracerColor))

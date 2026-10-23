@@ -70,6 +70,28 @@ struct AimbotView: View {
                     range: 0...360,
                     showRange: true
                 )
+                ToggleRow(label: String(localized: "aim_visible_only"), isOn: menu.feature(\.aimVisibleOnly))
+                SliderRow(
+                    label: String(localized: "aim_distance"),
+                    value: menu.feature(\.aimDistance),
+                    range: 20...400,
+                    unit: "m",
+                    showRange: true
+                )
+                SliderRow(
+                    label: String(localized: "aim_height"),
+                    value: menu.feature(\.aimHeight),
+                    range: 0.3...1.9,
+                    step: 0.05,
+                    showRange: true
+                )
+                SliderRow(
+                    label: String(localized: "aim_smooth"),
+                    value: menu.feature(\.aimSmooth),
+                    range: 0.02...1.0,
+                    step: 0.02,
+                    showRange: true
+                )
             }
         }
     }
