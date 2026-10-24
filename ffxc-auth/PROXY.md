@@ -72,7 +72,7 @@ If a page or the game refuses to connect after this, that is a certificate-pin
 failure and it is the one thing that kills this approach for a given host — the
 capture shows it as an upstream error, not as silence.
 
-## Workflow: capture first, rewrite second
+## Workflow: capture, then one click
 
 The game's anti-cheat endpoints and the shape of `check_info` live in native
 code; the C# dump exposes the *reasons* it reports (`HackerPoolCdt`: `MD5_*`,
@@ -80,11 +80,22 @@ code; the C# dump exposes the *reasons* it reports (`HackerPoolCdt`: `MD5_*`,
 — verified by scanning all 1.15M dump lines. So:
 
 1. Run with no rules (`data/rules.json` absent). Play one match.
-2. `curl http://<relay>:8080/captures?limit=500` (or open it in a browser).
-   Look for hosts that carry `check_info`, `gin`, `md5`, `anti`.
-3. Write rules for exactly those requests, and only for those.
+2. Open the dashboard (`http://<relay>:8080/`). It reads the capture, scores
+   every host+path on path and body evidence, and lists candidates with the
+   rule it would apply already filled in — report-shaped JSON fields
+   (`check_info`, `md5`, …) pre-set to their neutral value.
+3. Press **Apply**. The rule goes live immediately: the relay reads its rule
+   list per request, so there is no restart and the current tunnel survives.
 
-### Rules file
+Nothing is applied silently: every capture line records `applied: [...]`, and
+`/rules` returns the live set. `POST /rules` with a JSON array replaces it; the
+file is rewritten at the same time, so a restart keeps the rules.
+
+If the dashboard shows nothing, the session did not reach a report channel —
+usually the tunnel was not up, or the profile's certificate was installed but
+not trusted.
+
+### Rules file (what the dashboard writes)
 
 ```json
 [

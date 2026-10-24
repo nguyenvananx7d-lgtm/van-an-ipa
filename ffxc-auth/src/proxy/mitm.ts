@@ -62,7 +62,9 @@ export interface RelayConfig {
 }
 
 export interface RelayHandle {
-  port: number;
+  readonly port: number;
+  /** Replace the active rules without dropping connections. */
+  setRules: (next: Rule[]) => void;
   close: () => Promise<void>;
 }
 
@@ -330,6 +332,13 @@ export function createRelay(config: RelayConfig): RelayHandle {
     get port(): number {
       const address = proxy.address();
       return typeof address === "object" && address ? address.port : config.port;
+    },
+    // Rules are read per request from this array, so replacing its contents is a
+    // live update: no restart, no dropped tunnel, no lost match.
+    setRules: (next: Rule[]) => {
+      rules.length = 0;
+      rules.push(...next);
+      log(`relay: rules updated (${rules.length} active)`);
     },
     close: () =>
       new Promise<void>((resolve) => {

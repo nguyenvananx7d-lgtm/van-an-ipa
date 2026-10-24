@@ -4,6 +4,7 @@
   "private": true,
   "description": "Licensing/web-auth backend for the Vortex Arena (YABAOCHEAT) client.",
   "type": "module",
+  "packageManager": "pnpm@11.28.5",
   "engines": {
     "node": ">=20.6.0"
   },
