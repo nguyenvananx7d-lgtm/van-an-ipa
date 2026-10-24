@@ -103,6 +103,28 @@ public final class MenuStore: ObservableObject {
         set { configurations[selectedGame] = newValue; newValue.save(for: selectedGame) }
     }
 
+    /// One-tap conservative profile for a session that has to survive scrutiny:
+    /// aim assist off entirely (it is the part the server can score from the
+    /// match record), visual ESP kept but pulled in to 150 m, anti-ban sweep and
+    /// consume-once staging forced on.
+    ///
+    /// Written as a single assignment so the profile persists once and the panel
+    /// updates atomically instead of flickering through intermediate states.
+    public func applySafeProfile() {
+        var c = controls
+        c.isEnabled = false          // Legit aim / AimSystemEnabled
+        c.aimEnabled = false         // AimEnabled
+        c.silentAim = false          // SilentAim
+        c.headshotValue = false
+        c.drawFov = false
+        c.masterEsp = true
+        c.espVisibleOnly = true
+        c.espMaxDistance = min(c.espMaxDistance, 150)
+        c.antiBan = true
+        c.consumePayload = true
+        controls = c
+    }
+
     public func binding(for descriptor: ControlDescriptor) -> Binding<Double> {
         Binding(
             get: { self.value(of: descriptor) },

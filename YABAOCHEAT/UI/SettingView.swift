@@ -13,6 +13,9 @@ struct SettingView: View {
     @State private var showLog: Bool = false
     @State private var copied: Bool = false
 
+    /// Relay host as typed by the user (`host`, `host:port` or a full URL).
+    @AppStorage("relay.host") private var relayHost: String = ""
+
     /// Swap for the real invite when the server side settles.
     private let supportURL = "https://discord.gg/hcx7aP4XSp"
 
@@ -22,6 +25,7 @@ struct SettingView: View {
         VStack(alignment: .leading, spacing: Metrics.stack) {
             exploit
             antiBanSection
+            relaySection
             NetworkShieldSection()
             licenseInfo
             compatibility
@@ -95,6 +99,22 @@ struct SettingView: View {
                 isOn: menu.feature(\.consumePayload)
             )
             HStack(spacing: 10) {
+                Text(String(localized: "safe_profile_caption"))
+                    .font(.footnote)
+                    .foregroundStyle(Palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button {
+                    menu.applySafeProfile()
+                } label: {
+                    Text(String(localized: "safe_profile"))
+                }
+                .buttonStyle(ChipButtonStyle())
+            }
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .padding(.vertical, 11)
+            .rowDivider()
+            HStack(spacing: 10) {
                 if inject.isRunningAntiBan {
                     ProgressView()
                         .tint(Palette.accent)
@@ -131,6 +151,73 @@ struct SettingView: View {
             }
         }
     }
+    // MARK: - relay
+
+    /// One-tap install for the TLS relay profile.
+    ///
+    /// The relay (`ffxc-auth/src/proxy`) is the model that leaves the game binary
+    /// alone: the device trusts one certificate, its traffic goes through the
+    /// relay, and the anti-cheat report is edited in transit instead of the
+    /// client being patched. Everything is a link and a field here — the only
+    /// step an app is not allowed to do for the user is the certificate trust
+    /// toggle, so the note says exactly where it lives.
+    private var relayProfileURL: URL? {
+        let trimmed = relayHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let base = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        return URL(string: base.hasSuffix("/") ? base + "profile.mobileconfig" : base + "/profile.mobileconfig")
+    }
+
+    private var relaySection: some View {
+        SectionGroup(title: String(localized: "section_relay"), symbol: "network") {
+            HStack(spacing: 10) {
+                TextField(String(localized: "relay_host_placeholder"), text: $relayHost)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .font(.system(.body, design: .monospaced))
+                if !relayHost.isEmpty {
+                    Button {
+                        relayHost = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Palette.textFaint)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 11)
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .rowDivider()
+
+            HStack(spacing: 10) {
+                Text(String(localized: "relay_install_caption"))
+                    .font(.footnote)
+                    .foregroundStyle(Palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button {
+                    if let url = relayProfileURL { UIApplication.shared.open(url) }
+                } label: {
+                    Text(String(localized: "relay_install"))
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(relayProfileURL == nil)
+            }
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .padding(.vertical, 11)
+            .rowDivider()
+
+            Text(String(localized: "relay_trust_note"))
+                .font(.caption)
+                .foregroundStyle(Palette.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Metrics.rowPaddingH)
+                .padding(.vertical, 11)
+                .rowDivider()
+        }
+    }
+
     private var lastAntiBanText: String {
         guard let report = inject.antiBanReport else {
             return String(localized: "anti_ban_idle")
