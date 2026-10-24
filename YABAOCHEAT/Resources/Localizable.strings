@@ -284,3 +284,11 @@
 "relay_install" = "Install";
 "relay_install_caption" = "Install the relay profile, then enable trust for its certificate.";
 "relay_trust_note" = "Settings → General → About → Certificate Trust Settings → enable full trust. iOS does not let an app flip that switch; without it the relay cannot read any traffic.";
+
+/* Relay check */
+"relay_check" = "Check";
+"relay_checking" = "Checking relay…";
+"relay_check_caption" = "Verify that traffic is reaching the relay.";
+"relay_probe_ok" = "Relay OK — %d capture(s)";
+"relay_probe_http" = "Relay answered HTTP %d";
+"relay_probe_fail" = "Relay unreachable: %@";

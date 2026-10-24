@@ -15,6 +15,8 @@ struct SettingView: View {
 
     /// Relay host as typed by the user (`host`, `host:port` or a full URL).
     @AppStorage("relay.host") private var relayHost: String = ""
+    /// Last probe result, shown under the Check button.
+    @State private var relayProbe: String = ""
 
     /// Swap for the real invite when the server side settles.
     private let supportURL = "https://discord.gg/hcx7aP4XSp"
@@ -161,11 +163,48 @@ struct SettingView: View {
     /// client being patched. Everything is a link and a field here — the only
     /// step an app is not allowed to do for the user is the certificate trust
     /// toggle, so the note says exactly where it lives.
-    private var relayProfileURL: URL? {
+    /// Builds a relay URL from whatever the user typed: `host`, `host:port`,
+    /// `https://host`, or `https://host/relay` when Caddy fronts the relay.
+    private func relayURL(_ suffix: String) -> URL? {
         let trimmed = relayHost.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let base = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-        return URL(string: base.hasSuffix("/") ? base + "profile.mobileconfig" : base + "/profile.mobileconfig")
+        let normalized = base.hasSuffix("/") ? String(base.dropLast()) : base
+        return URL(string: normalized + "/" + suffix)
+    }
+
+    private var relayProfileURL: URL? { relayURL("profile.mobileconfig") }
+
+    /// One round of truth from the relay: it answers with the capture count, so
+    /// "did my traffic reach it?" is a button instead of a guess.
+    private func probeRelay() {
+        guard let url = relayURL("captures?limit=1") else { return }
+        relayProbe = String(localized: "relay_checking")
+        Task {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 8
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let count = object?["count"] as? Int
+                await MainActor.run {
+                    if code == 200, let count {
+                        relayProbe = String(format: String(localized: "relay_probe_ok"), count)
+                    } else {
+                        relayProbe = String(format: String(localized: "relay_probe_http"), code)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    relayProbe = String(
+                        format: String(localized: "relay_probe_fail"),
+                        error.localizedDescription
+                    )
+                }
+            }
+        }
     }
 
     private var relaySection: some View {
@@ -215,6 +254,24 @@ struct SettingView: View {
                 .padding(.horizontal, Metrics.rowPaddingH)
                 .padding(.vertical, 11)
                 .rowDivider()
+
+            HStack(spacing: 10) {
+                Text(relayProbe.isEmpty ? String(localized: "relay_check_caption") : relayProbe)
+                    .font(.footnote)
+                    .foregroundStyle(relayProbe.isEmpty ? Palette.textDim : Palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button {
+                    probeRelay()
+                } label: {
+                    Text(String(localized: "relay_check"))
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(relayURL("captures?limit=1") == nil)
+            }
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .padding(.vertical, 11)
+            .rowDivider()
         }
     }
 

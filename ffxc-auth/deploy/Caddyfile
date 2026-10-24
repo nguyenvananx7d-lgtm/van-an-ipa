@@ -7,6 +7,13 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# The relay's admin surface: profile download and capture dashboard. The
+	# proxy port (1299) is TLS passthrough territory and must never go through
+	# Caddy — terminate it and the device's CONNECT tunnels die.
+	handle_path /relay/* {
+		reverse_proxy relay:8080
+	}
+
 	@app path / /api /admin* /health
 	handle @app {
 		reverse_proxy auth:8787
