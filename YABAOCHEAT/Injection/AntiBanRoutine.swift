@@ -224,6 +224,64 @@ public actor AntiBanRoutine {
         return result.masked
     }
 
+    // MARK: - consume after load
+
+    /// True once this session's staged payload has been deliberately removed
+    /// from the container after launch. While set, the repair pass stays out of
+    /// the way: the absence is the point, not damage.
+    private var payloadConsumed = false
+
+    /// Called at the front of an inject, before the fresh payload is staged, so
+    /// a session that ended with a consumed payload heals normally next time.
+    public func prepareForSession() {
+        payloadConsumed = false
+    }
+
+    /// Remove the staged patch and config once the target has read them.
+    ///
+    /// When the panel is injected with every feature switched off and the
+    /// account is still banned, the assist is not what is being scored: the
+    /// evidence is the payload itself. A 97 KB IFix blob plus a JSON document
+    /// with `AimHumanize` / `SilentAim` keys, sitting in the game's own
+    /// Documents, is something the game can enumerate and never wrote. IFix
+    /// reads the patch at process start and the runtime reads the config on its
+    /// first bootstrap, so after that the files carry no function — only risk.
+    ///
+    /// The next inject re-stages both from the bundle, so a consumed session is
+    /// still a normal session; a *direct* launch of the game after this finds no
+    /// patch (see the `consume_payload` toggle).
+    @discardableResult
+    public func consumePayload(game: Game) -> [String] {
+        guard case .resolved(let data) = bridge.resolve(game: game) else {
+            log.log(.antiBan, "consume for \(game.rawValue): container not resolved — skipped")
+            return []
+        }
+        let fm = FileManager.default
+        krw.flushAll()
+        let baseline = baselineDate(in: data)
+        var removed: [String] = []
+        var touched: [String] = []
+        for url in bridge.patchURLs(in: data, game: game) + bridge.configURLs(in: data, game: game) {
+            guard fm.fileExists(atPath: url.path) else { continue }
+            do {
+                try fm.removeItem(at: url)
+                removed.append(url.lastPathComponent)
+                touched.append(url.deletingLastPathComponent().path)
+            } catch {
+                log.log(.antiBan, "consume: could not remove \(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        if !removed.isEmpty {
+            payloadConsumed = true
+            // The removals moved every parent directory's mtime; put them back
+            // and forge the ctime so the delete leaves no timestamp behind.
+            _ = restoreDirectories(touched, upTo: data, baseline: baseline)
+            _ = forgeKernelTimestamps(game: game, data: data, baseline: baseline)
+            log.log(.antiBan, "consumed staged payload after launch: \(removed.count) file(s) removed")
+        }
+        return removed
+    }
+
     // MARK: - live guard
 
     /// Keeps the on-disk posture steady *while* the game runs.
@@ -384,6 +442,10 @@ public actor AntiBanRoutine {
     /// events, and it refuses anything that does not match the bundle pin, so a
     /// tampered bundle cannot use this path to plant bytes.
     private func restorePayload(in data: URL, game: Game) -> [String] {
+        // A consumed session removed the payload on purpose. Re-staging it here
+        // would undo the whole point and hand the scanner the file again, so the
+        // repair only runs for a session that was not consumed.
+        guard !payloadConsumed else { return [] }
         guard let bundled = try? PatchPayload.bundled() else { return [] }
         guard bundled.data.count == PatchPayload.expectedLength else {
             log.log(.antiBan, "bundled payload length does not match the pin — not re-staging")

@@ -345,6 +345,7 @@ public final class InjectStore: ObservableObject {
                 // container open.
                 isRunningAntiBan = true
                 await installer.restageConfig(game: game, controls: menu.controls)
+                await antiBan.prepareForSession()
                 antiBanReport = await antiBan.run(game: game)
                 await antiBan.beginGuard(game: game)
                 isGuardingAntiBan = true
@@ -354,6 +355,9 @@ public final class InjectStore: ObservableObject {
 
             try? launcher.launch(game: game)
             probe.schedule(game: game, patchDigest: payload.sha256)
+            if menu.controls.antiBan && menu.controls.consumePayload {
+                schedulePayloadConsume(game: game)
+            }
         } catch let error as RuntimeInstaller.InstallError {
             isActive = false
             set(fallbackState(for: error), error.localizedDescription)
@@ -436,6 +440,34 @@ public final class InjectStore: ObservableObject {
     public func stopAntiBanGuard() async {
         await antiBan.endGuard()
         isGuardingAntiBan = false
+    }
+
+    /// Remove the staged payload from the game container once the target has
+    /// had time to read it.
+    ///
+    /// This is the answer to "it bans even with every feature off". When
+    /// nothing is enabled the assist cannot be what is scored, so the evidence
+    /// is the payload's existence: a 97 KB blob and a JSON document in the
+    /// game's own Documents that the game never wrote. IFix reads the patch at
+    /// process start and the runtime reads the config on its first bootstrap,
+    /// so after that the files are only evidence. They are re-staged on the next
+    /// inject.
+    ///
+    /// The delay is the safety margin: too early and a slow cold start reads
+    /// nothing (no ESP for the match), too late and a scan can still see them.
+    private func schedulePayloadConsume(game: Game) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
+            guard let self else { return }
+            guard self.launcher.runningDescription(for: game) != nil else {
+                self.status = "Payload kept: target did not come up"
+                return
+            }
+            let removed = await self.antiBan.consumePayload(game: game)
+            if !removed.isEmpty {
+                self.status = "Injected — payload consumed (\(removed.count) file(s))"
+            }
+        }
     }
 
     public func launch() {

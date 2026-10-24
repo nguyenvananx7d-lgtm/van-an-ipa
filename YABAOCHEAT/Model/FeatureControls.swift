@@ -54,6 +54,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var drawFov: Bool
     public var ignoreKnocked: Bool
     public var antiBan: Bool
+    /// Remove the staged patch and config from the game container once the
+    /// target has read them. App-side only — the runtime never sees this key.
+    /// Worth leaving on when a ban arrives with every feature switched off: at
+    /// that point the payload's existence is the evidence, not the assist.
+    public var consumePayload: Bool
 
     // MARK: weapon
 
@@ -189,6 +194,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         drawFov: Bool = true,
         ignoreKnocked: Bool = true,
         antiBan: Bool = true,
+        consumePayload: Bool = true,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
@@ -259,6 +265,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.drawFov = drawFov
         self.ignoreKnocked = ignoreKnocked
         self.antiBan = antiBan
+        self.consumePayload = consumePayload
         self.fastReloadPercent = fastReloadPercent
         self.fastFireLevel = fastFireLevel
         self.espColor = espColor
@@ -342,7 +349,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         case isEnabled, aimEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
              headshotValue, headshotPolicy, aimTarget, aimFovMode,
              aimbotType, silentAim, headRate, bodyRate, hitChance, aimDistance, drawFov,
-             ignoreKnocked, antiBan,
+             ignoreKnocked, antiBan, consumePayload,
              fastReloadPercent, fastFireLevel,
              espColor, espThickness, espBoxScalePercent, espBoxOffsetY,
              masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
@@ -383,6 +390,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         drawFov           = try c.decodeIfPresent(Bool.self, forKey: .drawFov) ?? d.drawFov
         ignoreKnocked     = try c.decodeIfPresent(Bool.self, forKey: .ignoreKnocked) ?? d.ignoreKnocked
         antiBan           = try c.decodeIfPresent(Bool.self, forKey: .antiBan) ?? d.antiBan
+        consumePayload    = try c.decodeIfPresent(Bool.self, forKey: .consumePayload) ?? d.consumePayload
 
         fastReloadPercent = try c.decodeIfPresent(Int.self, forKey: .fastReloadPercent) ?? d.fastReloadPercent
         fastFireLevel     = try c.decodeIfPresent(Int.self, forKey: .fastFireLevel) ?? d.fastFireLevel

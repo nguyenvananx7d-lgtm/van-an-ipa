@@ -89,6 +89,11 @@ struct SettingView: View {
                 detail: String(localized: "anti_ban_caption"),
                 isOn: menu.feature(\.antiBan)
             )
+            ToggleRow(
+                label: String(localized: "consume_payload"),
+                detail: String(localized: "consume_payload_caption"),
+                isOn: menu.feature(\.consumePayload)
+            )
             HStack(spacing: 10) {
                 if inject.isRunningAntiBan {
                     ProgressView()

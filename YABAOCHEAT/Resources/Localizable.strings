@@ -269,3 +269,7 @@
 "aim_reaction" = "Reaction delay";
 "aim_lead" = "Target lead";
 "aim_ban_note" = "Aim bans are statistical, not forensic. The server scores head rate, time-on-target and lock length from the match record, so these defaults are deliberately body-first with short locks and a slow reaction. Raising them is a ban-risk trade, not a free upgrade.";
+
+/* Consume-once staging */
+"consume_payload" = "Consume payload";
+"consume_payload_caption" = "After launch, delete the staged patch and config from the game container once the target has read them. The next inject stages them again; a direct launch of the game afterwards has no ESP.";
