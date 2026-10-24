@@ -64,6 +64,7 @@ ffxc-auth/                        separate licence server — not part of the IP
 ## Notes
 
 - `YABAOCHEAT/Resources/Assembly-CSharp-patch.bytes` is the payload staged into the game container. Its length and SHA-256 are pinned in `PatchPayload.swift`; change the blob and update both constants or injection refuses with `integrityMismatch`.
+- Anti-ban covers six channels, in this order: payload repair, residue removal, origin normalisation (provenance xattrs + POSIX mode), file/directory timestamps, kernel `ctime` forge, and content scrub. Attribute, mode and timestamp writes all bump `ctime`, so they must run before the forge — a VFS metadata write after it would undo it. `stripProvenance` and `mirrorMode` fail soft: a container that refuses `removexattr`/`chmod` just keeps the attribute.
 - `ESPDESGIN/` and `ffxc-auth/` are not referenced by `project.yml` and are not bundled.
 - Bundle id `com.apple.mobile.MobileHouseArrest` and display name `Vortex Arena` live in `YABAOCHEAT/Info.plist` and `project.yml`.
 - The network shield installs a system-wide DNS-over-HTTPS configuration profile through Safari; it needs no Network Extension entitlement. It does not create a tunnel — the optional inject gate only checks for an existing `utun`/`ipsec`/`ppp` interface. Usage guide: [NETWORK.md](NETWORK.md).

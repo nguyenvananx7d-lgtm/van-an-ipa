@@ -130,7 +130,10 @@ struct SettingView: View {
         guard let report = inject.antiBanReport else {
             return String(localized: "anti_ban_idle")
         }
-        if report.removed.isEmpty && report.masked.isEmpty && report.flagged.isEmpty {
+        // `isEmpty` covers the directory stamps, kernel ctime forge and content
+        // scrub as well; checking only three fields reported "clean" while the
+        // sweep had in fact done work on the other three channels.
+        if report.isEmpty {
             return String(localized: "anti_ban_clean")
         }
         return String(

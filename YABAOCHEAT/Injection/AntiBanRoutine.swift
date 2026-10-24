@@ -32,12 +32,25 @@ import Darwin
 /// 6. **Process identity.** The panel's kernel-side short name is replaced with
 ///    a system-looking name so a process-table walk does not surface an
 ///    injector next to the game.
+/// 7. **How the file arrived.** iOS writes `com.apple.provenance` (and
+///    sometimes quarantine / metadata attributes) onto files a *different* app
+///    created. Those describe origin, not content, and no timestamp pass hides
+///    them, so they are stripped from the staged payload. The POSIX mode is
+///    mirrored from a file the game itself wrote, so the copy does not stand
+///    out by permission bits alone.
+/// 8. **Payload integrity.** A staged blob that is missing or no longer matches
+///    the pinned digest (game updater replaced the container, another tool
+///    overwrote the name) is repaired from the bundle before anything else, so
+///    a session cannot end up "armed" with no patch while the mismatch itself
+///    is the loudest thing a scanner could find.
 ///
 /// Ordering is not incidental. The page cache is flushed before any delete
 /// (anything flushed after a delete writes the removed bytes straight back).
 /// Userspace stamps run before the kernel forge, because a VFS metadata write
-/// re-stamps `ctime` — only the kernel write may be last. And the signature
-/// walk runs before the forge so its reads cannot bump an already-forged atime.
+/// re-stamps `ctime` — only the kernel write may be last. Attribute and mode
+/// changes run *before* the timestamp stamp for the same reason, and the repair
+/// runs before both because it writes bytes. And the signature walk runs before
+/// the forge so its reads cannot bump an already-forged atime.
 ///
 /// Limits, stated honestly: this cannot defeat server-side telemetry, an
 /// in-memory integrity check inside the game, or a scanner that is running
@@ -144,6 +157,10 @@ public actor AntiBanRoutine {
         let baseline = baselineDate(in: data)
         var flagged: [String] = []
 
+        // Repair first: it writes bytes, and the mask pass that follows is what
+        // stops those bytes from looking fresh.
+        let restored = restorePayload(in: data, game: game)
+
         let residue = removeResidue(in: data)
         flagged.append(contentsOf: residue.failures)
 
@@ -180,7 +197,7 @@ public actor AntiBanRoutine {
         )
         log.log(
             .antiBan,
-            "sweep finished for \(game.rawValue): removed \(result.removed.count), "
+            "sweep finished for \(game.rawValue): restored \(restored.count), removed \(result.removed.count), "
             + "masked \(result.masked.count), dirs \(directories.count), "
             + "ctime \(forged.count), scrubbed \(result.scrubbed.count), flagged \(flagged.count)"
         )
@@ -327,9 +344,18 @@ public actor AntiBanRoutine {
     private func conceal(in data: URL, game: Game, baseline: Date) -> (masked: [String], failures: [String], directories: [String]) {
         var masked: [String] = []
         var directories: Set<String> = []
+        let reference = referenceMode(in: data)
 
         let targets = bridge.patchURLs(in: data, game: game) + bridge.configURLs(in: data, game: game)
         for url in targets where FileManager.default.fileExists(atPath: url.path) {
+            // Origin attributes and permission bits first: both are metadata
+            // writes, and the stamp below has to be the last userspace write on
+            // this inode before the kernel forge.
+            let cleared = stripProvenance(url)
+            let modeChanged = mirrorMode(url, reference)
+            if cleared || modeChanged {
+                log.log(.antiBan, "normalised origin of \(url.lastPathComponent)")
+            }
             if stamp(url, baseline: baseline) {
                 masked.append(url.lastPathComponent)
                 directories.insert(url.deletingLastPathComponent().path)
@@ -345,6 +371,117 @@ public actor AntiBanRoutine {
             log.log(.antiBan, "masked \(masked.count) payload file(s) to baseline \(Self.iso(baseline))")
         }
         return (masked, [], Array(directories))
+    }
+
+    /// Re-stage the pinned payload when a staged copy is missing or replaced.
+    ///
+    /// Two things cause this in the wild: the game's own updater rewrites the
+    /// container, or another tool overwrote the staged name. Either way the
+    /// session would run without the patch while the panel still reports it as
+    /// armed — and a blob that does not match its pin is the single loudest
+    /// artifact in the container. The write is in place (no sibling temp, no
+    /// rename) so the repair adds one modification instead of two directory
+    /// events, and it refuses anything that does not match the bundle pin, so a
+    /// tampered bundle cannot use this path to plant bytes.
+    private func restorePayload(in data: URL, game: Game) -> [String] {
+        guard let bundled = try? PatchPayload.bundled() else { return [] }
+        guard bundled.data.count == PatchPayload.expectedLength else {
+            log.log(.antiBan, "bundled payload length does not match the pin — not re-staging")
+            return []
+        }
+        guard bundled.sha256.caseInsensitiveCompare(PatchPayload.vendorPatchSHA256) == .orderedSame else {
+            log.log(.antiBan, "bundled payload digest does not match the pin — not re-staging")
+            return []
+        }
+        var restored: [String] = []
+        for url in bridge.patchURLs(in: data, game: game) {
+            if let existing = try? Data(contentsOf: url),
+               existing.count == bundled.data.count,
+               PatchPayload.digest(of: existing) == bundled.sha256 {
+                continue
+            }
+            guard QuietWrite.writeInPlace(bundled.data, to: url.path) else {
+                log.log(.antiBan, "re-stage failed for \(url.lastPathComponent)")
+                continue
+            }
+            restored.append(url.lastPathComponent)
+            log.log(.antiBan, "re-staged \(url.lastPathComponent) (\(bundled.data.count) bytes)")
+        }
+        return restored
+    }
+
+    /// The permission bits a file in this container already wears. The MCM
+    /// metadata plist is written by the system when the container is created,
+    /// so it is the closest thing to "the mode this container uses".
+    private func referenceMode(in data: URL) -> mode_t? {
+        let candidates = [
+            data.appendingPathComponent(ContainerBridge.mcmMetadataPlist),
+            data.appendingPathComponent(ContainerBridge.mcmMetadataPlistWithUnderscore),
+        ]
+        for url in candidates {
+            var info = stat()
+            if stat(url.path, &info) == 0 {
+                return info.st_mode & 0o777
+            }
+        }
+        var info = stat()
+        if stat(data.path, &info) == 0 {
+            return info.st_mode & 0o777
+        }
+        return nil
+    }
+
+    /// Bring a staged file's mode in line with the container's own. A payload
+    /// written by this app can carry a different `umask` result than the game's
+    /// files, and `stat` reports that just as plainly as a timestamp.
+    @discardableResult
+    private func mirrorMode(_ url: URL, _ reference: mode_t?) -> Bool {
+        guard let reference else { return false }
+        var info = stat()
+        guard stat(url.path, &info) == 0 else { return false }
+        let current = info.st_mode & 0o777
+        guard current != reference else { return false }
+        return chmod(url.path, reference) == 0
+    }
+
+    /// Remove the extended attributes iOS attaches to files a different app
+    /// created. `com.apple.provenance` in particular is what a forensic pass
+    /// uses to separate "written by this app" from "shipped with the container",
+    /// and no timestamp pass touches it.
+    @discardableResult
+    private func stripProvenance(_ url: URL) -> Bool {
+        var cleared = false
+        url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return }
+            let listSize = listxattr(path, nil, 0, 0)
+            guard listSize > 0 else { return }
+            var names = [CChar](repeating: 0, count: Int(listSize))
+            let read = listxattr(path, &names, names.count, 0)
+            guard read > 0 else { return }
+            names.withUnsafeBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                var offset = 0
+                while offset < Int(read) {
+                    let name = String(cString: base + offset)
+                    offset += name.utf8.count + 1
+                    guard AntiBanRoutine.isPanelProvenance(name) else { continue }
+                    if removexattr(path, name, 0) == 0 {
+                        cleared = true
+                    }
+                }
+            }
+        }
+        return cleared
+    }
+
+    /// Only attributes that describe *how the file arrived*. Anything else on a
+    /// container file may be required by the sandbox, so it stays.
+    private static func isPanelProvenance(_ name: String) -> Bool {
+        name.hasPrefix("com.apple.quarantine")
+            || name.hasPrefix("com.apple.provenance")
+            || name.hasPrefix("com.apple.metadata")
+            || name.hasPrefix("com.apple.lastuseddate")
+            || name.hasPrefix("com.apple.FinderInfo")
     }
 
     /// Restore one node's `mtime` + `atime` to `baseline`, and its `birthtime`
