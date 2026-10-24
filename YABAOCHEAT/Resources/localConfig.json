@@ -34,9 +34,9 @@
   "Rainbow" : false,
   "AllRainbow" : false,
 
-  "AimSystemEnabled" : true,
-  "AimEnabled" : true,
-  "LegitAimbot" : true,
+  "AimSystemEnabled" : false,
+  "AimEnabled" : false,
+  "LegitAimbot" : false,
   "SilentAim" : false,
   "AimBone" : "chest",
   "AimTarget" : 3,
