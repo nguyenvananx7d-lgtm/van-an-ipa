@@ -299,25 +299,25 @@ public final class NetworkShield: ObservableObject {
 
     /// Called at the front of every install. Always safe: with the shield off
     /// it is a no-op, and with `requireTunnelBeforeInject` off it only logs.
+    ///
+    /// The shield's screen was removed when the relay took over the traffic
+    /// story, so this gate must never be able to block an inject from a setting
+    /// no screen can reach any more. It reports and it returns true; the stored
+    /// `requireTunnelBeforeInject` flag is kept for compatibility but no longer
+    /// vetoes anything.
     public func preflightForInject(log: AppLog) -> Bool {
         refreshTunnel()
         guard isEnabled else { return true }
 
         // No network round-trip here: a DoH probe can take seconds and would
-        // delay every inject. Reachability is checked on demand by the Test
-        // button; this gate is about configuration and the tunnel interface.
+        // delay every inject. Reachability is checked on demand elsewhere; this
+        // gate is about configuration and the tunnel interface.
         log.log(.network,
                 "shield: \(provider.title) \(isConfigured ? "configured" : "not configured"), "
                 + "tunnel \(tunnelActive ? "up" : "down")")
 
         if requireTunnelBeforeInject && !tunnelActive {
-            log.log(.network, "shield: inject blocked — no tunnel interface")
-            setStatus("Inject blocked: start your VPN/tunnel first.", tone: .warn)
-            return false
-        }
-
-        if !isConfigured {
-            setStatus("Resolver not configured — open Network shield and pick one.", tone: .warn)
+            log.log(.network, "shield: no tunnel interface (advisory only — the shield screen was removed)")
         }
         return true
     }

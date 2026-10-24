@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Setting tab — the kernel-exploit controls, license facts, compatibility,
-/// language, support.
+/// Setting tab — session order: relay, anti-ban, exploit, then account facts,
+/// compatibility, language and support.
 struct SettingView: View {
     @EnvironmentObject var auth: AuthorizationStore
     @EnvironmentObject var language: LanguageStore
@@ -25,10 +25,15 @@ struct SettingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.stack) {
-            exploit
-            antiBanSection
+            // Order is by what a session actually touches: the relay that makes
+            // the traffic work, the sweep that keeps the container clean, the
+            // exploit that opens the path, then account facts and preferences.
+            // The old network-shield block lived here; it is gone, because the
+            // relay owns traffic now and two overlapping network screens made
+            // the same settings look like they contradicted each other.
             relaySection
-            NetworkShieldSection()
+            antiBanSection
+            exploit
             licenseInfo
             compatibility
             languageSection

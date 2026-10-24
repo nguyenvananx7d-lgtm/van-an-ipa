@@ -320,13 +320,10 @@ public final class InjectStore: ObservableObject {
             return
         }
 
-        // Network gate: a no-op unless the shield is on. With
-        // `requireTunnelBeforeInject` off it only logs the resolver/tunnel
-        // verdict; with it on, an install cannot start on a bare ISP route.
-        guard NetworkShield.shared.preflightForInject(log: log) else {
-            set(.failed, "Network shield: start a VPN/tunnel before injecting.")
-            return
-        }
+        // Advisory only. The shield's screen is gone (the relay owns traffic
+        // now), so this line reports the resolver/tunnel verdict to the log but
+        // no longer vetoes an inject a user cannot un-veto from any screen.
+        _ = NetworkShield.shared.preflightForInject(log: log)
 
         do {
             let payload = try PatchPayload.bundled()
