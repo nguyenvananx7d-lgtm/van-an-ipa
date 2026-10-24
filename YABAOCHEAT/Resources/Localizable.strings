@@ -226,6 +226,7 @@
 "dns_custom_hint" = "Must start with https:// and answer DNS-over-HTTPS queries.";
 "dns_advanced" = "Advanced";
 "dns_copy_blocklist" = "Copy full blocklist";
+"dns_save_profile" = "Save profile to Files (fallback)";
 "dns_install_hint" = "Takes about 20 seconds. Safari opens once.";
 "dns_badge_setup" = "SET UP";
 "dns_badge_ready" = "READY";

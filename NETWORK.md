@@ -22,6 +22,8 @@
 7. Mở game, đăng nhập và vào một trận thử. Nếu game không kết nối được, xoá profile và cài lại **không bật lọc tracker**.
 
 > Mọi thứ khác — VPN gate, copy blocklist, leak test, cài lại — nằm trong **Advanced**.
+>
+> Nếu Safari không tải được profile, dùng **Advanced → Save profile to Files**, rồi mở **Files → On My iPhone → Vortex Arena → VortexArena-DNS.mobileconfig** để cài.
 
 ## NextDNS denylist
 
@@ -74,6 +76,7 @@ Mục tiêu: chặn các hostname báo cáo/security của Free Fire ở tầng 
 | Hiện tượng | Cách xử lý |
 | --- | --- |
 | App hỏi quyền **Local Network** | Chọn **Allow**. App chỉ dùng loopback `127.0.0.1` để đưa profile sang Safari, không quét mạng LAN. |
+| Settings báo **Profile Failed to Install** | Cài bản mới (đã sửa key `DNSProtocol`/`ServerURL`). Nếu vẫn lỗi: **Advanced → Save profile to Files** → mở file trong **Files → On My iPhone → Vortex Arena**. |
 | Safari không mở | Thử lại khi app đang foreground; đảm bảo dùng Safari, không phải browser trong app khác. |
 | Không thấy "Profile Downloaded" | Kiểm tra đã bấm **Allow** ở banner tải profile; thử lại. |
 | Test resolver fail | Kiểm tra ID/URL và mạng; thử Cloudflare để loại trừ resolver. |

@@ -20,11 +20,11 @@ public enum DNSProfile {
         }
 
         var settings: [String: Any] = [
-            "DNSSettingsDNSProtocol": "HTTPS",
-            "DNSSettingsDoHURL": url.absoluteString
+            "DNSProtocol": "HTTPS",
+            "ServerURL": url.absoluteString
         ]
         if !provider.bootstrap.isEmpty {
-            settings["DNSSettingsServerAddresses"] = provider.bootstrap
+            settings["ServerAddresses"] = provider.bootstrap
         }
 
         let content: [String: Any] = [
@@ -44,6 +44,7 @@ public enum DNSProfile {
             "PayloadDisplayName": displayName,
             "PayloadDescription": "Encrypted DNS (DNS over HTTPS). Installed by Vortex Arena.",
             "PayloadOrganization": "Vortex Arena",
+            "PayloadScope": "System",
             "PayloadRemovalDisallowed": false,
             "PayloadContent": [content]
         ]

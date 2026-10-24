@@ -386,6 +386,39 @@ public final class NetworkShield: ObservableObject {
         setStatus("Blocklist copied. Paste it into NextDNS → Privacy → Denylist.", tone: .ok)
     }
 
+    /// Fallback for when Safari cannot reach the loopback server: write the
+    /// same profile into the app's Documents folder, which `UIFileSharingEnabled`
+    /// exposes in Files. Tapping the file there starts the same iOS installer.
+    @discardableResult
+    public func saveProfileToDocuments() -> URL? {
+        guard let data = DNSProfile.make(
+            provider: provider,
+            nextDNSID: nextDNSID,
+            customURL: customURL
+        ) else {
+            setStatus("Could not build the DNS profile.", tone: .error)
+            return nil
+        }
+        guard let docs = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first else {
+            setStatus("Could not find the Documents folder.", tone: .error)
+            return nil
+        }
+
+        let url = docs.appendingPathComponent("VortexArena-DNS.mobileconfig")
+        do {
+            try data.write(to: url, options: .atomic)
+            setStatus("Saved to Files → On My iPhone → Vortex Arena. Tap the profile there to install.",
+                      tone: .ok)
+            return url
+        } catch {
+            setStatus("Could not save the profile: \(error.localizedDescription)", tone: .error)
+            return nil
+        }
+    }
+
     /// Opens the NextDNS dashboard so the denylist can be edited next to the
     /// app; the DoH profile itself only carries the config ID.
     public func openNextDNS() {

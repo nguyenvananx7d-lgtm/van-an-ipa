@@ -495,6 +495,14 @@ struct NetworkShieldSection: View {
             shield.openLeakTest()
         }
 
+        ActionRow(
+            symbol: "folder",
+            label: String(localized: "dns_save_profile"),
+            showsChevron: false
+        ) {
+            shield.saveProfileToDocuments()
+        }
+
         if shield.isConfigured {
             ActionRow(
                 symbol: "arrow.clockwise",
