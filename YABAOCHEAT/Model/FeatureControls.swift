@@ -154,15 +154,16 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var aimSmooth: Double
     /// Aim only at enemies the game marks visible. Key `AimVisibleOnly`.
     public var aimVisibleOnly: Bool
-    /// Every switch starts OFF: the profile ships with nothing enabled and the
-    /// player opts into each feature. Value controls (sliders, bone) keep
-    /// sensible non-zero defaults so the moment a switch is turned on it does
-    /// something useful.
+    /// Ship defaults are armed: the master ESP, the full visual set and the
+    /// humanised sticky assist are on so the first Inject already stages a
+    /// usable `localConfig.json` instead of a blank one. Value controls keep
+    /// tuned defaults (corner box, right health bar, emerald palette, mixed
+    /// bone, 85% hit chance, 0.18 smoothing).
     public init(
-        isEnabled: Bool = false,
-        aimEnabled: Bool = false,
+        isEnabled: Bool = true,
+        aimEnabled: Bool = true,
         radiusValue: Double = 0,
-        aimbotRadiusValue: Double = 90.0,
+        aimbotRadiusValue: Double = 150.0,
         radiusPolicy: ControlPolicy = .value,
         headshotValue: Bool = false,
         headshotPolicy: ControlPolicy = .value,
@@ -174,26 +175,26 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         bodyRate: Int = 20,
         hitChance: Int = 85,
         aimDistance: Int = 200,
-        drawFov: Bool = false,
-        ignoreKnocked: Bool = false,
-        antiBan: Bool = false,
+        drawFov: Bool = true,
+        ignoreKnocked: Bool = true,
+        antiBan: Bool = true,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
         espBoxScalePercent: Int = 115,
         espBoxOffsetY: Int = 10,
-        masterEsp: Bool = false,
-        lineEsp: Bool = false,
-        boxEsp: Bool = false,
+        masterEsp: Bool = true,
+        lineEsp: Bool = true,
+        boxEsp: Bool = true,
         boxType: String = "corner",
-        nameEsp: Bool = false,
-        distanceEsp: Bool = false,
-        healthEsp: Bool = false,
+        nameEsp: Bool = true,
+        distanceEsp: Bool = true,
+        healthEsp: Bool = true,
         healthType: String = "right",
-        skeletonEsp: Bool = false,
-        tracerEsp: Bool = false,
-        drawEnemyCount: Bool = false,
+        skeletonEsp: Bool = true,
+        tracerEsp: Bool = true,
+        drawEnemyCount: Bool = true,
         textSize: Int = 14,
         espBounding: Int = 2,
         streamProof: Bool = false,
@@ -204,7 +205,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         camXaFloat: Double = 1.5,
         buffDamage: Bool = false,
         fastParachute: Bool = false,
-        esp360Arrows: Bool = false,
+        esp360Arrows: Bool = true,
         lineTarget: String = "bottom",
         silentAimTarget: String = "mixed",
         sniperScope: Bool = false,
@@ -212,15 +213,15 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         lineTracerColor: Bool = false,
         box2dColor: Bool = false,
         skeletonColor: Bool = false,
-        espPalette: String = "default",
+        espPalette: String = "emerald",
         rainbow: Bool = false,
         allRainbow: Bool = false,
         resetAllColors: Bool = false,
         espMaxDistance: Int = 250,
         espVisibleOnly: Bool = true,
-        espBoxFill: Bool = false,
+        espBoxFill: Bool = true,
         espBoxFillAlpha: Double = 0.18,
-        espHeadDot: Bool = false,
+        espHeadDot: Bool = true,
         espShowDowned: Bool = true,
         espTextScale: Double = 1.0,
         aimHeight: Double = 0.8,
@@ -299,11 +300,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     // MARK: - persistence
 
     /// Controls live in `UserDefaults` under a per-game prefix so the two titles
-    /// keep separate profiles. The `.v5` suffix forces the all-off profile onto
-    /// installs that already saved a default-enabled blob under `.v4`, so the
-    /// switches do not come back pre-ticked after an update.
+    /// keep separate profiles. The `.v6` suffix forces the armed profile onto
+    /// installs that already saved an all-off profile under `.v5`.
     public static func defaultsKey(for game: Game) -> String {
-        game.defaultsKeyPrefix + "controls.v5"
+        game.defaultsKeyPrefix + "controls.v6"
     }
 
     public static func load(for game: Game) -> FeatureControls {
@@ -627,6 +627,17 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "AimMaxDistance":   aimDistance,
             "AimDistance":      aimDistance,
             "AimVisibleOnly":   aimVisibleOnly,
+            // box / bar style + named palette, read by the rebuilt patch
+            "BoxType":          boxType,
+            "HealthType":       healthType,
+            "EspPalette":       espPalette,
+            // sticky-assist tuning: bone, reaction, prediction, touch gate
+            "AimBone":          silentAim ? "mixed"
+                                  : (aimTarget == "body" ? "chest" : aimTarget),
+            "AimReactionMs":    180,
+            "AimLeadMs":        100,
+            "AimTouchGate":     true,
+            "AntiBan":          antiBan,
         ]
     }
     /// The runtime reads `AimTarget` as an ordinal, not a word. Recovered from

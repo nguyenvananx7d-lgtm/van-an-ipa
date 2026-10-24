@@ -10,23 +10,24 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (45,667 B, targeting
+    /// The app ships a populated IFix patch (86,417 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
     /// manifest. It carries the ESP/aim method overrides directly — including
-    /// the config-driven ESP/aim block, the patched `get_LastAimingInfoFromWeapon` split
-    /// (`HeadRate` / `BodyRate`), the 360° arrow ring, the enemy counter and
-    /// the colour/chroma block — so staging it into the container is what
-    /// turns the features on.
+    /// the three-tab settings overlay built on the app's own design language
+    /// (VISUAL / AIMBOT / EXTRAS), the config-driven ESP block (corner/edge
+    /// boxes, fill, skeleton, health bar, tracer, 360° arrows, FOV ring, head
+    /// dot), the humanised sticky camera assist, and the behavioural anti-ban
+    /// gate — so staging it into the container is what turns the features on.
     ///
     /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
     /// treats a bundle whose length matches this value as the payload to write,
     /// and only falls back to adopting a staged copy when the bundle does not
     /// match. Keep it in step with the resource or injection is refused.
-    public static let expectedLength = 45_667
+    public static let expectedLength = 86_417
     /// SHA-256 of the IFix patch shipped in this bundle. Pinned here so a copy
     /// staged anywhere in the game's container can be adopted by digest when the
     /// bundle resource is absent.
-    public static let vendorPatchSHA256 = "8c7e4898fb1d6da952bca2428bbc9052ecc3fa046158a531b31f9a2383b81fbf"
+    public static let vendorPatchSHA256 = "43d50b2e34e0d8ec2b9ec061c382dcd8b17d45160e580f8186c3cf96efcf2ba7"
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 
