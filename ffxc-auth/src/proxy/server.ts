@@ -5,6 +5,7 @@ import { loadOrCreateAuthority } from "./pki.js";
 import { createRelay, type Rule } from "./mitm.js";
 import { buildMobileConfig } from "./profile.js";
 import { type CaptureRecord, suggestRules } from "./suggest.js";
+import { renderDashboard } from "./dashboard.js";
 
 /**
  * Relay entry point.
@@ -179,83 +180,44 @@ const admin = http.createServer((req, res) => {
     return;
   }
 
-  if (path === "/") {
-    res
-      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
-      .end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<body style="font:15px -apple-system;background:#0b0d0e;color:#eef1f0;padding:22px;max-width:820px;line-height:1.55">
-<h1 style="font-size:20px;margin:0 0 6px">${profileName}</h1>
-<p style="color:#9fb3ae;margin:0 0 16px">Đây là <b>bảng điều khiển relay</b>, không phải chỗ bật cheat.
-Cheat vẫn nằm trong app trên điện thoại. Relay chỉ đứng giữa game và server game để
-sửa báo cáo anti-cheat trên đường truyền — nên game không thấy code nào bị sửa.</p>
-
-<div style="background:#14181a;border:1px solid #24302e;border-radius:12px;padding:14px 16px;margin:0 0 18px">
-  <div>Proxy: <code style="color:#7dd3c0">${publicHost}:${proxyPort}</code></div>
-  <div>Rule đang sống: <b>${rules.length}</b> · Capture: <b>${countCaptures()}</b> dòng</div>
-</div>
-
-<h2 style="font-size:15px;margin:18px 0 8px">4 bước</h2>
-<ol style="margin:0 0 18px;padding-left:20px;color:#cfe0db">
-  <li>Bấm <a style="color:#7dd3c0" href="/profile.mobileconfig">Install profile</a> bằng Safari trên điện thoại.</li>
-  <li>Settings → General → About → Certificate Trust Settings → bật full trust cho CA của relay.</li>
-  <li>Chơi <b>một trận bình thường</b> (chưa sửa gì) rồi quay lại đây.</li>
-  <li>Bấm <b>Apply</b> ở rule được gợi ý bên dưới. Rule sống ngay, không cần restart.</li>
-</ol>
-
-<h2 style="font-size:15px;margin:18px 0 8px">Rule gợi ý</h2>
-<div id="state" style="color:#7dd3c0;min-height:20px;margin-bottom:6px"></div>
-<div id="list" style="color:#8d9693">đang tải…</div>
-<p style="color:#8d9693;margin-top:18px;font-size:13px">
-Nếu danh sách trống: chưa có traffic đi qua relay. Kiểm tra tunnel/proxy đã bật,
-cert đã trust, rồi chơi thêm một trận. Xem thô ở
-<a style="color:#7dd3c0" href="/captures?limit=200">/captures</a>.
-</p>
-<script>
-let active = [];
-const state = document.getElementById('state');
-const list = document.getElementById('list');
-fetch('/rules').then(r => r.json()).then(r => { active = Array.isArray(r) ? r : []; }).catch(() => {});
-fetch('/suggest').then(r => r.json()).then(data => {
-  if (!data.count) {
-    list.textContent = 'Chưa có ứng viên nào — chơi một trận trước.';
+  // One endpoint for everything the page renders, so the client does not have to
+  // orchestrate four requests and get the order wrong.
+  if (path === "/state") {
+    const records = readCaptures(4000);
+    const view = {
+      name: profileName,
+      publicHost,
+      proxyPort,
+      adminPort,
+      rules,
+      captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
+      suggestions: suggestRules(records),
+    };
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(view));
     return;
   }
-  list.innerHTML = '';
-  for (const s of data.suggestions) {
-    const row = document.createElement('div');
-    row.style = 'border:1px solid #24302e;border-radius:12px;padding:14px;margin:10px 0;color:#eef1f0';
-    const head = document.createElement('div');
-    head.innerHTML = '<b>' + s.host + s.path + '</b><br><span style="color:#8d9693">score ' +
-      s.score + ' · ' + s.calls + ' lần gọi · ' + s.action + '</span>';
-    const pre = document.createElement('pre');
-    pre.style = 'white-space:pre-wrap;color:#9fb3ae;font-size:12px;margin:10px 0;background:#14181a;padding:10px;border-radius:8px';
-    pre.textContent = JSON.stringify(s.rule, null, 2);
-    const button = document.createElement('button');
-    button.textContent = 'Apply';
-    button.style = 'background:#7dd3c0;color:#06110f;border:0;border-radius:9px;padding:9px 16px;font-weight:700';
-    button.onclick = async () => {
-      active = active.filter(x => !(x.host === s.rule.host && x.pathPattern === s.rule.pathPattern));
-      active.push(s.rule);
-      const response = await fetch('/rules', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(active)
-      });
-      state.textContent = response.ok
-        ? 'Đã áp — ' + active.length + ' rule đang sống, không cần restart'
-        : 'Áp thất bại';
-    };
-    row.append(head, pre, button);
-    list.append(row);
+
+  if (path === "/captures/clear" && req.method === "POST") {
+    writeFileSync(capturePath, "");
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ cleared: true }));
+    return;
   }
-}).catch(error => { list.textContent = 'suggest lỗi: ' + error; });
-</script>
-<p style="color:#8d9693;margin-top:22px;font-size:13px">
-Vì sao phải sửa: client gửi lên các mã <code>MD5_*</code>, <code>PMS_HOOK</code>,
-<code>NATIVE_RESULT</code>, <code>GIN_CHECK_DATA_EMPTY_IOS</code>. Host nào chỉ hiện
-dưới <code>app-measurement</code> hay domain quảng cáo thì <b>không phải</b> kênh báo cáo — để yên.
-</p>
-</body>`);
+
+  if (path === "/") {
+    const records = readCaptures(4000);
+    res
+      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      .end(
+        renderDashboard({
+          name: profileName,
+          publicHost,
+          proxyPort,
+          adminPort,
+          rules,
+          captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
+          suggestions: suggestRules(records),
+        }),
+      );
     return;
   }
 
