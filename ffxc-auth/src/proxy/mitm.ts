@@ -336,8 +336,11 @@ export function createRelay(config: RelayConfig): RelayHandle {
     // Rules are read per request from this array, so replacing its contents is a
     // live update: no restart, no dropped tunnel, no lost match.
     setRules: (next: Rule[]) => {
+      // Snapshot first: callers pass the very array this replaces (the server's
+      // live list), and clearing it before reading would wipe the update.
+      const snapshot = next.slice();
       rules.length = 0;
-      rules.push(...next);
+      rules.push(...snapshot);
       log(`relay: rules updated (${rules.length} active)`);
     },
     close: () =>

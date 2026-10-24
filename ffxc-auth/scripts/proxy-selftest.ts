@@ -15,6 +15,11 @@ import { createRelay } from "../src/proxy/mitm.js";
  * The origin is a local HTTPS server holding a leaf from the same CA, so the
  * whole path (interception, leaf issuance, upstream verification, rule
  * application, capture) is exercised exactly as it will be on a phone.
+ *
+ * Phase two replaces the rule set through `setRules` — the call the dashboard's
+ * Apply button makes — and asserts the next request already obeys it. That is
+ * the regression for an aliasing bug where the live list was cleared before it
+ * was read, so every "Apply" emptied the rules instead of installing them.
  */
 
 function listen(server: http.Server | https.Server, port = 0): Promise<number> {
@@ -67,7 +72,6 @@ async function main(): Promise<void> {
     },
   });
 
-  // createRelay listens asynchronously; wait for a real bound port.
   const relayPort = await new Promise<number>((resolve, reject) => {
     const deadline = Date.now() + 5000;
     const poll = () => {
@@ -78,57 +82,71 @@ async function main(): Promise<void> {
     poll();
   });
 
-  const body = await new Promise<string>((resolve, reject) => {
-    const connect = http.request({
-      host: "127.0.0.1",
-      port: relayPort,
-      method: "CONNECT",
-      path: `target.test:${originPort}`,
-      headers: { host: `target.test:${originPort}` },
-    });
-    connect.on("connect", (res, socket) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`CONNECT refused: ${res.statusCode}`));
-        return;
-      }
-      const secure = tls.connect({ socket, servername: "target.test", ca: ca.certPem });
-      secure.once("error", reject);
-      secure.once("secureConnect", () => {
-        const request = http.request(
-          {
-            host: `target.test:${originPort}`,
-            path: "/api/status",
-            method: "GET",
-            headers: { host: `target.test:${originPort}` },
-            createConnection: () => secure,
-          },
-          (response) => {
-            const chunks: Buffer[] = [];
-            response.on("data", (chunk: Buffer) => chunks.push(chunk));
-            response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-          },
-        );
-        request.once("error", reject);
-        request.end();
+  const requestThrough = (path: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const connect = http.request({
+        host: "127.0.0.1",
+        port: relayPort,
+        method: "CONNECT",
+        path: `target.test:${originPort}`,
+        headers: { host: `target.test:${originPort}` },
       });
+      connect.once("error", reject);
+      connect.on("connect", (res, socket) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`CONNECT refused: ${res.statusCode}`));
+          return;
+        }
+        const secure = tls.connect({ socket, servername: "target.test", ca: ca.certPem });
+        secure.once("error", reject);
+        secure.once("secureConnect", () => {
+          const request = http.request(
+            {
+              host: `target.test:${originPort}`,
+              path,
+              method: "GET",
+              headers: { host: `target.test:${originPort}` },
+              createConnection: () => secure,
+            },
+            (response) => {
+              const chunks: Buffer[] = [];
+              response.on("data", (chunk: Buffer) => chunks.push(chunk));
+              response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+            },
+          );
+          request.once("error", reject);
+          request.end();
+        });
+      });
+      connect.end();
     });
-    connect.once("error", reject);
-    connect.end();
-  });
 
-  const parsed = JSON.parse(body) as Record<string, unknown>;
-  const rewritten = parsed.verdict === "clean" && parsed.ok === true;
+  const first = JSON.parse(await requestThrough("/api/status")) as Record<string, unknown>;
+
+  // Live replacement, exactly as the dashboard applies a suggestion.
+  relay.setRules([
+    {
+      host: "target.test",
+      pathPattern: "^/api/status",
+      action: "json-merge",
+      merge: { verdict: "second" },
+      note: "reload",
+    },
+  ]);
+  const second = JSON.parse(await requestThrough("/api/status")) as Record<string, unknown>;
+
   const captured = readFileSync(capturePath, "utf8").trim().split("\n").filter(Boolean);
-  const record = JSON.parse(captured[captured.length - 1] ?? "{}") as Record<string, unknown>;
+  const last = JSON.parse(captured[captured.length - 1] ?? "{}") as Record<string, unknown>;
 
   await relay.close();
   await close(origin);
   rmSync(dir, { recursive: true, force: true });
 
   const failures: string[] = [];
-  if (!rewritten) failures.push(`response was not rewritten: ${body}`);
-  if (!record.host || record.host !== "target.test") failures.push("capture did not record the host");
-  if (!Array.isArray(record.applied) || (record.applied as string[]).length === 0) {
+  if (first.verdict !== "clean") failures.push(`first request not rewritten: ${JSON.stringify(first)}`);
+  if (second.verdict !== "second") failures.push(`setRules did not take effect: ${JSON.stringify(second)}`);
+  if (last.host !== "target.test") failures.push("capture did not record the host");
+  if (!Array.isArray(last.applied) || (last.applied as string[]).length === 0) {
     failures.push("capture did not record the applied rule");
   }
 
@@ -139,9 +157,9 @@ async function main(): Promise<void> {
   }
 
   console.log("relay selftest: PASS");
-  console.log(`  intercepted ${String(record.method)} ${String(record.path)} on ${String(record.host)}`);
-  console.log(`  rewrite: ${(record.applied as string[]).join(", ")}`);
-  console.log(`  body: ${body}`);
+  console.log(`  phase 1 rewrite: ${JSON.stringify(first)}`);
+  console.log(`  phase 2 after setRules: ${JSON.stringify(second)}`);
+  console.log(`  capture: ${String(last.host)}${String(last.path)} applied ${(last.applied as string[]).join(", ")}`);
 }
 
 main().catch((error) => {
