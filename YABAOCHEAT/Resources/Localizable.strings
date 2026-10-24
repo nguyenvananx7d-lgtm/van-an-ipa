@@ -264,3 +264,8 @@
 "dns_guide_remove_title" = "Remove";
 "dns_guide_remove_1" = "Settings -> General -> VPN & Device Management -> Configuration Profile -> Vortex Arena DNS Shield -> Remove Profile.";
 "done" = "Done";
+
+/* Rebuilt patch: server-side plausibility controls */
+"aim_reaction" = "Reaction delay";
+"aim_lead" = "Target lead";
+"aim_ban_note" = "Aim bans are statistical, not forensic. The server scores head rate, time-on-target and lock length from the match record, so these defaults are deliberately body-first with short locks and a slow reaction. Raising them is a ban-risk trade, not a free upgrade.";

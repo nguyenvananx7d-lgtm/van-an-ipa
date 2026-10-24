@@ -92,6 +92,33 @@ struct AimbotView: View {
                     step: 0.02,
                     showRange: true
                 )
+                SliderRow(
+                    label: String(localized: "aim_reaction"),
+                    value: menu.feature(\.aimReactionMs),
+                    range: 80...600,
+                    step: 10,
+                    unit: "ms",
+                    showRange: true
+                )
+                SliderRow(
+                    label: String(localized: "aim_lead"),
+                    value: menu.feature(\.aimLeadMs),
+                    range: 0...200,
+                    step: 5,
+                    unit: "ms",
+                    showRange: true
+                )
+                // The ban for an aim assist is statistical, not forensic: the
+                // server scores headshot ratio, time-on-target and lock length
+                // from the match record. The note is here because a slider that
+                // quietly makes the score worse deserves an explanation.
+                Text(String(localized: "aim_ban_note"))
+                    .font(.caption)
+                    .foregroundStyle(Palette.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.rowPaddingH)
+                    .padding(.vertical, 11)
+                    .rowDivider()
             }
         }
     }

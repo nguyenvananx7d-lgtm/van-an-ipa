@@ -154,27 +154,38 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     public var aimSmooth: Double
     /// Aim only at enemies the game marks visible. Key `AimVisibleOnly`.
     public var aimVisibleOnly: Bool
-    /// Ship defaults are armed: the master ESP, the full visual set and the
-    /// humanised sticky assist are on so the first Inject already stages a
-    /// usable `localConfig.json` instead of a blank one. Value controls keep
-    /// tuned defaults (corner box, right health bar, emerald palette, mixed
-    /// bone, 85% hit chance, 0.18 smoothing).
+    /// Delay between acquiring a target and the assist taking over, in ms.
+    /// Key `AimReactionMs`. Was hardcoded at 180; a field because a constant
+    /// reaction time is one of the statistics a server can score.
+    public var aimReactionMs: Int
+    /// How far ahead of the target's measured velocity the assist leads, in ms.
+    /// Key `AimLeadMs`. Was hardcoded at 100.
+    public var aimLeadMs: Int
+    /// Ship defaults are armed but deliberately conservative on the aim side.
+    /// A ban for aim is a *statistical* decision made by the server, not a file
+    /// scan: headshot ratio, time-on-target, lock duration and reaction-time
+    /// variance are all measurable from the match record alone. These defaults
+    /// keep the assist inside a human envelope — body-first, 30% head roll,
+    /// 95 px FOV, 120 m range, 260 ms reaction, 0.42 smoothing — instead of the
+    /// previous 85% head roll at 150 px / 200 m / 180 ms, which reads as a
+    /// machine. Every one of them stays adjustable in the Aimbot tab, so this is
+    /// a starting point, not a lock.
     public init(
         isEnabled: Bool = true,
         aimEnabled: Bool = true,
         radiusValue: Double = 0,
-        aimbotRadiusValue: Double = 150.0,
+        aimbotRadiusValue: Double = 95.0,
         radiusPolicy: ControlPolicy = .value,
         headshotValue: Bool = false,
         headshotPolicy: ControlPolicy = .value,
-        aimTarget: String = "head",
+        aimTarget: String = "body",
         aimFovMode: String = "strict",
         aimbotType: String = "aimbot",
         silentAim: Bool = false,
-        headRate: Int = 80,
-        bodyRate: Int = 20,
-        hitChance: Int = 85,
-        aimDistance: Int = 200,
+        headRate: Int = 55,
+        bodyRate: Int = 45,
+        hitChance: Int = 30,
+        aimDistance: Int = 120,
         drawFov: Bool = true,
         ignoreKnocked: Bool = true,
         antiBan: Bool = true,
@@ -225,8 +236,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         espShowDowned: Bool = true,
         espTextScale: Double = 1.05,
         aimHeight: Double = 0.8,
-        aimSmooth: Double = 0.18,
-        aimVisibleOnly: Bool = true
+        aimSmooth: Double = 0.42,
+        aimVisibleOnly: Bool = true,
+        aimReactionMs: Int = 260,
+        aimLeadMs: Int = 60
     ) {
         self.isEnabled = isEnabled
         self.aimEnabled = aimEnabled
@@ -295,6 +308,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.aimHeight = aimHeight
         self.aimSmooth = aimSmooth
         self.aimVisibleOnly = aimVisibleOnly
+        self.aimReactionMs = aimReactionMs
+        self.aimLeadMs = aimLeadMs
     }
 
     // MARK: - persistence
@@ -303,7 +318,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// keep separate profiles. The `.v6` suffix forces the armed profile onto
     /// installs that already saved an all-off profile under `.v5`.
     public static func defaultsKey(for game: Game) -> String {
-        game.defaultsKeyPrefix + "controls.v6"
+        // `.v7` deliberately abandons the `.v6` profile: an install that saved
+        // the old 85% / 150 px / 200 m aim profile would otherwise keep staging
+        // it forever, and that profile is what the server scored.
+        game.defaultsKeyPrefix + "controls.v7"
     }
 
     public static func load(for game: Game) -> FeatureControls {
@@ -337,7 +355,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              rainbow, allRainbow, resetAllColors,
              espMaxDistance, espVisibleOnly, espBoxFill, espBoxFillAlpha,
              espHeadDot, espShowDowned, espTextScale, aimHeight, aimSmooth,
-             aimVisibleOnly
+             aimVisibleOnly, aimReactionMs, aimLeadMs
     }
 
     /// Profiles written by an older build decode field by field rather than
@@ -418,6 +436,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimHeight         = try c.decodeIfPresent(Double.self, forKey: .aimHeight) ?? d.aimHeight
         aimSmooth         = try c.decodeIfPresent(Double.self, forKey: .aimSmooth) ?? d.aimSmooth
         aimVisibleOnly    = try c.decodeIfPresent(Bool.self, forKey: .aimVisibleOnly) ?? d.aimVisibleOnly
+        aimReactionMs     = try c.decodeIfPresent(Int.self, forKey: .aimReactionMs) ?? d.aimReactionMs
+        aimLeadMs         = try c.decodeIfPresent(Int.self, forKey: .aimLeadMs) ?? d.aimLeadMs
     }
 
     // MARK: - payload setters
@@ -503,6 +523,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "aimHeight": aimHeight,
             "aimSmooth": aimSmooth,
             "aimVisibleOnly": aimVisibleOnly,
+            "aimReactionMs": aimReactionMs,
+            "aimLeadMs": aimLeadMs,
         ]
     }
 
@@ -640,8 +662,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             // `Resources/localConfig.json`.
             "AimBone":          silentAim ? "mixed"
                                   : (aimTarget == "body" ? "chest" : aimTarget),
-            "AimReactionMs":    180,
-            "AimLeadMs":        100,
+            "AimReactionMs":    aimReactionMs,
+            "AimLeadMs":        aimLeadMs,
             "AimTouchGate":     true,
             "AntiBan":          antiBan,
         ]
