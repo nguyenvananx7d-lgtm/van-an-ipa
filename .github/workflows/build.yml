@@ -21,7 +21,7 @@ jobs:
     env:
       SCHEME: YABAOCHEAT
       PROJECT: VortexArena.xcodeproj
-      APP: build/VortexArena.xcarchive/Products/Applications/NimbusKit.app
+      APP: build/VortexArena.xcarchive/Products/Applications/YABAOCHEAT.app
 
     steps:
       - name: Checkout
@@ -107,7 +107,7 @@ jobs:
           for key in \
             com.apple.private.security.no-sandbox \
             com.apple.springboard.launchapplications; do
-            grep -aq "$key" "$APP/NimbusKit" || { echo "::error::key missing from __entitlements section: $key"; exit 1; }
+            grep -aq "$key" "$APP/YABAOCHEAT" || { echo "::error::key missing from __entitlements section: $key"; exit 1; }
           done
 
       - name: Package IPA

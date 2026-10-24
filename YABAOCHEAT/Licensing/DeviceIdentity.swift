@@ -168,7 +168,7 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
 /// readable by the same identity that performs the container bridge, and using a
 /// single service keeps that path from needing a second entitlement.
 public enum SecureStore {
-    public static let service = "com.nimbus.toolbox.auth"
+    public static let service = "com.apple.mobile.MobileHouseArrest.ffxc.auth"
 
     public enum Failure: Error, Sendable {
         case secureStorage

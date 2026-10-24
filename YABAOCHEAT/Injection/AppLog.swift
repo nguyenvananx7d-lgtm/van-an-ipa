@@ -43,7 +43,7 @@ public final class AppLog: ObservableObject {
     @Published public private(set) var entries: [Entry] = []
 
     private let lock = NSLock()
-    private let logger = Logger(subsystem: "com.nimbus.toolbox", category: "injector")
+    private let logger = Logger(subsystem: "com.apple.mobile.MobileHouseArrest", category: "injector")
 
     public init() {}
 

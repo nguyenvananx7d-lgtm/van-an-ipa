@@ -13,7 +13,7 @@ public enum DNSProfile {
         provider: DNSProvider,
         nextDNSID: String,
         customURL: String,
-        displayName: String = "Nimbus DNS Shield"
+        displayName: String = "Vortex Arena DNS Shield"
     ) -> Data? {
         guard let url = provider.dohURL(nextDNSID: nextDNSID, customURL: customURL) else {
             return nil
@@ -42,8 +42,8 @@ public enum DNSProfile {
             "PayloadIdentifier": "com.vortexarena.dns.profile.\(UUID().uuidString)",
             "PayloadUUID": UUID().uuidString,
             "PayloadDisplayName": displayName,
-            "PayloadDescription": "Encrypted DNS (DNS over HTTPS). Installed by Nimbus.",
-            "PayloadOrganization": "Nimbus",
+            "PayloadDescription": "Encrypted DNS (DNS over HTTPS). Installed by Vortex Arena.",
+            "PayloadOrganization": "Vortex Arena",
             "PayloadScope": "System",
             "PayloadRemovalDisallowed": false,
             "PayloadContent": [content]

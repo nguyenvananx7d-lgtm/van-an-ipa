@@ -56,6 +56,11 @@ function readCaptures(limit: number): CaptureRecord[] {
   return records;
 }
 
+function countCaptures(): number {
+  if (!existsSync(capturePath)) return 0;
+  return readFileSync(capturePath, "utf8").split("\n").filter(Boolean).length;
+}
+
 function applyRules(next: Rule[]): void {
   rules.length = 0;
   rules.push(...next);
@@ -178,18 +183,33 @@ const admin = http.createServer((req, res) => {
     res
       .writeHead(200, { "content-type": "text/html; charset=utf-8" })
       .end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<body style="font:15px -apple-system;background:#0b0d0e;color:#eef1f0;padding:24px;max-width:760px">
-<h1 style="font-size:19px">${profileName}</h1>
-<p>Proxy <code>${publicHost}:${proxyPort}</code> · rules live: <b>${rules.length}</b></p>
-<p><a style="color:#7dd3c0" href="/profile.mobileconfig">Install profile</a> ·
-   <a style="color:#7dd3c0" href="/captures?limit=200">Capture</a> ·
-   <a style="color:#7dd3c0" href="/suggest">Suggestions (raw)</a></p>
-<p style="color:#8d9693">After installing, enable full trust under
-Settings → General → About → Certificate Trust Settings. Then play one match;
-suggestions appear below and can be applied without a restart.</p>
-<h2 style="font-size:15px;margin-top:22px">Suggested rules</h2>
-<div id="state" style="color:#7dd3c0;min-height:20px"></div>
-<div id="list" style="color:#8d9693">loading…</div>
+<body style="font:15px -apple-system;background:#0b0d0e;color:#eef1f0;padding:22px;max-width:820px;line-height:1.55">
+<h1 style="font-size:20px;margin:0 0 6px">${profileName}</h1>
+<p style="color:#9fb3ae;margin:0 0 16px">Đây là <b>bảng điều khiển relay</b>, không phải chỗ bật cheat.
+Cheat vẫn nằm trong app trên điện thoại. Relay chỉ đứng giữa game và server game để
+sửa báo cáo anti-cheat trên đường truyền — nên game không thấy code nào bị sửa.</p>
+
+<div style="background:#14181a;border:1px solid #24302e;border-radius:12px;padding:14px 16px;margin:0 0 18px">
+  <div>Proxy: <code style="color:#7dd3c0">${publicHost}:${proxyPort}</code></div>
+  <div>Rule đang sống: <b>${rules.length}</b> · Capture: <b>${countCaptures()}</b> dòng</div>
+</div>
+
+<h2 style="font-size:15px;margin:18px 0 8px">4 bước</h2>
+<ol style="margin:0 0 18px;padding-left:20px;color:#cfe0db">
+  <li>Bấm <a style="color:#7dd3c0" href="/profile.mobileconfig">Install profile</a> bằng Safari trên điện thoại.</li>
+  <li>Settings → General → About → Certificate Trust Settings → bật full trust cho CA của relay.</li>
+  <li>Chơi <b>một trận bình thường</b> (chưa sửa gì) rồi quay lại đây.</li>
+  <li>Bấm <b>Apply</b> ở rule được gợi ý bên dưới. Rule sống ngay, không cần restart.</li>
+</ol>
+
+<h2 style="font-size:15px;margin:18px 0 8px">Rule gợi ý</h2>
+<div id="state" style="color:#7dd3c0;min-height:20px;margin-bottom:6px"></div>
+<div id="list" style="color:#8d9693">đang tải…</div>
+<p style="color:#8d9693;margin-top:18px;font-size:13px">
+Nếu danh sách trống: chưa có traffic đi qua relay. Kiểm tra tunnel/proxy đã bật,
+cert đã trust, rồi chơi thêm một trận. Xem thô ở
+<a style="color:#7dd3c0" href="/captures?limit=200">/captures</a>.
+</p>
 <script>
 let active = [];
 const state = document.getElementById('state');
@@ -197,22 +217,22 @@ const list = document.getElementById('list');
 fetch('/rules').then(r => r.json()).then(r => { active = Array.isArray(r) ? r : []; }).catch(() => {});
 fetch('/suggest').then(r => r.json()).then(data => {
   if (!data.count) {
-    list.textContent = 'No candidate yet — play one match first.';
+    list.textContent = 'Chưa có ứng viên nào — chơi một trận trước.';
     return;
   }
   list.innerHTML = '';
   for (const s of data.suggestions) {
     const row = document.createElement('div');
-    row.style = 'border:1px solid #24302e;border-radius:10px;padding:12px;margin:10px 0;color:#eef1f0';
+    row.style = 'border:1px solid #24302e;border-radius:12px;padding:14px;margin:10px 0;color:#eef1f0';
     const head = document.createElement('div');
-    head.innerHTML = '<b>' + s.host + s.path + '</b> <span style="color:#8d9693">score ' +
-      s.score + ' · ' + s.calls + ' call(s) · ' + s.action + '</span>';
+    head.innerHTML = '<b>' + s.host + s.path + '</b><br><span style="color:#8d9693">score ' +
+      s.score + ' · ' + s.calls + ' lần gọi · ' + s.action + '</span>';
     const pre = document.createElement('pre');
-    pre.style = 'white-space:pre-wrap;color:#9fb3ae;font-size:12px;margin:8px 0';
+    pre.style = 'white-space:pre-wrap;color:#9fb3ae;font-size:12px;margin:10px 0;background:#14181a;padding:10px;border-radius:8px';
     pre.textContent = JSON.stringify(s.rule, null, 2);
     const button = document.createElement('button');
     button.textContent = 'Apply';
-    button.style = 'background:#7dd3c0;color:#06110f;border:0;border-radius:8px;padding:7px 14px;font-weight:600';
+    button.style = 'background:#7dd3c0;color:#06110f;border:0;border-radius:9px;padding:9px 16px;font-weight:700';
     button.onclick = async () => {
       active = active.filter(x => !(x.host === s.rule.host && x.pathPattern === s.rule.pathPattern));
       active.push(s.rule);
@@ -222,18 +242,19 @@ fetch('/suggest').then(r => r.json()).then(data => {
         body: JSON.stringify(active)
       });
       state.textContent = response.ok
-        ? 'Applied — ' + active.length + ' rule(s) live, no restart'
-        : 'Apply failed';
+        ? 'Đã áp — ' + active.length + ' rule đang sống, không cần restart'
+        : 'Áp thất bại';
     };
     row.append(head, pre, button);
     list.append(row);
   }
-}).catch(error => { list.textContent = 'suggest failed: ' + error; });
+}).catch(error => { list.textContent = 'suggest lỗi: ' + error; });
 </script>
-<p style="color:#8d9693;margin-top:24px">Reasons, for reference: the client reports
-<code>MD5_*</code>, <code>PMS_HOOK</code>, <code>NATIVE_RESULT</code> and
-<code>GIN_CHECK_DATA_EMPTY_IOS</code>. A host that only shows up under
-<code>app-measurement</code> or an ad domain is not a report channel — leave it alone.</p>
+<p style="color:#8d9693;margin-top:22px;font-size:13px">
+Vì sao phải sửa: client gửi lên các mã <code>MD5_*</code>, <code>PMS_HOOK</code>,
+<code>NATIVE_RESULT</code>, <code>GIN_CHECK_DATA_EMPTY_IOS</code>. Host nào chỉ hiện
+dưới <code>app-measurement</code> hay domain quảng cáo thì <b>không phải</b> kênh báo cáo — để yên.
+</p>
 </body>`);
     return;
   }
