@@ -166,18 +166,27 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// How far ahead of the target's measured velocity the assist leads, in ms.
     /// Key `AimLeadMs`. Was hardcoded at 100.
     public var aimLeadMs: Int
-    /// Ship defaults are armed but deliberately conservative on the aim side.
-    /// A ban for aim is a *statistical* decision made by the server, not a file
-    /// scan: headshot ratio, time-on-target, lock duration and reaction-time
-    /// variance are all measurable from the match record alone. These defaults
-    /// keep the assist inside a human envelope — body-first, 30% head roll,
-    /// 95 px FOV, 120 m range, 260 ms reaction, 0.42 smoothing — instead of the
-    /// previous 85% head roll at 150 px / 200 m / 180 ms, which reads as a
-    /// machine. Every one of them stays adjustable in the Aimbot tab, so this is
-    /// a starting point, not a lock.
+
+    /// True when at least one thing the injected patch provides is switched on.
+    ///
+    /// The app refuses to stage the payload when this is false: loading an IFix
+    /// patch to draw nothing still rewrites a game method and leaves a host
+    /// object, and that footprint is exactly what an "I enabled nothing" session
+    /// must not have. Visual master and the three aim gates are the switch set
+    /// that decides it.
+    public var hasAnyPatchFeature: Bool {
+        masterEsp || isEnabled || aimEnabled || silentAim
+    }
+    /// Ship defaults are visual-only. The aim assist starts **off**: a ban that
+    /// arrives with every feature switched off cannot be an aim score, and that
+    /// is the report this build answers. ESP stays on with conservative limits,
+    /// and if the assist is switched on its numbers are body-first (30% head
+    /// roll, 95 px FOV, 120 m, 260 ms reaction, 0.42 smoothing) rather than the
+    /// old 85% / 150 px / 200 m / 180 ms machine signature. Every value stays
+    /// adjustable in the Aimbot tab.
     public init(
-        isEnabled: Bool = true,
-        aimEnabled: Bool = true,
+        isEnabled: Bool = false,
+        aimEnabled: Bool = false,
         radiusValue: Double = 0,
         aimbotRadiusValue: Double = 95.0,
         radiusPolicy: ControlPolicy = .value,
@@ -325,10 +334,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// keep separate profiles. The `.v6` suffix forces the armed profile onto
     /// installs that already saved an all-off profile under `.v5`.
     public static func defaultsKey(for game: Game) -> String {
-        // `.v7` deliberately abandons the `.v6` profile: an install that saved
-        // the old 85% / 150 px / 200 m aim profile would otherwise keep staging
-        // it forever, and that profile is what the server scored.
-        game.defaultsKeyPrefix + "controls.v7"
+        // `.v8` again abandons the saved profile on purpose: an install built
+        // under `.v7` still had the aim assist armed at boot. A ban that arrives
+        // with nothing switched on is not an aim score, so the safe default is
+        // visual ESP only, with the assist off until the user turns it on.
+        game.defaultsKeyPrefix + "controls.v8"
     }
 
     public static func load(for game: Game) -> FeatureControls {

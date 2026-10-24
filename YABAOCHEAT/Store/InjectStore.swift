@@ -310,6 +310,16 @@ public final class InjectStore: ObservableObject {
     public func install(expectedDigest: String?, monitorMs: Int) async {
         set(.injecting, "Installing…")
 
+        // Nothing enabled means nothing to load. Staging the payload anyway
+        // writes two files the game never wrote and makes IFix patch a method
+        // for no reason — the exact situation this build answers. The game is
+        // left untouched instead.
+        guard menu.controls.hasAnyPatchFeature else {
+            set(.ready, "Nothing enabled — game left untouched")
+            log.log(.antiBan, "inject skipped: no patch feature is enabled")
+            return
+        }
+
         // Network gate: a no-op unless the shield is on. With
         // `requireTunnelBeforeInject` off it only logs the resolver/tunnel
         // verdict; with it on, an install cannot start on a bare ISP route.
