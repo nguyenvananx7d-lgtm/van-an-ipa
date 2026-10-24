@@ -2,7 +2,7 @@
 "status" = "Status";
 "controls" = "Controls";
 "log" = "Log";
-"app_title" = "Vortex Arena";
+"app_title" = "Nimbus";
 "version" = "Version";
 "license_valid" = "License valid";
 "checking" = "Checking…";
@@ -273,3 +273,7 @@
 /* Consume-once staging */
 "consume_payload" = "Consume payload";
 "consume_payload_caption" = "After launch, delete the staged patch and config from the game container once the target has read them. The next inject stages them again; a direct launch of the game afterwards has no ESP.";
+
+/* Safe profile */
+"safe_profile" = "Safe profile";
+"safe_profile_caption" = "One tap: aim assist off, visual ESP only, anti-ban and consume-once forced on.";

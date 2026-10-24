@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>com.apple.mobile.MobileHouseArrest</string>
+	<string>com.nimbus.toolbox</string>
 	<key>platform-application</key>
 	<true/>
 	<key>com.apple.security.exception.iokit-user-client-class</key>

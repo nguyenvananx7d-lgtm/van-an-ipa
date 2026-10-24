@@ -52,7 +52,7 @@ public final class AuthorizationStore: ObservableObject {
         let resp = LicenseResponse(
             status: "valid",
             message: nil,
-            plan: "Vortex Arena",
+            plan: "Nimbus",
             expiresAt: nil,
             metadata: nil,
             session: "bypass",

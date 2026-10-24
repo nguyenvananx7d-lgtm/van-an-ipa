@@ -105,7 +105,7 @@ final class LoopbackProfileServer {
                 let html = """
                 <!doctype html><meta name="viewport" content="width=device-width">
                 <body style="font: -apple-system; padding: 24px">
-                <h2>Vortex Arena DNS Shield</h2>
+                <h2>Nimbus DNS Shield</h2>
                 <p>Open <code>/VortexArena-DNS.mobileconfig</code> in Safari.</p>
                 </body>
                 """

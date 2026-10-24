@@ -410,7 +410,7 @@ public final class NetworkShield: ObservableObject {
         let url = docs.appendingPathComponent("VortexArena-DNS.mobileconfig")
         do {
             try data.write(to: url, options: .atomic)
-            setStatus("Saved to Files → On My iPhone → Vortex Arena. Tap the profile there to install.",
+            setStatus("Saved to Files → On My iPhone → Nimbus. Tap the profile there to install.",
                       tone: .ok)
             return url
         } catch {
