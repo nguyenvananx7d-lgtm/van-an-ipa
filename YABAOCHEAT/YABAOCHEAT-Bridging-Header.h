@@ -3,3 +3,5 @@
 #import "Injection/kexploit/kexploit_opa334.h"
 #import "Injection/kexploit/sandbox_escape.h"
 #import "Injection/kexploit/kutils.h"
+#import "Injection/kexploit/krw.h"
+#import "Injection/kexploit/vnode.h"

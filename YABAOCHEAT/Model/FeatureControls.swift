@@ -182,8 +182,8 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
         espThickness: Int = 1,
-        espBoxScalePercent: Int = 115,
-        espBoxOffsetY: Int = 10,
+        espBoxScalePercent: Int = 116,
+        espBoxOffsetY: Int = 8,
         masterEsp: Bool = true,
         lineEsp: Bool = true,
         boxEsp: Bool = true,
@@ -220,10 +220,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         espMaxDistance: Int = 250,
         espVisibleOnly: Bool = true,
         espBoxFill: Bool = true,
-        espBoxFillAlpha: Double = 0.18,
+        espBoxFillAlpha: Double = 0.16,
         espHeadDot: Bool = true,
         espShowDowned: Bool = true,
-        espTextScale: Double = 1.0,
+        espTextScale: Double = 1.05,
         aimHeight: Double = 0.8,
         aimSmooth: Double = 0.18,
         aimVisibleOnly: Bool = true
@@ -536,11 +536,12 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// The aim / ESP switches from the panel, keyed exactly as the injected
     /// runtime reads them.
     ///
-    /// `antiBan` and `streamProof` are deliberately not emitted here: neither
-    /// has a literal in the recovered runtime vocabulary. `antiBan` instead
-    /// drives the local trace sweep + payload timestamp masking + session
-    /// re-stamp (`AntiBanRoutine`) at the front of every inject; `streamProof`
-    /// rides along in the serialized payload only.
+    /// `antiBan` is emitted as `AntiBan` so the rebuilt patch can gate its
+    /// behavioural humanisation (post-kill pause, track micro-breaks, acquire
+    /// overshoot) on the same switch the panel shows. The local trace sweep +
+    /// payload timestamp masking + session re-stamp still run at the front of
+    /// every inject via `AntiBanRoutine`; `streamProof` rides along in the
+    /// serialized payload only.
     public func runtimeConfigDocument() -> [String: Any] {
         [
             // visual ESP
@@ -631,7 +632,12 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "BoxType":          boxType,
             "HealthType":       healthType,
             "EspPalette":       espPalette,
-            // sticky-assist tuning: bone, reaction, prediction, touch gate
+            // sticky-assist tuning: bone, reaction, prediction, touch gate.
+            // The sticky-lock keys (AimStickiness, AimLockMs, AimSwitchBias,
+            // AimMaxTurn, AimTrackGain, AimOvershootDeg, AimBreak*Ms) are not
+            // emitted here on purpose: the panel does not expose them, so
+            // `PatchPayload.configuration` keeps the values shipped in
+            // `Resources/localConfig.json`.
             "AimBone":          silentAim ? "mixed"
                                   : (aimTarget == "body" ? "chest" : aimTarget),
             "AimReactionMs":    180,

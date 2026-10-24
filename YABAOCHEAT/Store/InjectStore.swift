@@ -102,7 +102,10 @@ public final class InjectStore: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.foregroundRecheck() }
+            Task { @MainActor in
+                NetworkShield.shared.refreshTunnel()
+                self?.foregroundRecheck()
+            }
         }
 
         // Live propagation: any panel change rewrites the runtime config into
@@ -306,6 +309,15 @@ public final class InjectStore: ObservableObject {
 
     public func install(expectedDigest: String?, monitorMs: Int) async {
         set(.injecting, "Installing…")
+
+        // Network gate: a no-op unless the shield is on. With
+        // `requireTunnelBeforeInject` off it only logs the resolver/tunnel
+        // verdict; with it on, an install cannot start on a bare ISP route.
+        guard NetworkShield.shared.preflightForInject(log: log) else {
+            set(.failed, "Network shield: start a VPN/tunnel before injecting.")
+            return
+        }
+
         do {
             let payload = try PatchPayload.bundled()
             // Sophia parity: bring the kernel chain up before touching the
@@ -413,9 +425,11 @@ public final class InjectStore: ObservableObject {
             isGuardingAntiBan = true
         }
         isRunningAntiBan = false
-        status = sweep.removed.isEmpty && sweep.masked.isEmpty && sweep.flagged.isEmpty
+        status = sweep.isEmpty
             ? "Anti-ban sweep done — clean"
-            : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.masked.count) masked, \(sweep.flagged.count) flagged"
+            : "Anti-ban sweep done — \(sweep.removed.count) removed, \(sweep.masked.count) masked, "
+              + "\(sweep.directories.count) dirs, \(sweep.kernelForged.count) ctime, "
+              + "\(sweep.scrubbed.count) scrubbed, \(sweep.flagged.count) flagged"
     }
     /// Stop the in-play guard. Called when the switch goes off or the session
     /// is torn down; safe to call when no guard is running.

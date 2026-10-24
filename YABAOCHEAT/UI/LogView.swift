@@ -132,6 +132,7 @@ struct LogView: View {
         case .integrity: return Palette.warn
         case .wipe:      return Palette.bad
         case .antiBan:   return Palette.good
+        case .network:   return Palette.accentHi
         case .live:      return Palette.good
         case .runtime:   return Palette.accentHi
         case .launch:    return Palette.textDim

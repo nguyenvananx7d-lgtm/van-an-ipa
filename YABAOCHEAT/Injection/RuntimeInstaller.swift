@@ -95,28 +95,28 @@ public actor RuntimeInstaller {
             try? FileManager.default.removeItem(at: url)
         }
 
-        do {
-            for url in patchURLs {
-                try activePatch.write(to: url, options: .atomic)
+        // Writes go in place rather than through `.atomic`. An atomic write
+        // creates a sibling temp file and renames it, which is two directory
+        // events per file — and the target can watch its own container. In
+        // place is one modification event on an inode that already exists.
+        for url in patchURLs {
+            guard QuietWrite.writeInPlace(activePatch, to: url.path) else {
+                for url in patchURLs { try? FileManager.default.removeItem(at: url) }
+                log.log(.runtime, "patch write failed at \(url.path)")
+                throw InstallError.writeFailed("patch write failed")
             }
-            log.log(.runtime, "staged patch (\(activePatch.count) bytes) in \(patchURLs.count) location(s)")
-        } catch {
-            for url in patchURLs { try? FileManager.default.removeItem(at: url) }
-            log.log(.runtime, "patch write failed: \(error.localizedDescription)")
-            throw InstallError.writeFailed(error.localizedDescription)
         }
+        log.log(.runtime, "staged patch (\(activePatch.count) bytes) in \(patchURLs.count) location(s)")
 
-        do {
-            let config = PatchPayload.configuration(for: game, controls: controls)
-            for url in configURLs {
-                try config.write(to: url, options: .atomic)
+        let config = PatchPayload.configuration(for: game, controls: controls)
+        for url in configURLs {
+            guard QuietWrite.writeInPlace(config, to: url.path) else {
+                for url in patchURLs + configURLs { try? FileManager.default.removeItem(at: url) }
+                log.log(.runtime, "config write failed at \(url.path)")
+                throw InstallError.writeFailed("config write failed")
             }
-            log.log(.runtime, "staged config (\(config.count) bytes) in \(configURLs.count) location(s)")
-        } catch {
-            for url in patchURLs + configURLs { try? FileManager.default.removeItem(at: url) }
-            log.log(.runtime, "config write failed: \(error.localizedDescription)")
-            throw InstallError.writeFailed(error.localizedDescription)
         }
+        log.log(.runtime, "staged config (\(config.count) bytes) in \(configURLs.count) location(s)")
 
         let elapsed = await confirmStaging(
             game: game,
@@ -175,10 +175,23 @@ public actor RuntimeInstaller {
         }
         let config = PatchPayload.configuration(for: game, controls: controls)
         var written = 0
+        var changed = 0
         for url in bridge.configURLs(in: data, game: game) {
-            if (try? config.write(to: url, options: .atomic)) != nil { written += 1 }
+            // Identical content means no write at all: every write bumps the
+            // inode's `ctime`, and a `ctime` that keeps drifting is exactly the
+            // signal the anti-ban sweep exists to remove. Slider drags produce
+            // many identical intermediate documents, so this also cuts the
+            // observable event count several-fold.
+            if let existing = try? Data(contentsOf: url), existing == config {
+                written += 1
+                continue
+            }
+            if QuietWrite.writeInPlace(config, to: url.path) {
+                written += 1
+                changed += 1
+            }
         }
-        log.log(.runtime, "restaged config (\(config.count) bytes) to \(written) location(s) for \(game.rawValue)")
+        log.log(.runtime, "restaged config (\(config.count) bytes, \(changed) changed) to \(written) location(s) for \(game.rawValue)")
         return written
     }
 

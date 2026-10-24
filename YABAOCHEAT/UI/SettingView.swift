@@ -22,6 +22,7 @@ struct SettingView: View {
         VStack(alignment: .leading, spacing: Metrics.stack) {
             exploit
             antiBanSection
+            NetworkShieldSection()
             licenseInfo
             compatibility
             languageSection

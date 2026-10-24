@@ -4,9 +4,9 @@
   "EspMaster" : true,
   "EspBox" : true,
   "EspBoxFill" : true,
-  "EspBoxFillAlpha" : 0.18,
-  "EspBoxScale" : 1.15,
-  "EspBoxOffset" : 10,
+  "EspBoxFillAlpha" : 0.16,
+  "EspBoxScale" : 1.16,
+  "EspBoxOffset" : 8,
   "EspSkeleton" : true,
   "EspName" : true,
   "EspHealth" : true,
@@ -21,7 +21,12 @@
   "EspShowDowned" : true,
   "EspVisibleOnly" : true,
   "EspMaxDistance" : 250,
-  "EspTextScale" : 1,
+  "EspTextScale" : 1.05,
+
+  "EspGlow" : true,
+  "EspTargetHighlight" : true,
+  "EspNameChip" : true,
+  "EspSkeletonJoints" : true,
 
   "BoxType" : "corner",
   "HealthType" : "right",
@@ -47,5 +52,17 @@
   "AimVisibleOnly" : true,
   "IgnoreKnocked" : true,
   "AimTouchGate" : true,
+
+  "AimStickiness" : 0.78,
+  "AimLockMs" : 1600,
+  "AimSwitchBias" : 0.55,
+  "AimMaxTurn" : 180,
+  "AimTrackGain" : 1.35,
+  "AimOvershootDeg" : 0.9,
+  "AimBreakMinMs" : 90,
+  "AimBreakMaxMs" : 260,
+  "AimKillGuardMs" : 550,
+  "AimHumanize" : true,
+
   "AntiBan" : true
 }

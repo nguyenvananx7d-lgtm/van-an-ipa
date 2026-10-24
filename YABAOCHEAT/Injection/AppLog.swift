@@ -21,6 +21,7 @@ public final class AppLog: ObservableObject {
             case wipe = "WIPE"
 
             case antiBan = "ANTIBAN"
+            case network = "NETWORK"
 
             case live = "LIVE"
             case runtime = "RUNTIME"

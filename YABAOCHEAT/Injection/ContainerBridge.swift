@@ -68,6 +68,25 @@ public final class ContainerBridge: @unchecked Sendable {
     private let grantLock = NSLock()
     private var activeGrants: [String: Int64] = [:]
 
+    /// Directories a write probe has already confirmed in this process. The
+    /// probe works by creating and deleting `.ffxc_access_probe`, which is two
+    /// observable directory events inside the *target's own* container every
+    /// time `resolve` runs — and `resolve` runs constantly (every screen
+    /// appearance, every install, every probe). Once a directory has been
+    /// proved writable the verdict cannot change while the grant that allowed
+    /// it is held, so the answer is cached and the canary stops being written.
+    private let probeLock = NSLock()
+    private var verifiedWritable: Set<String> = []
+
+    private func probeVerdict(for path: String) -> Bool {
+        probeLock.lock(); defer { probeLock.unlock() }
+        return verifiedWritable.contains(path)
+    }
+
+    private func rememberProbeVerdict(for path: String) {
+        probeLock.lock(); verifiedWritable.insert(path); probeLock.unlock()
+    }
+
     /// A per-container grant already held for `path` (canonical, no trailing slash).
     private func activeGrant(for path: String) -> Int64? {
         grantLock.lock(); defer { grantLock.unlock() }
@@ -423,12 +442,22 @@ public final class ContainerBridge: @unchecked Sendable {
 
     /// Write + delete a probe file. True when the granted sandbox extension (or
     /// an honoured entitlement) actually covers the container.
+    ///
+    /// A directory already proved writable in this process is never re-probed:
+    /// the create/delete pair is visible to anything watching the target's
+    /// container, and a retained grant cannot regress mid-session.
     private func probeWritable(_ data: URL) -> Bool {
+        let key = data.standardizedFileURL.path
+        if probeVerdict(for: key) {
+            lastAccessError = nil
+            return true
+        }
         let probe = data.appendingPathComponent(ContainerBridge.accessProbe)
         do {
             try Data("ffxc".utf8).write(to: probe)
             try fm.removeItem(at: probe)
             lastAccessError = nil
+            rememberProbeVerdict(for: key)
             return true
         } catch {
             lastAccessError = error.localizedDescription

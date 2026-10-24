@@ -10,24 +10,28 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (86,417 B, targeting
+    /// The app ships a populated IFix patch (97,659 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
     /// manifest. It carries the ESP/aim method overrides directly — including
     /// the three-tab settings overlay built on the app's own design language
     /// (VISUAL / AIMBOT / EXTRAS), the config-driven ESP block (corner/edge
-    /// boxes, fill, skeleton, health bar, tracer, 360° arrows, FOV ring, head
-    /// dot), the humanised sticky camera assist, and the behavioural anti-ban
-    /// gate — so staging it into the container is what turns the features on.
+    /// boxes with a depth-scaled halo and brackets, gradient fill, segmented
+    /// health track, skeleton with joint rings, tracer, 360° arrows, FOV ring
+    /// with cardinal ticks, head dot), the sticky camera assist (1.6 s lock
+    /// retention, near-crosshair acquisition bias, error-adaptive gain and an
+    /// angular-speed cap), and the behavioural anti-ban gate (reaction jitter,
+    /// post-kill pause, micro-breaks on long tracks, acquire overshoot) — so
+    /// staging it into the container is what turns the features on.
     ///
     /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
     /// treats a bundle whose length matches this value as the payload to write,
     /// and only falls back to adopting a staged copy when the bundle does not
     /// match. Keep it in step with the resource or injection is refused.
-    public static let expectedLength = 86_417
+    public static let expectedLength = 97_659
     /// SHA-256 of the IFix patch shipped in this bundle. Pinned here so a copy
     /// staged anywhere in the game's container can be adopted by digest when the
     /// bundle resource is absent.
-    public static let vendorPatchSHA256 = "43d50b2e34e0d8ec2b9ec061c382dcd8b17d45160e580f8186c3cf96efcf2ba7"
+    public static let vendorPatchSHA256 = "cd2bc18ed9abba678f2de2bc44bbab560ed11a6ea462b781bd319a818d458285"
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 

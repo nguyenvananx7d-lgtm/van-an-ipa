@@ -54,6 +54,7 @@ YABAOCHEAT/
   Injection/                      installer, launcher, probe, wipe, anti-ban
     kexploit/                     kernel R/W chain (opa334 port)
     MCM/                          container-manager bridge
+  Network/                        DoH profile builder, loopback server, tunnel probe
   Licensing/                      protocol constants, client, verifier, device id
   Resources/                      patch blob, localConfig.json, strings, icons
 ESPDESGIN/                        separate InjectFix tooling — not part of the IPA
@@ -65,3 +66,4 @@ ffxc-auth/                        separate licence server — not part of the IP
 - `YABAOCHEAT/Resources/Assembly-CSharp-patch.bytes` is the payload staged into the game container. Its length and SHA-256 are pinned in `PatchPayload.swift`; change the blob and update both constants or injection refuses with `integrityMismatch`.
 - `ESPDESGIN/` and `ffxc-auth/` are not referenced by `project.yml` and are not bundled.
 - Bundle id `com.apple.mobile.MobileHouseArrest` and display name `Vortex Arena` live in `YABAOCHEAT/Info.plist` and `project.yml`.
+- The network shield installs a system-wide DNS-over-HTTPS configuration profile through Safari; it needs no Network Extension entitlement. It does not create a tunnel — the optional inject gate only checks for an existing `utun`/`ipsec`/`ppp` interface. Usage guide: [NETWORK.md](NETWORK.md).
