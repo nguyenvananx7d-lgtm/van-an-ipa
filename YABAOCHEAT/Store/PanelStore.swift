@@ -109,7 +109,7 @@ public final class PanelStore: ObservableObject {
 
     // MARK: - messages from the page
 
-    func handle(_ body: Any) {
+    func handle(_ body: Any) async {
         guard let message = body as? [String: Any],
               let type = message["type"] as? String
         else { return }
@@ -120,10 +120,10 @@ public final class PanelStore: ObservableObject {
             pushInjector()
 
         case "apply":
-            if let values = message["values"] as? [String: Any] { apply(values) }
+            if let values = message["values"] as? [String: Any] { await apply(values) }
 
         case "inject":
-            if let values = message["values"] as? [String: Any] { apply(values) }
+            if let values = message["values"] as? [String: Any] { await apply(values) }
             Task { await runInjector() }
 
         case "close":
@@ -148,7 +148,7 @@ public final class PanelStore: ObservableObject {
     /// Merge the page's draft over the stored profile and commit. Unknown keys
     /// are ignored; a value of the wrong type fails the whole decode and the
     /// profile is left exactly as it was.
-    private func apply(_ values: [String: Any]) {
+    private func apply(_ values: [String: Any]) async {
         var merged = encode(menu.controls)
         for (key, value) in values where merged[key] != nil {
             merged[key] = value
@@ -164,7 +164,7 @@ public final class PanelStore: ObservableObject {
         // Persisted in `MenuStore`, but that alone only reaches the game on the
         // next inject. Push it into the container now so the file the patch
         // reads is the profile the user just confirmed.
-        let written = injector.stageProfile(controls)
+        let written = await injector.stageProfile(controls)
         log.log(.runtime, "panel applied profile for \(menu.selectedGame.rawValue) — \(written.map { "\($0) file(s)" } ?? "container unavailable")")
         pushState()
         if written == nil {

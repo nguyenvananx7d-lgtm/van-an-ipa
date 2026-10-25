@@ -383,9 +383,9 @@ public final class InjectStore: ObservableObject {
     /// inject. Returns the number of files written, or nil when the container
     /// cannot be reached — the caller must tell the user which one happened.
     @discardableResult
-    public func stageProfile(_ controls: FeatureControls) -> Int? {
+    public func stageProfile(_ controls: FeatureControls) async -> Int? {
         guard case .resolved = bridge.resolve(game: game) else { return nil }
-        return installer.restageConfig(game: game, controls: controls)
+        return await installer.restageConfig(game: game, controls: controls)
     }
 
     public func uninject() async {

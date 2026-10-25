@@ -83,7 +83,7 @@ private struct PanelWebContainer: UIViewRepresentable {
             guard message.name == "panel" else { return }
             let body = message.body
             Task { @MainActor in
-                self.store.handle(body)
+                await self.store.handle(body)
             }
         }
 
