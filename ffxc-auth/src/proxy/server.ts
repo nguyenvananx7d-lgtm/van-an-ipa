@@ -1,11 +1,14 @@
 import http from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { loadOrCreateAuthority } from "./pki.js";
 import { createRelay, type Rule } from "./mitm.js";
 import { buildMobileConfig } from "./profile.js";
 import { type CaptureRecord, suggestRules } from "./suggest.js";
 import { renderDashboard } from "./dashboard.js";
+import { renderMenu } from "./menu.js";
+import { type VpnPayload } from "./profile.js";
+import { FEATURES, featureById, featureHits, rulesForFeatures } from "./features.js";
 
 /**
  * Relay entry point.
@@ -25,9 +28,112 @@ const proxyPort = Number(process.env.RELAY_PORT ?? 1299);
 const adminPort = Number(process.env.RELAY_ADMIN_PORT ?? 8080);
 const dataDir = process.env.RELAY_DATA_DIR ?? "data";
 const capturePath = process.env.RELAY_CAPTURE ?? join(dataDir, "capture.jsonl");
+
+/**
+ * Static copy of the in-app control panel, served at /panel so a profile's web
+ * clip can open the same UI the app bundles. Kept separate from /menu: the
+ * relay's own menu keeps working while this surface is evaluated.
+ * Sync with `scripts/sync-panel.sh`.
+ */
+const panelDir = process.env.RELAY_PANEL_DIR ?? join(process.cwd(), "public", "menu");
+const panelTypes: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+};
 const rulesPath = process.env.RELAY_RULES ?? join(dataDir, "rules.json");
 const publicHost = process.env.RELAY_PUBLIC_HOST ?? "127.0.0.1";
 const profileName = process.env.RELAY_PROFILE_NAME ?? "Nimbus Relay";
+
+/**
+ * The licence backend, used by the menu's login screen.
+ *
+ * Two URLs on purpose: `/api` authorises a key, while `/admin/api/sessions`
+ * answers "is this token still live" without touching the heartbeat sequence
+ * the app is already driving. Reusing the heartbeat from here would move the
+ * client's sequence forward and register as a replay on its next poll.
+ */
+const authApiUrl = process.env.AUTH_URL ?? "http://127.0.0.1:8787/api";
+const authAdminUrl = process.env.AUTH_ADMIN_URL ?? "http://127.0.0.1:8787";
+const authAdminToken = process.env.AUTH_ADMIN_TOKEN ?? process.env.ADMIN_TOKEN ?? "";
+
+const version = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
+function readBody(req: http.IncomingMessage, limit = 8 * 1024): Promise<string | null> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) {
+        resolve(null);
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", () => resolve(null));
+  });
+}
+
+/**
+ * `fetch` is present at runtime (Node 18+) but this project compiles against
+ * ES2022 without the DOM lib, so its return type is not in scope. One narrow
+ * interface keeps the two call sites honest without pulling in lib.dom.
+ */
+interface FetchResult {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+async function httpFetch(
+  url: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<FetchResult> {
+  return (await fetch(url, init)) as unknown as FetchResult;
+}
+
+async function sessionIsValid(token: string): Promise<boolean> {
+  if (!token || !authAdminToken) return false;
+  try {
+    const response = await httpFetch(`${authAdminUrl}/admin/api/sessions`, {
+      headers: { "x-admin-token": authAdminToken },
+    });
+    if (!response.ok) return false;
+    const body = (await response.json()) as {
+      sessions?: { token?: string; expired?: boolean }[];
+    };
+    return (body.sessions ?? []).some((entry) => entry.token === token && entry.expired === false);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Who may change rules. With no admin token configured the relay stays open,
+ * which is right for a laptop-and-one-phone setup; as soon as a token exists,
+ * a rule write needs either that token (the dashboard) or a live licence
+ * session (the phone menu).
+ */
+async function controlAllowed(req: http.IncomingMessage): Promise<boolean> {
+  if (!authAdminToken) return true;
+  if (req.headers["x-admin-token"] === authAdminToken) return true;
+  const token = req.headers["x-menu-session"];
+  return typeof token === "string" && (await sessionIsValid(token));
+}
 
 function loadRules(): Rule[] {
   if (!existsSync(rulesPath)) return [];
@@ -40,8 +146,43 @@ function loadRules(): Rule[] {
   }
 }
 
+const featuresPath = process.env.RELAY_FEATURES ?? join(dataDir, "features.json");
+
+function loadEnabledFeatures(): Set<string> {
+  if (!existsSync(featuresPath)) return new Set();
+  try {
+    const parsed = JSON.parse(readFileSync(featuresPath, "utf8")) as unknown;
+    const list = Array.isArray(parsed)
+      ? parsed
+      : ((parsed as { enabled?: unknown[] }).enabled ?? []);
+    return new Set(
+      list.filter((id): id is string => typeof id === "string" && Boolean(featureById(id))),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function saveEnabledFeatures(): void {
+  writeFileSync(featuresPath, JSON.stringify({ enabled: [...enabledFeatures] }, null, 2));
+}
+
+const enabledFeatures = loadEnabledFeatures();
+
+/** Manual rules keep their order; feature rules are appended and always win. */
+function mergedRules(manual: Rule[]): Rule[] {
+  return [
+    ...manual.filter((rule) => !rule.feature),
+    ...rulesForFeatures(enabledFeatures),
+  ];
+}
+
 const ca = loadOrCreateAuthority(join(dataDir, "ca"));
-const rules = loadRules();
+const rules = mergedRules(loadRules());
+const passthrough = (process.env.RELAY_PASSTHROUGH ?? "")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 
 function readCaptures(limit: number): CaptureRecord[] {
   if (!existsSync(capturePath)) return [];
@@ -63,10 +204,43 @@ function countCaptures(): number {
 }
 
 function applyRules(next: Rule[]): void {
+  const merged = mergedRules(next);
   rules.length = 0;
-  rules.push(...next);
+  rules.push(...merged);
   writeFileSync(rulesPath, JSON.stringify(rules, null, 2));
   relay.setRules(rules);
+}
+
+/**
+ * Switch a feature on or off. This is the only place the menu's switches reach:
+ * it rewrites the live rule array and the file behind it, so a reboot keeps the
+ * choice and a running tunnel picks it up on the next request.
+ */
+function setFeature(id: string, on: boolean): boolean {
+  if (!featureById(id)) return false;
+  if (on) enabledFeatures.add(id);
+  else enabledFeatures.delete(id);
+  saveEnabledFeatures();
+  const manual = rules.filter((rule) => !rule.feature);
+  const merged = mergedRules(manual);
+  rules.length = 0;
+  rules.push(...merged);
+  writeFileSync(rulesPath, JSON.stringify(rules, null, 2));
+  relay.setRules(rules);
+  return true;
+}
+
+function featureState(records: CaptureRecord[]) {
+  const hits = featureHits(records);
+  return FEATURES.map((feature) => ({
+    id: feature.id,
+    label: feature.label,
+    detail: feature.detail,
+    risky: Boolean(feature.risky),
+    enabled: enabledFeatures.has(feature.id),
+    rules: feature.rules.length,
+    hits: hits[feature.id] ?? 0,
+  }));
 }
 
 const relay = createRelay({
@@ -74,12 +248,69 @@ const relay = createRelay({
   ca,
   capturePath,
   rules,
+  passthrough,
   log: (line) => console.log(line),
 });
+
+/**
+ * The profile is the whole delivery vehicle: certificate, tunnel, proxy and
+ * menu in one tap. A missing variable drops that one payload rather than
+ * failing the boot — a Wi-Fi-only deployment is still a valid relay.
+ */
+function readVpn(): VpnPayload | undefined {
+  const server = process.env.RELAY_VPN_SERVER;
+  if (!server) return undefined;
+  const mode = process.env.RELAY_VPN_MODE ?? "l2tp";
+
+  if (mode === "ikev2") {
+    const username = process.env.RELAY_VPN_USER;
+    const password = process.env.RELAY_VPN_PASSWORD;
+    if (!username || !password) return undefined;
+    return {
+      type: "ikev2",
+      server,
+      remoteIdentifier: process.env.RELAY_VPN_REMOTE_ID ?? server,
+      username,
+      password,
+    };
+  }
+
+  const username = process.env.RELAY_L2TP_USER;
+  const password = process.env.RELAY_L2TP_PASSWORD;
+  const sharedSecret = process.env.RELAY_IPSEC_SECRET;
+  if (!username || !password || !sharedSecret) return undefined;
+  return { type: "l2tp", server, username, password, sharedSecret };
+}
+
+const vpn = readVpn();
+const menuUrl = process.env.RELAY_MENU_URL;
+const consent =
+  process.env.RELAY_CONSENT ??
+  (vpn
+    ? `${profileName.toUpperCase()}
+
+Sau khi cài profile:
+1. Bật tin cậy đầy đủ cho ${profileName} trong Cài đặt tin cậy chứng nhận.
+2. Mở Cài đặt > VPN, chọn ${profileName} VPN và Kết nối.
+3. Đóng hoàn toàn game và mở lại.`
+    : undefined);
+
+// Inside the tunnel: applies on every network, including cellular, for as long
+// as the VPN is up. RELAY_PROXY_IN_VPN=0 reverts to the manual entry.
+const proxies =
+  vpn && process.env.RELAY_PROXY_IN_VPN !== "0"
+    ? {
+        host: publicHost,
+        port: proxyPort,
+        exceptions: ["localhost", "127.0.0.1", "*.local"],
+      }
+    : undefined;
 
 const profile = buildMobileConfig({
   ca,
   displayName: profileName,
+  consent,
+  manualProxy: { host: publicHost, port: proxyPort },
   wifi: process.env.RELAY_WIFI_SSID
     ? {
         ssid: process.env.RELAY_WIFI_SSID,
@@ -87,19 +318,51 @@ const profile = buildMobileConfig({
         proxyPort,
       }
     : undefined,
-  vpn:
-    process.env.RELAY_VPN_SERVER && process.env.RELAY_VPN_USER && process.env.RELAY_VPN_PASSWORD
-      ? {
-          server: process.env.RELAY_VPN_SERVER,
-          remoteIdentifier: process.env.RELAY_VPN_REMOTE_ID ?? process.env.RELAY_VPN_SERVER,
-          username: process.env.RELAY_VPN_USER,
-          password: process.env.RELAY_VPN_PASSWORD,
-        }
-      : undefined,
+  vpn,
+  proxies,
+  webclip: menuUrl
+    ? { url: menuUrl, label: process.env.RELAY_MENU_LABEL ?? `${profileName} Control` }
+    : undefined,
 });
 
-const admin = http.createServer((req, res) => {
+const admin = http.createServer(async (req, res) => {
   const path = (req.url ?? "/").split("?")[0];
+
+  if (path === "/menu/login") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json" }).end('{"error":"method_not_allowed"}');
+      return;
+    }
+    if (!authAdminToken) {
+      res.writeHead(503, { "content-type": "application/json" }).end(
+        JSON.stringify({ error: "auth backend not configured (AUTH_ADMIN_TOKEN)" }),
+      );
+      return;
+    }
+    const raw = await readBody(req);
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(raw ?? "") as Record<string, unknown>;
+    } catch {
+      res.writeHead(400, { "content-type": "application/json" }).end('{"error":"bad_request"}');
+      return;
+    }
+    try {
+      const upstream = await httpFetch(authApiUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      res
+        .writeHead(upstream.status, { "content-type": "application/json" })
+        .end(await upstream.text());
+    } catch (error) {
+      res.writeHead(502, { "content-type": "application/json" }).end(
+        JSON.stringify({ error: `auth backend unreachable: ${String(error)}` }),
+      );
+    }
+    return;
+  }
 
   if (path === "/profile.mobileconfig") {
     res
@@ -126,8 +389,43 @@ const admin = http.createServer((req, res) => {
     return;
   }
 
+  if (path === "/features" && req.method === "POST") {
+    if (!(await controlAllowed(req))) {
+      res.writeHead(401, { "content-type": "application/json" }).end(
+        '{"error":"unauthorized","hint":"dashboard: ?token=<ADMIN_TOKEN>; menu: sign in"}',
+      );
+      return;
+    }
+    const raw = await readBody(req);
+    let body: { id?: unknown; enabled?: unknown };
+    try {
+      body = JSON.parse(raw ?? "") as { id?: unknown; enabled?: unknown };
+    } catch {
+      res.writeHead(400, { "content-type": "application/json" }).end('{"error":"bad_request"}');
+      return;
+    }
+    if (typeof body.id !== "string") {
+      res.writeHead(400, { "content-type": "application/json" }).end('{"error":"missing_id"}');
+      return;
+    }
+    if (!setFeature(body.id, Boolean(body.enabled))) {
+      res.writeHead(404, { "content-type": "application/json" }).end('{"error":"unknown_feature"}');
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" }).end(
+      JSON.stringify({ id: body.id, enabled: Boolean(body.enabled), rules: rules.length }),
+    );
+    return;
+  }
+
   if (path === "/rules") {
     if (req.method === "POST") {
+      if (!(await controlAllowed(req))) {
+        res.writeHead(401, { "content-type": "application/json" }).end(
+          '{"error":"unauthorized","hint":"dashboard: ?token=<ADMIN_TOKEN>; menu: sign in"}',
+        );
+        return;
+      }
       const chunks: Buffer[] = [];
       req.on("data", (chunk: Buffer) => {
         chunks.push(chunk);
@@ -190,6 +488,7 @@ const admin = http.createServer((req, res) => {
       proxyPort,
       adminPort,
       rules,
+      features: featureState(records),
       captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
       suggestions: suggestRules(records),
     };
@@ -200,6 +499,46 @@ const admin = http.createServer((req, res) => {
   if (path === "/captures/clear" && req.method === "POST") {
     writeFileSync(capturePath, "");
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ cleared: true }));
+    return;
+  }
+
+  if (path === "/menu") {
+    const deviceKey = new URL(req.url ?? "/", "http://x").searchParams.get("k") ?? "";
+    const records = readCaptures(4000);
+    res
+      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      .end(
+        renderMenu({
+          name: profileName,
+          publicHost,
+          proxyPort,
+          deviceKey,
+          rules,
+          captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
+          suggestions: suggestRules(records),
+          loginEnabled: Boolean(authAdminToken),
+          version,
+          features: featureState(records),
+        }),
+      );
+    return;
+  }
+
+  if (path === "/panel" || path.startsWith("/panel/")) {
+    const name = path === "/panel" || path === "/panel/"
+      ? "index.html"
+      : path.slice("/panel/".length);
+    if (name.includes("..") || name.startsWith("/")) {
+      res.writeHead(400, { "content-type": "text/plain" }).end("bad path");
+      return;
+    }
+    const file = join(panelDir, name);
+    if (!existsSync(file)) {
+      res.writeHead(404, { "content-type": "text/plain" }).end("panel assets missing");
+      return;
+    }
+    const type = panelTypes[extname(file).toLowerCase()] ?? "application/octet-stream";
+    res.writeHead(200, { "content-type": type, "cache-control": "no-cache" }).end(readFileSync(file));
     return;
   }
 
@@ -216,6 +555,10 @@ const admin = http.createServer((req, res) => {
           rules,
           captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
           suggestions: suggestRules(records),
+          transport: vpn
+            ? { kind: vpn.type, server: vpn.server, proxyInTunnel: Boolean(proxies) }
+            : undefined,
+          menuUrl,
         }),
       );
     return;

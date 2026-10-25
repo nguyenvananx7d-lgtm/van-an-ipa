@@ -15,6 +15,8 @@
     "mint": "node --import tsx scripts/mint-keys.ts",
     "relay": "node --import tsx src/proxy/server.ts",
     "relay:selftest": "node --import tsx scripts/proxy-selftest.ts",
+    "relay:feature-test": "node --import tsx scripts/feature-selftest.ts",
+    "panel:sync": "sh scripts/sync-panel.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

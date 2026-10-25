@@ -22,6 +22,8 @@ COPY package.json pnpm-lock.yaml ./
 # old "copy dist onto a bare image" recipe would start and then crash on boot.
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
+# Static control panel served at /panel (synced by scripts/sync-panel.sh).
+COPY public ./public
 # keys/ and data/ are bind-mounted; all config comes from the environment (.env)
 EXPOSE 8787
 # The relay entry point is a second process over the same image:

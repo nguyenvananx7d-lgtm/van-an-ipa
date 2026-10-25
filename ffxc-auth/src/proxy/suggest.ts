@@ -27,6 +27,10 @@ export interface CaptureRecord {
   resPreview?: string;
   error?: string;
   blocked?: boolean;
+  /** Feature ids whose rules acted on this request. */
+  features?: string[];
+  /** Host was spliced as raw TCP instead of intercepted. */
+  passthrough?: boolean;
 }
 
 export interface Suggestion {

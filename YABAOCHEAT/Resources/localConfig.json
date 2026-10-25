@@ -64,5 +64,12 @@
   "AimKillGuardMs" : 900,
   "AimHumanize" : true,
 
+  "AimStealth" : 2,
+  "AimFrom" : 0,
+  "AimHoldGain" : 1.0,
+  "AimCommitMs" : 50,
+  "AntibanMaxEngageMs" : 2400,
+  "AntibanCooldownMs" : 900,
+
   "AntiBan" : true
 }

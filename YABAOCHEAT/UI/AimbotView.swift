@@ -108,6 +108,55 @@ struct AimbotView: View {
                     unit: "ms",
                     showRange: true
                 )
+            }
+            SectionGroup(title: String(localized: "section_aimbot_stealth"), symbol: "shield.lefthalf.filled") {
+                SegmentRow(
+                    label: String(localized: "aim_stealth"),
+                    selection: tierBinding,
+                    options: [
+                        SegmentOption(value: "0", title: String(localized: "stealth_lock")),
+                        SegmentOption(value: "1", title: String(localized: "stealth_low")),
+                        SegmentOption(value: "2", title: String(localized: "stealth_balanced")),
+                        SegmentOption(value: "3", title: String(localized: "stealth_quiet")),
+                    ]
+                )
+                SegmentRow(
+                    label: String(localized: "aim_origin"),
+                    selection: menu.feature(\.aimFrom),
+                    options: [
+                        SegmentOption(value: "camera", title: String(localized: "origin_camera")),
+                        SegmentOption(value: "eye", title: String(localized: "origin_eye")),
+                    ]
+                )
+                SliderRow(
+                    label: String(localized: "aim_hold_gain"),
+                    value: menu.feature(\.aimHoldGain),
+                    range: 0.3...2.5,
+                    step: 0.05,
+                    showRange: true
+                )
+                SliderRow(
+                    label: String(localized: "aim_commit"),
+                    value: menu.feature(\.aimCommitMs),
+                    range: 10...500,
+                    step: 10,
+                    unit: "ms",
+                    showRange: true
+                )
+                Text(String(localized: "aim_stealth_note"))
+                    .font(.caption)
+                    .foregroundStyle(Palette.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.rowPaddingH)
+                    .padding(.vertical, 11)
+                    .rowDivider()
+                Text(String(localized: "aim_origin_note"))
+                    .font(.caption)
+                    .foregroundStyle(Palette.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.rowPaddingH)
+                    .padding(.vertical, 11)
+                    .rowDivider()
                 // The ban for an aim assist is statistical, not forensic: the
                 // server scores headshot ratio, time-on-target and lock length
                 // from the match record. The note is here because a slider that
@@ -121,5 +170,22 @@ struct AimbotView: View {
                     .rowDivider()
             }
         }
+    }
+
+    /// `SegmentRow` speaks in strings and the tier is an ordinal the patch
+    /// clamps to 0...3, so the conversion lives here rather than widening the
+    /// row type for one control.
+    private var tierBinding: Binding<String> {
+        Binding(
+            get: { String(menu.controls.aimStealth) },
+            set: { newValue in
+                var current = menu.controls
+                current.aimStealth = Int(newValue) ?? 2
+                // `AimLock` is tier 0 under its old name. Leaving it set while
+                // the tier moves would mean two switches arguing.
+                current.aimLock = current.aimStealth == 0
+                menu.controls = current
+            }
+        )
     }
 }

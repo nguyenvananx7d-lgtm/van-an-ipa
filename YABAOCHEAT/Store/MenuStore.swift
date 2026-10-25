@@ -100,7 +100,18 @@ public final class MenuStore: ObservableObject {
 
     public var controls: FeatureControls {
         get { configurations[selectedGame] ?? FeatureControls() }
-        set { configurations[selectedGame] = newValue; newValue.save(for: selectedGame) }
+        set {
+            var next = newValue
+            // The tier is a preset, not a second source of truth: it only
+            // rewrites the limits it owns when the tier itself moved, so a
+            // hand-dragged Max Engage or Deadzone survives the next save.
+            let tierChanged = configurations[selectedGame].map {
+                $0.aimStealth != next.aimStealth || $0.aimLock != next.aimLock
+            } ?? true
+            if tierChanged { next.applyStealthTier() }
+            configurations[selectedGame] = next
+            next.save(for: selectedGame)
+        }
     }
 
     /// One-tap conservative profile for a session that has to survive scrutiny:

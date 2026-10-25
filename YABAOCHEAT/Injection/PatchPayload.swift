@@ -10,7 +10,7 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (99,065 B, targeting
+    /// The app ships a populated IFix patch (98,397 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
     /// manifest. It carries the ESP/aim method overrides directly — including
     /// the three-tab settings overlay built on the app's own design language
@@ -18,23 +18,23 @@ public struct PatchPayload: Sendable {
     /// boxes with a depth-scaled halo and brackets, gradient fill, segmented
     /// health track, skeleton with joint rings, tracer, 360° arrows, FOV ring
     /// with cardinal ticks, head dot), the aim crosshair (ring + centre pip),
-    /// the sticky camera assist (1.6 s lock retention, near-crosshair
-    /// acquisition bias, error-adaptive gain and an angular-speed cap) with the
-    /// optional continuous-lock mode, and the behavioural anti-ban gate
-    /// (reaction jitter, post-kill pause, micro-breaks on long tracks, acquire
-    /// overshoot) — so staging it into the container is what turns the features
-    /// on. It also re-reads `localConfig.json` while the match runs, so panel
-    /// changes land without a relaunch.
+    /// and the aim core: one solve per frame driven from the game's own
+    /// per-player pass rather than from a GUI Repaint event, with continuous
+    /// tracking and the anti-ban envelope expressed as engagement length,
+    /// release beats, turn-rate and a rationed `SetAimRotation` commit instead
+    /// of the old per-frame write dropout — so staging it into the container is
+    /// what turns the features on. It also re-reads `localConfig.json` while the
+    /// match runs, so panel changes land without a relaunch.
     ///
     /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
     /// treats a bundle whose length matches this value as the payload to write,
     /// and only falls back to adopting a staged copy when the bundle does not
     /// match. Keep it in step with the resource or injection is refused.
-    public static let expectedLength = 99_065
+    public static let expectedLength = 98_397
     /// SHA-256 of the IFix patch shipped in this bundle. Pinned here so a copy
     /// staged anywhere in the game's container can be adopted by digest when the
     /// bundle resource is absent.
-    public static let vendorPatchSHA256 = "aaf9fd0ef880898693b6801fd6b1b92633dfa0f9efc4242fecc8cd0dec11f3f0"
+    public static let vendorPatchSHA256 = "17f9f55e087b9423bcb7d8cb7f8341e3b2c425bc00da3a7a2e91b0be9f9fcdff"
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 

@@ -1,7 +1,8 @@
 import http from "node:http";
 import https from "node:https";
+import net from "node:net";
 import tls from "node:tls";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type Authority, leafFor } from "./pki.js";
 
@@ -24,10 +25,10 @@ import { type Authority, leafFor } from "./pki.js";
  * before any rewrite can be written.
  */
 
-export type RuleAction = "block" | "json-merge" | "text-replace";
+export type RuleAction = "block" | "json-merge" | "text-replace" | "respond";
 
 export interface Rule {
-  /** Exact host or suffix (`".example.com"`). Omitted matches every host. */
+  /** Exact host or suffix (`.example.com`). Omitted matches every host. */
   host?: string;
   /** Regular expression source matched against the request path. */
   pathPattern: string;
@@ -37,7 +38,31 @@ export interface Rule {
   /** For `text-replace`: literal needle and replacement in the response body. */
   find?: string;
   replace?: string;
+  /**
+   * For `respond`: the body the relay returns itself, without dialing upstream.
+   *
+   * This is what turns the relay from a rewriting proxy into a delivery point.
+   * The game already fetches its IFix code patch over HTTPS (`GameVarDef.CodePatchUrl`,
+   * applied by `COWGameEntry.LoadIFix`), so rewriting that field to a relay path
+   * makes the game download and install the patch through its own loader — into
+   * its own sandbox, under its own provenance, with its own timestamps. Nothing
+   * is written into the container by a second process, which is the artifact a
+   * container scan looks for.
+   */
+  body?: string;
+  /** File on disk to serve for `respond`, preferred over `body` when both set. */
+  bodyFile?: string;
+  /** Content type for `respond`. Defaults to `application/json`. */
+  contentType?: string;
+  /** HTTP status for `respond`. Defaults to 200. */
+  status?: number;
   note?: string;
+  /**
+   * Which menu feature owns this rule. Tagged rules are managed by the feature
+   * switch rather than by hand: toggling a feature adds or removes every rule
+   * carrying its id, and a manual edit never removes them.
+   */
+  feature?: string;
 }
 
 export interface RelayConfig {
@@ -58,6 +83,16 @@ export interface RelayConfig {
    * pinning workarounds that need to reach a specific edge node.
    */
   upstreamHostFor?: (host: string) => string;
+  /**
+   * Host suffixes that are tunneled raw instead of intercepted.
+   *
+   * A phone's HTTP proxy sees every connection, including ones that are not
+   * HTTP: game transports speak their own framed protocol inside TLS, and
+   * terminating those breaks the session for no benefit. A raw TCP splice keeps
+   * them working, records that they happened, and leaves the interesting HTTP
+   * hosts to the mitm path.
+   */
+  passthrough?: string[];
   log?: (line: string) => void;
 }
 
@@ -86,6 +121,13 @@ function hostMatches(rule: Rule, host: string): boolean {
   const want = rule.host.toLowerCase();
   if (want.startsWith(".")) return host === want.slice(1) || host.endsWith(want);
   return host === want;
+}
+
+/** Ids of the features that acted on a request, for per-feature counters. */
+function appliedFeatures(hits: Rule[]): string[] {
+  const ids = new Set<string>();
+  for (const rule of hits) if (rule.feature) ids.add(rule.feature);
+  return [...ids];
 }
 
 function rulesFor(rules: Rule[], host: string, path: string): Rule[] {
@@ -151,8 +193,30 @@ export function createRelay(config: RelayConfig): RelayHandle {
     const rulesHit = rulesFor(rules, host, path);
     if (rulesHit.some((rule) => rule.action === "block")) {
       log(`relay: blocked ${host}${path} by rule`);
-      capture({ ts: new Date().toISOString(), host, method: req.method, path, status: 204, blocked: true });
+      capture({
+        ts: new Date().toISOString(),
+        host,
+        method: req.method,
+        path,
+        status: 204,
+        blocked: true,
+        features: appliedFeatures(rulesHit),
+      });
       res.writeHead(204).end();
+      return;
+    }
+
+    // A `respond` rule wins over forwarding: the relay is the origin for this
+    // path. Draining the request body first keeps a client that is still
+    // writing from seeing an RST on a keep-alive connection.
+    const synthetic = rulesHit.find((rule) => rule.action === "respond");
+    if (synthetic) {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => {
+        serveSynthetic(req, res, host, path, synthetic, rulesHit);
+      });
+      req.on("error", () => res.destroy());
       return;
     }
 
@@ -173,6 +237,55 @@ export function createRelay(config: RelayConfig): RelayHandle {
       forward(req, res, host, port, path, requestBody, overflow, rulesHit);
     });
     req.on("error", () => res.destroy());
+  }
+
+  function serveSynthetic(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    host: string,
+    path: string,
+    rule: Rule,
+    rulesHit: Rule[],
+  ) {
+    let body: Buffer;
+    if (rule.bodyFile) {
+      try {
+        body = readFileSync(rule.bodyFile);
+      } catch (error) {
+        // A missing payload file must not look like a successful response: the
+        // game would cache an empty patch and apply nothing.
+        log(`relay: respond bodyFile unreadable (${rule.bodyFile}): ${(error as Error).message}`);
+        res.writeHead(503, { "content-type": "text/plain" }).end("relay: payload unavailable");
+        return;
+      }
+    } else {
+      body = Buffer.from(rule.body ?? "{}", "utf8");
+    }
+
+    const status = rule.status ?? 200;
+    res.writeHead(status, {
+      "content-type": rule.contentType ?? "application/json; charset=utf-8",
+      "content-length": body.length,
+      // A patched binary or a control document that a CDN or the game's own
+      // HTTP cache holds on to is a patch that never updates.
+      "cache-control": "no-store, max-age=0",
+      "access-control-allow-origin": "*",
+    });
+    res.end(body);
+
+    log(`relay: responded ${status} ${body.length}B for ${host}${path}`);
+    capture({
+      ts: new Date().toISOString(),
+      host,
+      method: req.method,
+      path,
+      status,
+      contentType: rule.contentType ?? "application/json",
+      synthetic: true,
+      resBytes: body.length,
+      applied: [`respond(${rule.note ?? rule.pathPattern})`],
+      features: appliedFeatures(rulesHit),
+    });
   }
 
   function forward(
@@ -278,6 +391,7 @@ export function createRelay(config: RelayConfig): RelayHandle {
             reqBytes: requestBody.length,
             resBytes: overflow ? buffered : body.length,
             applied,
+            features: appliedFeatures(rulesHit),
             reqPreview: requestBody.length ? preview(requestBody, previewBytes) : undefined,
             resPreview: !overflow && body.length ? preview(body, previewBytes) : undefined,
           });
@@ -314,6 +428,33 @@ export function createRelay(config: RelayConfig): RelayHandle {
   });
   proxy.on("connect", (req, clientSocket, head) => {
     const target = hostOnly(req.url);
+    const targetPort = Number(/(\d+)$/.exec(req.url ?? "")?.[1] ?? 443);
+    const passthrough = (config.passthrough ?? []).some((suffix) =>
+      suffix.startsWith(".") ? target === suffix.slice(1) || target.endsWith(suffix) : target === suffix,
+    );
+
+    if (passthrough) {
+      // Raw splice: no certificate, no parsing, byte-for-byte both ways.
+      clientSocket.write("HTTP/1.1 200 Connection Established\r\nProxy-Agent: nimbus-relay\r\n\r\n");
+      let established = false;
+      const upstream = net.connect(targetPort, target, () => {
+        established = true;
+        if (head && head.length > 0) upstream.write(head);
+        clientSocket.pipe(upstream);
+        upstream.pipe(clientSocket);
+      });
+      upstream.on("error", (error) => {
+        // A mid-session reset is the device or the server hanging up, which is
+        // normal. Only a failure to reach the target is worth a log line.
+        if (!established) log(`relay: passthrough failed for ${target}: ${error.message}`);
+        clientSocket.destroy();
+      });
+      clientSocket.on("close", () => upstream.destroy());
+      log(`relay: passthrough ${target}:${targetPort}`);
+      capture({ ts: new Date().toISOString(), host: target, path: "", passthrough: true });
+      return;
+    }
+
     clientSocket.write("HTTP/1.1 200 Connection Established\r\nProxy-Agent: nimbus-relay\r\n\r\n");
     if (head && head.length > 0) clientSocket.unshift(head);
     log(`relay: tunnel ${target}`);

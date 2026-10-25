@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Control Panel</title>
+<link rel="stylesheet" href="panel-fonts.css">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<div class="panel" id="panel">
+
+  <!-- header: brand, session stats, secret timer -->
+  <header class="head" id="head">
+    <div class="brand-card">
+      <div class="brand-row">
+        <span class="logo"></span>
+        <span class="brand" id="brand">VORTEX ARENA</span>
+        <span class="chip solid" id="planChip">PRO</span>
+        <span class="grow"></span>
+        <span class="chip" id="daysChip">30D</span>
+        <button class="icon-btn" id="closeBtn" aria-label="Đóng">
+          <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">KẾT NỐI</span>
+          <span class="stat-value live" id="connValue"><i></i>LIVE</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">ĐANG BẬT</span>
+          <span class="stat-value" id="enabledValue">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">KEY HẾT HẠN</span>
+          <span class="stat-value" id="expiryValue">--/--/----</span>
+        </div>
+      </div>
+
+      <div class="session">
+        <div class="session-row">
+          <span>MENU SECRET</span>
+          <strong id="sessionTimer">24:00:00</strong>
+        </div>
+        <div class="bar"><i id="sessionBar" style="width:100%"></i></div>
+        <div class="session-row sub">
+          <span>Gói đang hoạt động</span>
+          <span id="sessionPct">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+
+  <!-- scrollable rows -->
+  <main class="body" id="body"></main>
+
+  <!-- footer: sync state, reset, apply -->
+  <footer class="foot">
+    <div class="sync">
+      <span id="syncLabel">Đã đồng bộ 00:00:00</span>
+      <span class="sync-state" id="syncState"></span>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="resetBtn">Reset</button>
+      <button class="btn primary" id="applyBtn">Áp dụng cấu hình</button>
+    </div>
+  </footer>
+</div>
+
+<!-- key injector -->
+<div class="overlay" id="injectOverlay" hidden>
+  <div class="modal">
+    <div class="spinner" id="injectSpinner"></div>
+    <div class="modal-title" id="injectTitle">ĐANG TẢI KEY INJECTOR...</div>
+    <div class="modal-url" id="injectUrl">key=…&amp;deviceId=…</div>
+    <div class="modal-status" id="injectStatus"></div>
+    <button class="btn primary narrow" id="injectClose" hidden>Đóng</button>
+  </div>
+</div>
+
+<!-- relay sign-in: same key the licence server issued -->
+<div class="overlay signin" id="loginOverlay" hidden>
+  <div class="modal login-card">
+    <div class="brand-row login-brand">
+      <span class="logo"></span>
+      <span class="brand" id="loginBrand">VORTEX ARENA</span>
+      <span class="chip solid">PRO</span>
+    </div>
+    <p class="login-sub">Nhập license key để mở menu</p>
+    <input class="key-input" id="keyInput" type="text" inputmode="text"
+           autocomplete="off" autocapitalize="characters" spellcheck="false"
+           placeholder="VT-XXXX-XXXX">
+    <button class="btn primary login-btn" id="loginBtn">KẾT NỐI</button>
+    <div class="login-note" id="loginNote"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="panel.js"></script>
+</body>
+</html>

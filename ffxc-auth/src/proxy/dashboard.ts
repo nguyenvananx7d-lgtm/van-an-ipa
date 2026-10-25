@@ -19,6 +19,9 @@ export interface DashboardView {
   rules: Rule[];
   captures: { total: number; recent: CaptureRecord[] };
   suggestions: Suggestion[];
+  /** Present when the profile carries a tunnel; changes the setup steps. */
+  transport?: { kind: string; server: string; proxyInTunnel: boolean };
+  menuUrl?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -31,17 +34,33 @@ function escapeHtml(value: string): string {
 
 /** The server-rendered shell; everything dynamic arrives from `/state`. */
 export function renderDashboard(view: DashboardView): string {
+  const routeStep = view.transport
+    ? {
+        title: `Bật ${view.name} VPN`,
+        detail: `Settings → VPN → chọn ${view.name} → Kết nối. `
+          + (view.transport.proxyInTunnel
+            ? `Proxy ${view.proxyPort} đã nằm trong profile, không cần nhập tay.`
+            : `Sau đó nhập proxy ${view.publicHost}:${view.proxyPort} trong Wi-Fi.`),
+        done: view.captures.total > 0,
+      }
+    : {
+        title: `Nhập proxy trong Wi-Fi: ${view.publicHost} : ${view.proxyPort}`,
+        detail: "Settings → Wi-Fi → ⓘ cạnh tên mạng → Configure Proxy → Manual → điền server và port ở trên.",
+        done: view.captures.total > 0,
+      };
+
   const steps = [
     {
       title: "Cài profile trên điện thoại",
-      detail: "Bấm nút bên dưới bằng Safari → Allow → Settings cài profile.",
-      done: view.rules.length > 0 || view.captures.total > 0,
+      detail: "Bấm nút Cài profile bên dưới bằng Safari → Allow → Settings cài profile.",
+      done: view.captures.total > 0 || view.rules.length > 0,
     },
     {
       title: "Bật full trust cho chứng chỉ",
       detail: "Settings → General → About → Certificate Trust Settings → bật công tắc.",
       done: view.captures.total > 0,
     },
+    routeStep,
     {
       title: "Chơi một trận bình thường",
       detail: "Chưa sửa gì. Relay sẽ ghi lại các request game gửi lên server.",
@@ -88,13 +107,26 @@ export function renderDashboard(view: DashboardView): string {
     <b style="color:#7dd3c0">Trang này là gì?</b>
     <p style="margin:8px 0 0;color:#cfe0db">
       Đây là <b>bảng điều khiển relay</b> — con proxy đứng giữa game và server game.
-      Cheat vẫn nằm trong app trên điện thoại. Relay chỉ làm một việc: đọc báo cáo
-      anti-cheat game gửi lên, sửa lại cho sạch, rồi chuyển tiếp.
+      Không có app nào cần cài: profile cấp chứng chỉ, dựng tunnel và đặt proxy,
+      còn relay đọc báo cáo anti-cheat game gửi lên, sửa lại cho sạch, rồi chuyển tiếp.
       Vì code game không bị đụng tới nên nó không có gì để phát hiện.
     </p>
     <pre style="margin:12px 0 0;color:#9fb3ae;font-size:12px;white-space:pre-wrap">Điện thoại ──TLS──▶ relay (${escapeHtml(view.publicHost)}:${view.proxyPort}) ──TLS──▶ server game
                       │
                       └─ ghi lại + sửa rule</pre>
+  </div>
+
+  <div style="background:#101516;border:1px solid #24302e;border-radius:14px;padding:14px 16px;margin:0 0 18px">
+    <b style="color:#eef1f0">${view.transport ? "Tunnel trong profile" : "Nhập proxy trên iPhone"}</b>
+    <div style="margin-top:8px;font-family:ui-monospace,monospace;font-size:15px;color:#bff3e4">
+      ${escapeHtml(view.transport?.kind.toUpperCase() ?? "PROXY")}: ${escapeHtml(view.transport?.server ?? view.publicHost)}
+      &nbsp;·&nbsp; Proxy: ${escapeHtml(view.publicHost)}:${view.proxyPort}
+    </div>
+    <div style="color:#8d9693;font-size:13px;margin-top:6px">
+      ${view.transport
+        ? "Profile đã cài sẵn tunnel và proxy. Chỉ cần bật VPN trong Settings, rồi mở lại game."
+        : "Settings → Wi-Fi → bấm ⓘ cạnh tên mạng → Configure Proxy → Manual → điền hai giá trị trên → Save. Cùng một Wi-Fi với máy chạy relay."}
+    </div>
   </div>
 
   <h2 style="font-size:15px;margin:22px 0 6px">Bạn đang ở bước nào</h2>
@@ -103,6 +135,10 @@ export function renderDashboard(view: DashboardView): string {
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px">
     <a href="/profile.mobileconfig" style="background:#7dd3c0;color:#06110f;text-decoration:none;
        border-radius:10px;padding:10px 16px;font-weight:700">Cài profile</a>
+    ${view.menuUrl
+      ? `<a href="/menu" style="background:#161c1b;color:#cfe0db;text-decoration:none;
+           border:1px solid #24302e;border-radius:10px;padding:10px 16px;font-weight:600">Mở menu</a>`
+      : ""}
     <button id="clear" style="background:#161c1b;color:#cfe0db;border:1px solid #24302e;
        border-radius:10px;padding:10px 16px;font-weight:600">Xoá capture</button>
     <button id="reload" style="background:#161c1b;color:#cfe0db;border:1px solid #24302e;
@@ -130,12 +166,24 @@ export function renderDashboard(view: DashboardView): string {
 const note = document.getElementById('note');
 let rules = [];
 
-function post(path, body) {
-  return fetch(path, {
+/* When the relay has an admin token, rule writes need it. Opening the
+   dashboard once as /?token=... is enough: it stays in sessionStorage. */
+const adminToken = new URLSearchParams(location.search).get('token')
+  || sessionStorage.getItem('nimbus.admin') || '';
+if (adminToken) sessionStorage.setItem('nimbus.admin', adminToken);
+
+async function post(path, body) {
+  const headers = { 'content-type': 'application/json' };
+  if (adminToken) headers['x-admin-token'] = adminToken;
+  const response = await fetch(path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: body === undefined ? '{}' : JSON.stringify(body)
   });
+  if (response.status === 401) {
+    note.textContent = 'Cần token: mở lại trang với /?token=<ADMIN_TOKEN>';
+  }
+  return response;
 }
 
 function cell(text, width) {

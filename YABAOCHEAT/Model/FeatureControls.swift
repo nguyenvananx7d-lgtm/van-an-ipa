@@ -198,17 +198,37 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// Write-free pause after the locked target dies. Key `AimKillGuardMs`.
     public var aimKillGuardMs: Int
     /// Hold the target continuously instead of the humanised release pattern.
-    /// Key `AimLock`; the patch forces the anti-ban envelope open while it is
-    /// on, so it stays off by default.
+    /// Key `AimLock`; it now means stealth tier 0, so it forces the engagement
+    /// envelope open without touching the aim maths.
     public var aimLock: Bool
     /// Ring + centre pip drawn at the crosshair while the assist is armed.
     /// Key `AimCrosshair`.
     public var aimCrosshair: Bool
+    /// Behavioural envelope the patch folds its limits into. Key `AimStealth`.
+    /// `0` lock · `1` low · `2` balanced · `3` quiet. Replaces the old cliff
+    /// where turning the assist up meant switching every limit off at once.
+    public var aimStealth: Int
+    /// Which point the assist solves its rotation from. Key `AimFrom`.
+    /// `camera` is the reticle you see; `eye` is the local player's head, which
+    /// is where the shot actually leaves in third person. The gap between them
+    /// grows with range, so this is the difference between "on target" and
+    /// "on target and hitting".
+    public var aimFrom: String
+    /// Multiplier on tracking gain, so the lock can be sharpened or softened
+    /// without moving the stealth envelope. Key `AimHoldGain`.
+    public var aimHoldGain: Double
+    /// Minimum spacing between `SetAimRotation` commits, in ms. That call is the
+    /// only aim write the game counts, so its rate is what a replay can score.
+    /// Key `AimCommitMs`.
+    public var aimCommitMs: Int
 
     // MARK: panel — in-game anti-ban budget
-    /// Master for the duty/engagement limits. Key `AntibanBudget`.
+    /// Legacy. The patch used to ration itself by skipping writes on a duty
+    /// cycle; that made the reticle lose the target without hiding the pattern,
+    /// so it is gone and these two no longer reach the runtime. Kept in the
+    /// model so a saved profile from an older build still decodes.
     public var antiBanBudget: Bool
-    /// Percentage of the time the assist may write. Key `AntibanDutyCycle`.
+    /// Legacy — see `antiBanBudget`.
     public var antiBanDutyCycle: Int
     /// Longest continuous lock before release, in ms. Key `AntibanMaxEngageMs`.
     public var antiBanMaxEngageMs: Int
@@ -338,6 +358,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimKillGuardMs: Int = 900,
         aimLock: Bool = false,
         aimCrosshair: Bool = true,
+        aimStealth: Int = 2,
+        aimFrom: String = "camera",
+        aimHoldGain: Double = 1.0,
+        aimCommitMs: Int = 50,
         antiBanBudget: Bool = true,
         antiBanDutyCycle: Int = 45,
         antiBanMaxEngageMs: Int = 2400,
@@ -436,6 +460,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.aimKillGuardMs = aimKillGuardMs
         self.aimLock = aimLock
         self.aimCrosshair = aimCrosshair
+        self.aimStealth = aimStealth
+        self.aimFrom = aimFrom
+        self.aimHoldGain = aimHoldGain
+        self.aimCommitMs = aimCommitMs
         self.antiBanBudget = antiBanBudget
         self.antiBanDutyCycle = antiBanDutyCycle
         self.antiBanMaxEngageMs = antiBanMaxEngageMs
@@ -498,7 +526,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              aimDeadzone, aimLatch, aimRamp, aimHumanize, aimTouchGate,
              aimStickiness, aimSwitchBias, aimMaxTurn, aimTrackGain,
              aimOvershootDeg, aimBreakMinMs, aimBreakMaxMs, aimKillGuardMs,
-             aimLock, aimCrosshair,
+             aimLock, aimCrosshair, aimStealth, aimFrom, aimHoldGain, aimCommitMs,
              antiBanBudget, antiBanDutyCycle, antiBanMaxEngageMs, antiBanCooldownMs,
              espSmoothBox, espFadeFar, espOffscreenArrows, espHealthText,
              espGlow, espNameChip, espSkeletonJoints, espTargetHighlight
@@ -741,6 +769,37 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// payload timestamp masking + session re-stamp still run at the front of
     /// every inject via `AntiBanRoutine`; `streamProof` rides along in the
     /// serialized payload only.
+    /// Fold the stealth tier into the individual limits it owns.
+    ///
+    /// `Logic.Aim.cs` applies the same ladder in the patch, but the panel emits
+    /// every key it holds and an explicit key wins over the tier there — so a
+    /// tier change would appear to do nothing. Applying it here as a preset
+    /// keeps the sliders showing the numbers the tier actually means.
+    ///
+    /// These seven values must stay in step with `ApplyStealthTier()` in
+    /// `ESPDESGIN/src/Logic.Aim.cs`.
+    public mutating func applyStealthTier() {
+        if aimLock { aimStealth = 0 }
+        switch aimStealth {
+        case 0:
+            antiBanMaxEngageMs = 8000; antiBanCooldownMs = 0
+            aimHumanize = false; aimDeadzone = 0; aimOvershootDeg = 0
+            aimMaxTurn = 720; aimCommitMs = 20; aimHoldGain = 1.35
+        case 1:
+            antiBanMaxEngageMs = 4000; antiBanCooldownMs = 500
+            aimHumanize = true; aimDeadzone = 0.14; aimOvershootDeg = 1.1
+            aimMaxTurn = 240; aimCommitMs = 40; aimHoldGain = 1.15
+        case 3:
+            antiBanMaxEngageMs = 1400; antiBanCooldownMs = 1400
+            aimHumanize = true; aimDeadzone = 0.30; aimOvershootDeg = 2.6
+            aimMaxTurn = 90; aimCommitMs = 120; aimHoldGain = 0.85
+        default:
+            antiBanMaxEngageMs = 2400; antiBanCooldownMs = 900
+            aimHumanize = true; aimDeadzone = 0.20; aimOvershootDeg = 1.8
+            aimMaxTurn = 110; aimCommitMs = 50; aimHoldGain = 1.0
+        }
+    }
+
     public func runtimeConfigDocument() -> [String: Any] {
         [
             // visual ESP
@@ -856,9 +915,14 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "AimKillGuardMs":   aimKillGuardMs,
             "AimLock":          aimLock,
             "AimCrosshair":     aimCrosshair,
-            // in-game anti-ban budget
-            "AntibanBudget":       antiBanBudget,
-            "AntibanDutyCycle":    antiBanDutyCycle,
+            // in-game anti-ban envelope. `AntibanBudget` / `AntibanDutyCycle` are
+            // no longer emitted: the patch dropped per-frame write skipping, and a
+            // key the runtime never reads is just another word for a scanner to
+            // find in the document.
+            "AimStealth":          aimStealth,
+            "AimFrom":             aimFrom == "eye" ? 1 : 0,
+            "AimHoldGain":         aimHoldGain,
+            "AimCommitMs":         aimCommitMs,
             "AntibanMaxEngageMs":  antiBanMaxEngageMs,
             "AntibanCooldownMs":   antiBanCooldownMs,
             // ESP detail
