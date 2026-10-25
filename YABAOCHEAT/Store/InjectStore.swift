@@ -376,6 +376,18 @@ public final class InjectStore: ObservableObject {
 
     // MARK: - teardown
 
+    /// Write a profile into the resolved container without needing an active
+    /// session. The web panel calls this on "Áp dụng cấu hình": without it a
+    /// change made after the app was relaunched (`isActive` is in-memory only)
+    /// would be saved to `UserDefaults` and never reach the game until the next
+    /// inject. Returns the number of files written, or nil when the container
+    /// cannot be reached — the caller must tell the user which one happened.
+    @discardableResult
+    public func stageProfile(_ controls: FeatureControls) -> Int? {
+        guard case .resolved = bridge.resolve(game: game) else { return nil }
+        return installer.restageConfig(game: game, controls: controls)
+    }
+
     public func uninject() async {
         await stopAntiBanGuard()
         do {

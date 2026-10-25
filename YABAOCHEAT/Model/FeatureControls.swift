@@ -167,6 +167,74 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// Key `AimLeadMs`. Was hardcoded at 100.
     public var aimLeadMs: Int
 
+    // MARK: panel — aim behaviour (all read by the in-game patch)
+    /// Error cone, in degrees, the assist stops correcting inside. Key
+    /// `AimDeadzone`; `0` disables the dead zone.
+    public var aimDeadzone: Double
+    /// Keep the incumbent target inside a widened cone instead of swapping to
+    /// a marginally better one. Key `AimLatch`.
+    public var aimLatch: Bool
+    /// Ramp the correction in over 0.35 s when a lock starts. Key `AimRamp`.
+    public var aimRamp: Bool
+    /// Master for the humanisation layer (jitter, overshoot, breaks).
+    /// Key `AimHumanize`.
+    public var aimHumanize: Bool
+    /// Assist only while a finger is on the screen. Key `AimTouchGate`.
+    public var aimTouchGate: Bool
+    /// Extra latch width, 0…1. Key `AimStickiness`.
+    public var aimStickiness: Double
+    /// Score bonus the current target keeps, 0…1. Key `AimSwitchBias`.
+    public var aimSwitchBias: Double
+    /// Angular-speed cap per frame, in degrees. Key `AimMaxTurn`.
+    public var aimMaxTurn: Int
+    /// Gain applied to the measured velocity lead, 0…2. Key `AimTrackGain`.
+    public var aimTrackGain: Double
+    /// Deliberate overshoot on acquisition, in degrees. Key `AimOvershootDeg`.
+    public var aimOvershootDeg: Double
+    /// Forced micro-break window on long tracks. Keys `AimBreakMinMs` /
+    /// `AimBreakMaxMs`.
+    public var aimBreakMinMs: Int
+    public var aimBreakMaxMs: Int
+    /// Write-free pause after the locked target dies. Key `AimKillGuardMs`.
+    public var aimKillGuardMs: Int
+    /// Hold the target continuously instead of the humanised release pattern.
+    /// Key `AimLock`; the patch forces the anti-ban envelope open while it is
+    /// on, so it stays off by default.
+    public var aimLock: Bool
+    /// Ring + centre pip drawn at the crosshair while the assist is armed.
+    /// Key `AimCrosshair`.
+    public var aimCrosshair: Bool
+
+    // MARK: panel — in-game anti-ban budget
+    /// Master for the duty/engagement limits. Key `AntibanBudget`.
+    public var antiBanBudget: Bool
+    /// Percentage of the time the assist may write. Key `AntibanDutyCycle`.
+    public var antiBanDutyCycle: Int
+    /// Longest continuous lock before release, in ms. Key `AntibanMaxEngageMs`.
+    public var antiBanMaxEngageMs: Int
+    /// Cooldown after a release, in ms. Key `AntibanCooldownMs`.
+    public var antiBanCooldownMs: Int
+
+    // MARK: panel — ESP detail
+    /// Smooth each box against its own previous frame. Key `EspSmoothBox`.
+    public var espSmoothBox: Bool
+    /// Fade elements as they approach the distance limit. Key `EspFadeFar`.
+    public var espFadeFar: Bool
+    /// Draw bearings on the 360° ring for enemies off screen.
+    /// Key `EspOffscreenArrows`.
+    public var espOffscreenArrows: Bool
+    /// Print HP under the distance line (≤120 m). Key `EspHealthText`.
+    public var espHealthText: Bool
+    /// Halo behind boxes and lines. Key `EspGlow`.
+    public var espGlow: Bool
+    /// Dark plate behind the name tag. Key `EspNameChip`.
+    public var espNameChip: Bool
+    /// Rings on the skeleton joints. Key `EspSkeletonJoints`.
+    public var espSkeletonJoints: Bool
+    /// Extra brackets on the enemy the assist is locked onto.
+    /// Key `EspTargetHighlight`.
+    public var espTargetHighlight: Bool
+
     /// True when at least one thing the injected patch provides is switched on.
     ///
     /// The app refuses to stage the payload when this is false: loading an IFix
@@ -198,7 +266,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         silentAim: Bool = false,
         headRate: Int = 55,
         bodyRate: Int = 45,
-        hitChance: Int = 30,
+        hitChance: Int = 50,
         aimDistance: Int = 120,
         drawFov: Bool = true,
         ignoreKnocked: Bool = true,
@@ -254,7 +322,34 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimSmooth: Double = 0.42,
         aimVisibleOnly: Bool = true,
         aimReactionMs: Int = 260,
-        aimLeadMs: Int = 60
+        aimLeadMs: Int = 60,
+        aimDeadzone: Double = 0.20,
+        aimLatch: Bool = true,
+        aimRamp: Bool = true,
+        aimHumanize: Bool = true,
+        aimTouchGate: Bool = true,
+        aimStickiness: Double = 0.45,
+        aimSwitchBias: Double = 0.30,
+        aimMaxTurn: Int = 110,
+        aimTrackGain: Double = 0.70,
+        aimOvershootDeg: Double = 1.8,
+        aimBreakMinMs: Int = 140,
+        aimBreakMaxMs: Int = 420,
+        aimKillGuardMs: Int = 900,
+        aimLock: Bool = false,
+        aimCrosshair: Bool = true,
+        antiBanBudget: Bool = true,
+        antiBanDutyCycle: Int = 45,
+        antiBanMaxEngageMs: Int = 2400,
+        antiBanCooldownMs: Int = 900,
+        espSmoothBox: Bool = true,
+        espFadeFar: Bool = true,
+        espOffscreenArrows: Bool = true,
+        espHealthText: Bool = true,
+        espGlow: Bool = true,
+        espNameChip: Bool = true,
+        espSkeletonJoints: Bool = true,
+        espTargetHighlight: Bool = true
     ) {
         self.isEnabled = isEnabled
         self.aimEnabled = aimEnabled
@@ -326,6 +421,33 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.aimVisibleOnly = aimVisibleOnly
         self.aimReactionMs = aimReactionMs
         self.aimLeadMs = aimLeadMs
+        self.aimDeadzone = aimDeadzone
+        self.aimLatch = aimLatch
+        self.aimRamp = aimRamp
+        self.aimHumanize = aimHumanize
+        self.aimTouchGate = aimTouchGate
+        self.aimStickiness = aimStickiness
+        self.aimSwitchBias = aimSwitchBias
+        self.aimMaxTurn = aimMaxTurn
+        self.aimTrackGain = aimTrackGain
+        self.aimOvershootDeg = aimOvershootDeg
+        self.aimBreakMinMs = aimBreakMinMs
+        self.aimBreakMaxMs = aimBreakMaxMs
+        self.aimKillGuardMs = aimKillGuardMs
+        self.aimLock = aimLock
+        self.aimCrosshair = aimCrosshair
+        self.antiBanBudget = antiBanBudget
+        self.antiBanDutyCycle = antiBanDutyCycle
+        self.antiBanMaxEngageMs = antiBanMaxEngageMs
+        self.antiBanCooldownMs = antiBanCooldownMs
+        self.espSmoothBox = espSmoothBox
+        self.espFadeFar = espFadeFar
+        self.espOffscreenArrows = espOffscreenArrows
+        self.espHealthText = espHealthText
+        self.espGlow = espGlow
+        self.espNameChip = espNameChip
+        self.espSkeletonJoints = espSkeletonJoints
+        self.espTargetHighlight = espTargetHighlight
     }
 
     // MARK: - persistence
@@ -372,7 +494,14 @@ public struct FeatureControls: Codable, Equatable, Sendable {
              rainbow, allRainbow, resetAllColors,
              espMaxDistance, espVisibleOnly, espBoxFill, espBoxFillAlpha,
              espHeadDot, espShowDowned, espTextScale, aimHeight, aimSmooth,
-             aimVisibleOnly, aimReactionMs, aimLeadMs
+             aimVisibleOnly, aimReactionMs, aimLeadMs,
+             aimDeadzone, aimLatch, aimRamp, aimHumanize, aimTouchGate,
+             aimStickiness, aimSwitchBias, aimMaxTurn, aimTrackGain,
+             aimOvershootDeg, aimBreakMinMs, aimBreakMaxMs, aimKillGuardMs,
+             aimLock, aimCrosshair,
+             antiBanBudget, antiBanDutyCycle, antiBanMaxEngageMs, antiBanCooldownMs,
+             espSmoothBox, espFadeFar, espOffscreenArrows, espHealthText,
+             espGlow, espNameChip, espSkeletonJoints, espTargetHighlight
     }
 
     /// Profiles written by an older build decode field by field rather than
@@ -456,6 +585,36 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimVisibleOnly    = try c.decodeIfPresent(Bool.self, forKey: .aimVisibleOnly) ?? d.aimVisibleOnly
         aimReactionMs     = try c.decodeIfPresent(Int.self, forKey: .aimReactionMs) ?? d.aimReactionMs
         aimLeadMs         = try c.decodeIfPresent(Int.self, forKey: .aimLeadMs) ?? d.aimLeadMs
+
+        aimDeadzone       = try c.decodeIfPresent(Double.self, forKey: .aimDeadzone) ?? d.aimDeadzone
+        aimLatch          = try c.decodeIfPresent(Bool.self, forKey: .aimLatch) ?? d.aimLatch
+        aimRamp           = try c.decodeIfPresent(Bool.self, forKey: .aimRamp) ?? d.aimRamp
+        aimHumanize       = try c.decodeIfPresent(Bool.self, forKey: .aimHumanize) ?? d.aimHumanize
+        aimTouchGate      = try c.decodeIfPresent(Bool.self, forKey: .aimTouchGate) ?? d.aimTouchGate
+        aimStickiness     = try c.decodeIfPresent(Double.self, forKey: .aimStickiness) ?? d.aimStickiness
+        aimSwitchBias     = try c.decodeIfPresent(Double.self, forKey: .aimSwitchBias) ?? d.aimSwitchBias
+        aimMaxTurn        = try c.decodeIfPresent(Int.self, forKey: .aimMaxTurn) ?? d.aimMaxTurn
+        aimTrackGain      = try c.decodeIfPresent(Double.self, forKey: .aimTrackGain) ?? d.aimTrackGain
+        aimOvershootDeg   = try c.decodeIfPresent(Double.self, forKey: .aimOvershootDeg) ?? d.aimOvershootDeg
+        aimBreakMinMs     = try c.decodeIfPresent(Int.self, forKey: .aimBreakMinMs) ?? d.aimBreakMinMs
+        aimBreakMaxMs     = try c.decodeIfPresent(Int.self, forKey: .aimBreakMaxMs) ?? d.aimBreakMaxMs
+        aimKillGuardMs    = try c.decodeIfPresent(Int.self, forKey: .aimKillGuardMs) ?? d.aimKillGuardMs
+        aimLock           = try c.decodeIfPresent(Bool.self, forKey: .aimLock) ?? d.aimLock
+        aimCrosshair      = try c.decodeIfPresent(Bool.self, forKey: .aimCrosshair) ?? d.aimCrosshair
+
+        antiBanBudget     = try c.decodeIfPresent(Bool.self, forKey: .antiBanBudget) ?? d.antiBanBudget
+        antiBanDutyCycle  = try c.decodeIfPresent(Int.self, forKey: .antiBanDutyCycle) ?? d.antiBanDutyCycle
+        antiBanMaxEngageMs = try c.decodeIfPresent(Int.self, forKey: .antiBanMaxEngageMs) ?? d.antiBanMaxEngageMs
+        antiBanCooldownMs = try c.decodeIfPresent(Int.self, forKey: .antiBanCooldownMs) ?? d.antiBanCooldownMs
+
+        espSmoothBox      = try c.decodeIfPresent(Bool.self, forKey: .espSmoothBox) ?? d.espSmoothBox
+        espFadeFar        = try c.decodeIfPresent(Bool.self, forKey: .espFadeFar) ?? d.espFadeFar
+        espOffscreenArrows = try c.decodeIfPresent(Bool.self, forKey: .espOffscreenArrows) ?? d.espOffscreenArrows
+        espHealthText     = try c.decodeIfPresent(Bool.self, forKey: .espHealthText) ?? d.espHealthText
+        espGlow           = try c.decodeIfPresent(Bool.self, forKey: .espGlow) ?? d.espGlow
+        espNameChip       = try c.decodeIfPresent(Bool.self, forKey: .espNameChip) ?? d.espNameChip
+        espSkeletonJoints = try c.decodeIfPresent(Bool.self, forKey: .espSkeletonJoints) ?? d.espSkeletonJoints
+        espTargetHighlight = try c.decodeIfPresent(Bool.self, forKey: .espTargetHighlight) ?? d.espTargetHighlight
     }
 
     // MARK: - payload setters
@@ -673,16 +832,44 @@ public struct FeatureControls: Codable, Equatable, Sendable {
             "HealthType":       healthType,
             "EspPalette":       espPalette,
             // sticky-assist tuning: bone, reaction, prediction, touch gate.
-            // The sticky-lock keys (AimStickiness, AimLockMs, AimSwitchBias,
-            // AimMaxTurn, AimTrackGain, AimOvershootDeg, AimBreak*Ms) are not
-            // emitted here on purpose: the panel does not expose them, so
-            // `PatchPayload.configuration` keeps the values shipped in
-            // `Resources/localConfig.json`.
+            // These are the exact keys the in-game patch parses, so the panel
+            // can tune the feel of the assist instead of leaving it at the
+            // values the shipped document happens to carry.
             "AimBone":          silentAim ? "mixed"
                                   : (aimTarget == "body" ? "chest" : aimTarget),
             "AimReactionMs":    aimReactionMs,
             "AimLeadMs":        aimLeadMs,
-            "AimTouchGate":     true,
+            "AimTouchGate":     aimTouchGate,
+            // aim feel + humanisation, all read by the in-game patch
+            "HitChance":        hitChance,
+            "AimDeadzone":      aimDeadzone,
+            "AimLatch":         aimLatch,
+            "AimRamp":          aimRamp,
+            "AimHumanize":      aimHumanize,
+            "AimStickiness":    aimStickiness,
+            "AimSwitchBias":    aimSwitchBias,
+            "AimMaxTurn":       aimMaxTurn,
+            "AimTrackGain":     aimTrackGain,
+            "AimOvershootDeg":  aimOvershootDeg,
+            "AimBreakMinMs":    aimBreakMinMs,
+            "AimBreakMaxMs":    aimBreakMaxMs,
+            "AimKillGuardMs":   aimKillGuardMs,
+            "AimLock":          aimLock,
+            "AimCrosshair":     aimCrosshair,
+            // in-game anti-ban budget
+            "AntibanBudget":       antiBanBudget,
+            "AntibanDutyCycle":    antiBanDutyCycle,
+            "AntibanMaxEngageMs":  antiBanMaxEngageMs,
+            "AntibanCooldownMs":   antiBanCooldownMs,
+            // ESP detail
+            "EspSmoothBox":       espSmoothBox,
+            "EspFadeFar":         espFadeFar,
+            "EspOffscreenArrows": espOffscreenArrows,
+            "EspHealthText":      espHealthText,
+            "EspGlow":            espGlow,
+            "EspNameChip":        espNameChip,
+            "EspSkeletonJoints":  espSkeletonJoints,
+            "EspTargetHighlight": espTargetHighlight,
             "AntiBan":          antiBan,
         ]
     }

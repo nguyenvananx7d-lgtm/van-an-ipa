@@ -7,6 +7,7 @@ struct ContentView: View {
     @StateObject private var menu = MenuStore.shared
     @StateObject private var auth = AuthorizationStore.shared
     @StateObject private var inject = InjectStore.shared
+    @ObservedObject private var panel = PanelStore.shared
 
     @State private var selectedTab: Int = 0
 
@@ -59,12 +60,19 @@ struct ContentView: View {
                     .padding(.bottom, 24)
                 }
             }
+            // The floating ball the web panel opens from. Sits above the
+            // scroll view and below nothing else, so it stays reachable on
+            // every tab.
+            PanelBubble()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .animation(.easeInOut(duration: 0.18), value: selectedTab)
         .toggleStyle(MachinedToggleStyle())
         .tint(Palette.accent)
         .task { await inject.evaluate() }
+        .fullScreenCover(isPresented: $panel.isOpen) {
+            WebPanelView()
+        }
     }
     // MARK: - app bar
     private var header: some View {

@@ -57,6 +57,7 @@ YABAOCHEAT/
   Network/                        DoH profile builder, loopback server, tunnel probe
   Licensing/                      protocol constants, client, verifier, device id
   Resources/                      patch blob, localConfig.json, strings, icons
+    panel/                        web control panel (HTML/CSS/JS) + bridge host
 ESPDESGIN/                        separate InjectFix tooling — not part of the IPA
 ffxc-auth/                        separate licence server — not part of the IPA
 ```

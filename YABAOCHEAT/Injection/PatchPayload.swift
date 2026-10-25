@@ -10,28 +10,31 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (97,772 B, targeting
+    /// The app ships a populated IFix patch (99,065 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
     /// manifest. It carries the ESP/aim method overrides directly — including
     /// the three-tab settings overlay built on the app's own design language
     /// (VISUAL / AIMBOT / EXTRAS), the config-driven ESP block (corner/edge
     /// boxes with a depth-scaled halo and brackets, gradient fill, segmented
     /// health track, skeleton with joint rings, tracer, 360° arrows, FOV ring
-    /// with cardinal ticks, head dot), the sticky camera assist (1.6 s lock
-    /// retention, near-crosshair acquisition bias, error-adaptive gain and an
-    /// angular-speed cap), and the behavioural anti-ban gate (reaction jitter,
-    /// post-kill pause, micro-breaks on long tracks, acquire overshoot) — so
-    /// staging it into the container is what turns the features on.
+    /// with cardinal ticks, head dot), the aim crosshair (ring + centre pip),
+    /// the sticky camera assist (1.6 s lock retention, near-crosshair
+    /// acquisition bias, error-adaptive gain and an angular-speed cap) with the
+    /// optional continuous-lock mode, and the behavioural anti-ban gate
+    /// (reaction jitter, post-kill pause, micro-breaks on long tracks, acquire
+    /// overshoot) — so staging it into the container is what turns the features
+    /// on. It also re-reads `localConfig.json` while the match runs, so panel
+    /// changes land without a relaunch.
     ///
     /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
     /// treats a bundle whose length matches this value as the payload to write,
     /// and only falls back to adopting a staged copy when the bundle does not
     /// match. Keep it in step with the resource or injection is refused.
-    public static let expectedLength = 97_772
+    public static let expectedLength = 99_065
     /// SHA-256 of the IFix patch shipped in this bundle. Pinned here so a copy
     /// staged anywhere in the game's container can be adopted by digest when the
     /// bundle resource is absent.
-    public static let vendorPatchSHA256 = "5d90f8d7cb62bbb5f3c6574e611a6beeaccb712e1238c81b29a011d14dba7521"
+    public static let vendorPatchSHA256 = "aaf9fd0ef880898693b6801fd6b1b92633dfa0f9efc4242fecc8cd0dec11f3f0"
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 
