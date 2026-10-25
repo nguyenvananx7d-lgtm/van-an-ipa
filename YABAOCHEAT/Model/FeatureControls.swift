@@ -629,6 +629,10 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimKillGuardMs    = try c.decodeIfPresent(Int.self, forKey: .aimKillGuardMs) ?? d.aimKillGuardMs
         aimLock           = try c.decodeIfPresent(Bool.self, forKey: .aimLock) ?? d.aimLock
         aimCrosshair      = try c.decodeIfPresent(Bool.self, forKey: .aimCrosshair) ?? d.aimCrosshair
+        aimStealth        = try c.decodeIfPresent(Int.self, forKey: .aimStealth) ?? d.aimStealth
+        aimFrom           = try c.decodeIfPresent(String.self, forKey: .aimFrom) ?? d.aimFrom
+        aimHoldGain       = try c.decodeIfPresent(Double.self, forKey: .aimHoldGain) ?? d.aimHoldGain
+        aimCommitMs       = try c.decodeIfPresent(Int.self, forKey: .aimCommitMs) ?? d.aimCommitMs
 
         antiBanBudget     = try c.decodeIfPresent(Bool.self, forKey: .antiBanBudget) ?? d.antiBanBudget
         antiBanDutyCycle  = try c.decodeIfPresent(Int.self, forKey: .antiBanDutyCycle) ?? d.antiBanDutyCycle
