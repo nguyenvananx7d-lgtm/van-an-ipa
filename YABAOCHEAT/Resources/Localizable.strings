@@ -298,6 +298,8 @@
 /* Consume-once staging */
 "consume_payload" = "Consume payload";
 "consume_payload_caption" = "After launch, delete the staged patch and config from the game container once the target has read them. The next inject stages them again; a direct launch of the game afterwards has no ESP.";
+"modern_inject" = "Modern injection";
+"modern_inject_caption" = "Route by iOS: native hook on 17.0–18.7.1, hotfix channel everywhere else. Nothing is ever written into the game container. Turn off only to fall back to the legacy staging route — the one that was detected.";
 
 /* Safe profile */
 "safe_profile" = "Safe profile";

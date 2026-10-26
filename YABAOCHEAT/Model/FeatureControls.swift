@@ -59,6 +59,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
     /// Worth leaving on when a ban arrives with every feature switched off: at
     /// that point the payload's existence is the evidence, not the assist.
     public var consumePayload: Bool
+    /// Route selection for the inject flow. True (default): the modern matrix
+    /// in `InjectPlan` — native hook on 17.0–18.7.1, hotfix channel elsewhere.
+    /// False: the legacy container-staging route, which is the one that was
+    /// detected and is kept only as an emergency fallback.
+    public var preferModernInjection: Bool
 
     // MARK: weapon
 
@@ -292,6 +297,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         ignoreKnocked: Bool = true,
         antiBan: Bool = true,
         consumePayload: Bool = true,
+        preferModernInjection: Bool = true,
         fastReloadPercent: Int = 0,
         fastFireLevel: Int = 0,
         espColor: Int = 0xFF00FF00,
@@ -394,6 +400,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         self.ignoreKnocked = ignoreKnocked
         self.antiBan = antiBan
         self.consumePayload = consumePayload
+        self.preferModernInjection = preferModernInjection
         self.fastReloadPercent = fastReloadPercent
         self.fastFireLevel = fastFireLevel
         self.espColor = espColor
@@ -509,7 +516,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         case isEnabled, aimEnabled, radiusValue, aimbotRadiusValue, radiusPolicy,
              headshotValue, headshotPolicy, aimTarget, aimFovMode,
              aimbotType, silentAim, headRate, bodyRate, hitChance, aimDistance, drawFov,
-             ignoreKnocked, antiBan, consumePayload,
+             ignoreKnocked, antiBan, consumePayload, preferModernInjection,
              fastReloadPercent, fastFireLevel,
              espColor, espThickness, espBoxScalePercent, espBoxOffsetY,
              masterEsp, lineEsp, boxEsp, boxType, nameEsp, distanceEsp,
@@ -558,6 +565,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         ignoreKnocked     = try c.decodeIfPresent(Bool.self, forKey: .ignoreKnocked) ?? d.ignoreKnocked
         antiBan           = try c.decodeIfPresent(Bool.self, forKey: .antiBan) ?? d.antiBan
         consumePayload    = try c.decodeIfPresent(Bool.self, forKey: .consumePayload) ?? d.consumePayload
+        preferModernInjection = try c.decodeIfPresent(Bool.self, forKey: .preferModernInjection) ?? d.preferModernInjection
 
         fastReloadPercent = try c.decodeIfPresent(Int.self, forKey: .fastReloadPercent) ?? d.fastReloadPercent
         fastFireLevel     = try c.decodeIfPresent(Int.self, forKey: .fastFireLevel) ?? d.fastFireLevel

@@ -278,6 +278,31 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// The modern inject flow: route from `InjectPlan`, no container staging.
+    /// Native hook plants into the game's memory; hotfix lets the game pull
+    /// the patch through the relay. The legacy flow stays reachable through
+    /// `FeatureControls.preferModernInjection = false` and nothing else.
+    private func modernInject() async {
+        let route = InjectPlan.route()
+        log.log(.launch, "modern inject: \(route.displayName) — \(InjectPlan.readiness(for: route))")
+        await ensureExploitBeforeInject()
+        switch route {
+        case .nativeHook:
+            guard KernelExploit.kernelRWReady else {
+                status = "Kernel stage lost — retry, or enable legacy staging"
+                log.log(.kernelRW, "modern inject: kernel r/w not established, nothing planted")
+                return
+            }
+            runNativeHook()
+            try? launcher.launch(game: game)
+            status = "Native hook planted — see log"
+        case .hotfix:
+            runTrafficCheck()
+            try? launcher.launch(game: game)
+            status = "Hotfix route: game launched — patch arrives via relay"
+        }
+    }
+
     public func runNativeHook() {
         guard KernelExploit.kernelStageSupported else {
             status = "Native hook unsupported on this iOS (needs 17.0–18.7.1)"
@@ -393,6 +418,11 @@ public final class InjectStore: ObservableObject {
         _ = NetworkShield.shared.preflightForInject(log: log)
 
         do {
+            log.log(.launch, InjectPlan.decision())
+            if menu.controls.preferModernInjection {
+                await modernInject()
+                return
+            }
             let payload = try PatchPayload.bundled()
             // Sophia parity: bring the kernel chain up before touching the
             // target (the vendor build never waits for an opt-in button).

@@ -107,6 +107,11 @@ struct SettingView: View {
                 detail: String(localized: "consume_payload_caption"),
                 isOn: menu.feature(\.consumePayload)
             )
+            ToggleRow(
+                label: String(localized: "modern_inject"),
+                detail: String(localized: "modern_inject_caption"),
+                isOn: menu.feature(\.preferModernInjection)
+            )
             HStack(spacing: 10) {
                 Text(String(localized: "safe_profile_caption"))
                     .font(.footnote)

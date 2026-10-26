@@ -2,6 +2,20 @@
 
 SwiftUI iOS app (`YABAOCHEAT`) built from `project.yml` with XcodeGen and packaged as an unsigned IPA by GitHub Actions. No Mac needed locally: push, wait for the runner, download the artifact.
 
+## The cheat reaches the game one of two ways — never through the container
+
+The legacy route (writing an IFix patch + `localConfig.json` into the game's
+Data container from a second process) was detected and is retired from the
+default flow. It survives only behind **Settings → Modern injection = off**.
+
+| Route | iOS | Mechanism | Artifacts |
+| --- | --- | --- | --- |
+| **Native hook** | 17.0–18.7.1 | Kernel chain wins → label patch → `task_for_pid(game)` → dyld image walk → 16-byte branch stub over `Player.IsReallyInStealth` + PIC trampoline on a fresh R+W+X page | none on disk; 16 bytes in RAM |
+| **Hotfix channel** | all (18.8–27 included) | The relay rewrites `GameVarDef.CodePatchUrl` in the var-table response; the game downloads and applies the patch through its own `LoadIFix` | the game's own files, written by the game |
+
+The route is chosen by `InjectPlan` from the OS version alone; the inject
+button logs which one it picked and why.
+
 ## Toolchain
 
 | Piece | Version |
@@ -27,45 +41,57 @@ xcodebuild -project VortexArena.xcodeproj -scheme YABAOCHEAT \
 1. Push to `main`, open a PR, or run **Actions → Build VortexArena IPA → Run workflow**.
 2. Wait for the green check (~4–6 min).
 3. Open the run, scroll to **Artifacts**, download `VortexArena-unsigned`.
-4. Unzip → `VortexArena-unsigned.ipa`.
-
-Every push to `main` builds automatically. The workflow also rejects source trees that still contain merge-conflict markers, so a broken merge fails fast instead of producing a half-built app.
 
 ## Install
 
-The IPA is unsigned and carries the entitlements the app needs (`no-sandbox`, `container-manager`, SpringBoard/FrontBoard launch, `get-task-allow`). Install it with a signer that honours entitlements:
-
-- **TrollStore** — open the `.ipa` directly on device.
-- **ESign / Feather / SideStore / Sideloadly** — import the IPA, keep the embedded entitlements.
-
-A plain free-developer sideload will strip the private entitlements; the app will install and launch but container access and the kernel stage will report unavailable.
+Unsigned IPA carrying private entitlements. TrollStore opens it directly;
+ESign / Feather / SideStore / Sideloadly import it and must keep the embedded
+entitlements. A plain free-developer sideload strips them and the kernel stage
+reports unavailable.
 
 ## Layout
 
 ```
 project.yml                       XcodeGen spec (single source of truth)
-YABAOCHEAT.entitlements           private entitlements, embedded at sign time
-.github/workflows/build.yml       CI: generate → archive → sign → IPA
 YABAOCHEAT/
   App/                            entry point, root view, environment
   UI/                             panel (inject, aimbot, visual, misc, settings, log)
   Store/                          observable state (auth, inject, menu, language)
-  Model/                          feature controls, game, license, recovered vocab
-  Injection/                      installer, launcher, probe, wipe, anti-ban
-    kexploit/                     kernel R/W chain (opa334 port)
-    MCM/                          container-manager bridge
-  Network/                        DoH profile builder, loopback server, tunnel probe
+  Model/                          feature controls, game, license
+  Injection/
+    InjectPlan.swift              the one inject matrix (route by iOS)
+    NativeHookInstaller.swift     stage-1 native hook, marker-verified
+    TrafficHotfixInstaller.swift  relay readiness for the hotfix channel
+    kexploit/                     kernel R/W chain (17.0–18.7.1), sandbox escape
+    taskport.{h,m}                task-port + trampoline assembly primitives
+    MCM/                          container-manager bridge (legacy fallback only)
+    AntiBanRoutine.swift          legacy container sweep (legacy fallback only)
   Licensing/                      protocol constants, client, verifier, device id
+  Network/                        DoH profile, loopback server, tunnel probe
   Resources/                      patch blob, localConfig.json, strings, icons
     panel/                        web control panel (HTML/CSS/JS) + bridge host
-ESPDESGIN/                        separate InjectFix tooling — not part of the IPA
-ffxc-auth/                        separate licence server — not part of the IPA
+ESPDESGIN/                        patch build tooling — not part of the IPA
+ffxc-auth/                        licence server + MITM relay — not part of the IPA
+NATIVE_HOOK.md                    the injection research: why IFix is enumerable, the new routes
 ```
+
+## Usage
+
+1. Settings → run the exploit stage (iOS 17.0–18.7.1) — the native hook row
+   lights up when the kernel chain has won.
+2. Settings → relay host → **Check** — the hotfix row reports whether the
+   relay is reachable, capturing, or codepatch-armed.
+3. Hit **Inject**. The log names the route and every stage it reached.
+4. In the game: ESP on by default; aim is off by default — turn it on in the
+   Aimbot tab, start from the **Balanced** stealth tier.
+
+The hotfix channel needs one capture session to pin its three relay env vars
+(`RELAY_PATCH_HOST`, `RELAY_VARCONFIG_PATH`, `RELAY_PATCH_FILE`) — see
+[NATIVE_HOOK.md](NATIVE_HOOK.md) §4–5.
 
 ## Notes
 
-- `YABAOCHEAT/Resources/Assembly-CSharp-patch.bytes` is the payload staged into the game container. Its length and SHA-256 are pinned in `PatchPayload.swift`; change the blob and update both constants or injection refuses with `integrityMismatch`.
-- Anti-ban covers six channels, in this order: payload repair, residue removal, origin normalisation (provenance xattrs + POSIX mode), file/directory timestamps, kernel `ctime` forge, and content scrub. Attribute, mode and timestamp writes all bump `ctime`, so they must run before the forge — a VFS metadata write after it would undo it. `stripProvenance` and `mirrorMode` fail soft: a container that refuses `removexattr`/`chmod` just keeps the attribute.
 - `ESPDESGIN/` and `ffxc-auth/` are not referenced by `project.yml` and are not bundled.
-- Bundle id `com.nimbus.toolbox` and display name `Nimbus` live in `YABAOCHEAT/Info.plist` and `project.yml`. The old `com.apple.mobile.MobileHouseArrest` spelling impersonated a system daemon and was a one-string signature for any blocklist.
-- The network shield installs a system-wide DNS-over-HTTPS configuration profile through Safari; it needs no Network Extension entitlement. It does not create a tunnel — the optional inject gate only checks for an existing `utun`/`ipsec`/`ppp` interface. Usage guide: [NETWORK.md](NETWORK.md).
+- The IFix registry (`ILFixDynamicMethodWrapper.wrapperArray`) is public static:
+  any IFix patch is enumerable regardless of delivery. That is why the native
+  hook route exists, and why it is the primary on the iOS range it supports.
