@@ -296,12 +296,13 @@ public final class InjectStore: ObservableObject {
             runNativeHook()
             try? launcher.launch(game: game)
             status = "Native hook planted — see log"
-        case .nativeAssist:
-            // No patch, no hook: the game turns its own assist on because the
-            // relay says so. Readiness is the relay itself.
+        case .hotfix:
+            // No file is ever planted: the game pulls the patch through its
+            // own CodePatchUrl, which the relay rewrites. Native-assist rides
+            // alongside as the game's own second aim layer.
             runTrafficCheck()
             try? launcher.launch(game: game)
-            status = "Native assist: game launched — relay drives the assist"
+            status = "ESP + aim via relay — game pulls the patch itself"
         }
     }
 
