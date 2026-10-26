@@ -41,7 +41,9 @@ public struct TrafficHotfixInstaller: Sendable {
                           captureMode: false, ruleCount: 0,
                           detail: "Set the relay host in Settings first")
         }
-        let urlString = "https://\(host)/state"
+        // The relay dashboard (proxy server) lives on the admin port; the host
+        // field in Settings carries the bare LAN IP.
+        let urlString = "http://\(host):8080/state"
         guard let url = URL(string: urlString) else {
             return Report(reachable: false, codepatchEnabled: false,
                           captureMode: false, ruleCount: 0,

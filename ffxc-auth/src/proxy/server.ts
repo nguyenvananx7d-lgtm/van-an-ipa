@@ -524,10 +524,11 @@ const admin = http.createServer(async (req, res) => {
     return;
   }
 
-  if (path === "/panel" || path.startsWith("/panel/")) {
-    const name = path === "/panel" || path === "/panel/"
+  const panelPath = path ?? "/";
+  if (panelPath === "/panel" || panelPath.startsWith("/panel/")) {
+    const name = panelPath === "/panel" || panelPath === "/panel/"
       ? "index.html"
-      : path.slice("/panel/".length);
+      : panelPath.slice("/panel/".length);
     if (name.includes("..") || name.startsWith("/")) {
       res.writeHead(400, { "content-type": "text/plain" }).end("bad path");
       return;
