@@ -5,9 +5,9 @@
    comes from light (gradients, glows, soft masks) rather than decoration. */
 
 :root {
-  --bg: #050506;
-  --surface: #0C0D0E;
-  --surface-2: #0E0F10;
+  --bg: #0B0A14;
+  --surface: #131120;
+  --surface-2: #1A172B;
   --raise: #17181A;
   --line: rgba(255, 255, 255, 0.065);
   --line-strong: rgba(255, 255, 255, 0.14);
@@ -20,9 +20,9 @@
   --track: #26282A;
   --knob-off: #8C9095;
 
-  --accent: #7FE3C8;
-  --accent-soft: rgba(127, 227, 200, 0.14);
-  --accent-line: rgba(127, 227, 200, 0.42);
+  --accent: #7C5CFF;
+  --accent-soft: rgba(124, 92, 255, 0.16);
+  --accent-line: rgba(124, 92, 255, 0.45);
 
   --font-ui: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Segoe UI", system-ui, sans-serif;
@@ -101,7 +101,7 @@ body::before {
   position: absolute;
   inset: -40% -20%;
   background:
-    radial-gradient(45% 55% at 18% 20%, rgba(127, 227, 200, 0.14), transparent 62%),
+    radial-gradient(45% 55% at 18% 20%, rgba(124, 92, 255, 0.16), transparent 62%),
     radial-gradient(40% 50% at 88% 8%, rgba(143, 166, 240, 0.10), transparent 60%);
   filter: blur(14px);
   opacity: 0.9;
@@ -765,7 +765,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 .btn.primary.done {
   background: linear-gradient(180deg, #E8FFF7, #CFF5E7);
-  box-shadow: 0 0 0 3px rgba(127, 227, 200, 0.14), 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.16), 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .btn.primary:disabled { opacity: 0.45; }
