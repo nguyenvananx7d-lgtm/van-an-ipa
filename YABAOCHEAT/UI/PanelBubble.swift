@@ -18,18 +18,30 @@ struct PanelBubble: View {
             let current = position ?? defaultPoint(in: geo.size)
 
             ZStack {
+                // Soft halo so the orb reads as the one live thing on screen.
                 Circle()
-                    .fill(Palette.surfaceHi)
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
+                    .fill(Palette.accent.opacity(0.16))
+                    .frame(width: diameter + 18, height: diameter + 18)
+                    .blur(radius: 9)
                 Circle()
-                    .strokeBorder(Color.white.opacity(0.85), lineWidth: 1.4)
-                    .frame(width: 17, height: 17)
+                    .fill(
+                        RadialGradient(
+                            colors: [Palette.accentHi, Palette.accent, Palette.accentDeep],
+                            center: .init(x: 0.35, y: 0.3),
+                            startRadius: 2,
+                            endRadius: diameter
+                        )
+                    )
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.6)
+                    .frame(width: 18, height: 18)
                 Circle()
                     .fill(Color.white)
-                    .frame(width: 4, height: 4)
+                    .frame(width: 5, height: 5)
             }
             .frame(width: diameter, height: diameter)
-            .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+            .shadow(color: Palette.accent.opacity(0.45), radius: 14, y: 4)
             .contentShape(Circle())
             .position(clamped(current, in: geo.size))
             .gesture(

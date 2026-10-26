@@ -60,6 +60,10 @@ struct ContentView: View {
                     .padding(.bottom, 24)
                 }
             }
+            // The orb is the primary control surface: it floats over every
+            // screen and opens the control panel. The tabs stay as the slow
+            // path; the orb is the fast one.
+            PanelBubble()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .animation(.easeInOut(duration: 0.18), value: selectedTab)
