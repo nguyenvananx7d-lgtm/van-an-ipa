@@ -152,34 +152,49 @@ function escapeRegExp(value: string): string {
  */
 export function suggestPatchRules(
   records: CaptureRecord[],
-  env: { serveHost?: string; servePath?: string } = {},
+  env: { patchFile?: string } = {},
 ): Suggestion[] {
-  const serveHost = env.serveHost ?? process.env.RELAY_PATCH_HOST;
-  const servePath = env.servePath ?? process.env.RELAY_PATCH_PATH ?? "/cdn/patch/Assembly-CSharp-patch.bytes";
-  if (!serveHost) return [];
+  const patchFile = env.patchFile ?? process.env.RELAY_PATCH_FILE;
+  if (!patchFile) return [];
 
   const out: Suggestion[] = [];
   for (const record of records) {
     if (!record.host || !record.path || record.error) continue;
     const preview = record.resPreview ?? "";
     if (!preview.includes("CodePatchUrl")) continue;
+
+    // The var table carries the game's own patch URL verbatim. Instead of
+    // rewriting the table (a tamper the game can verify), answer the game AT
+    // that URL with our patch: the request, the host, the path and the file
+    // are all the game's own — only the bytes differ.
+    const match = /CodePatchUrl["'\s:=]+(https?:\/\/[^"'\s,}]+)/i.exec(preview);
+    const rawUrl = match?.[1];
+    if (!rawUrl) continue;
+    let host = "";
+    let path = "/";
+    try {
+      const url = new URL(rawUrl);
+      host = url.hostname;
+      path = url.pathname + url.search;
+    } catch {
+      continue;
+    }
+
     out.push({
-      host: record.host,
-      path: record.path,
-      action: "json-merge",
+      host,
+      path,
+      action: "respond",
       score: 10,
-      reasons: ["body carries CodePatchUrl"],
+      reasons: ["the game's own patch URL, taken from the var table"],
       calls: 1,
       rule: {
-        host: record.host,
-        pathPattern: `^${escapeRegExp(record.path)}$`,
-        action: "json-merge",
-        merge: {
-          CodePatchUrl: `https://${serveHost}${servePath}`,
-          InjectFixBeforeLaunchGame: true,
-        },
+        host,
+        pathPattern: `^${escapeRegExp(path)}$`,
+        action: "respond",
+        bodyFile: patchFile,
+        contentType: "application/octet-stream",
         feature: "codepatch",
-        note: "auto-pinned from a capture carrying CodePatchUrl",
+        note: "serve the patch at the game's real hotfix URL",
       },
     });
   }
