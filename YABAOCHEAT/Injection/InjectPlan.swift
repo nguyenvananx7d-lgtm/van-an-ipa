@@ -6,21 +6,22 @@ import Foundation
 /// - `.nativeHook` — iOS 17.0–18.7.1: the kernel chain wins, `task_for_pid`
 ///   answers, and a branch stub + trampoline are planted straight into the
 ///   game's address space. Nothing on disk, nothing in IFix's registry.
-/// - `.hotfix` — every other iOS (18.8 through 27): the relay rewrites
-///   `GameVarDef.CodePatchUrl` and the game downloads and applies the patch
-///   through its own `LoadIFix`. A MITM does not care about iOS versions.
+/// - `.nativeAssist` — every other iOS (18.8 through 27): no patch at all.
+///   The relay rewrites the game's own settings response so the game turns on
+///   the aim assist it already ships (`EAimAssist.AllOn`). The game aims with
+///   its own code; nothing is injected, nothing is enumerable.
 ///
-/// The container-staging route is deliberately not a row in this table: it is
-/// the route that was detected, and it exists only as a legacy fallback behind
-/// `FeatureControls.preferModernInjection`.
+/// The IFix patch routes (container staging, hotfix channel) are deliberately
+/// not in this table: the patch itself is the detected artifact, so they are
+/// reachable only as explicit fallbacks, not as defaults.
 public enum InjectRoute: String, Sendable {
     case nativeHook
-    case hotfix
+    case nativeAssist
 
     public var displayName: String {
         switch self {
         case .nativeHook: return "Native hook (kernel)"
-        case .hotfix: return "Hotfix channel (relay)"
+        case .nativeAssist: return "Native assist (no patch)"
         }
     }
 }
@@ -32,9 +33,9 @@ public struct InjectPlan: Sendable {
             return .nativeHook
         }
         if os.majorVersion == 18 {
-            return os.minorVersion <= 7 ? .nativeHook : .hotfix
+            return os.minorVersion <= 7 ? .nativeHook : .nativeAssist
         }
-        return .hotfix
+        return .nativeAssist
     }
 
     /// One line for the log screen: what was picked and why.
@@ -43,15 +44,15 @@ public struct InjectPlan: Sendable {
     }
 
     /// Whether the picked route is usable right now, without device passes.
-    /// `.nativeHook` needs the kernel chain to have won; `.hotfix` needs a
-    /// relay host and a codepatch-armed relay.
+    /// `.nativeHook` needs the kernel chain to have won; `.nativeAssist` needs
+    /// a relay host and one capture-pinned rule on the relay.
     public static func readiness(for route: InjectRoute) -> String {
         switch route {
         case .nativeHook:
             return KernelExploit.kernelRWReady
                 ? "ready — kernel r/w established"
                 : "not ready — run the exploit stage first"
-        case .hotfix:
+        case .nativeAssist:
             let host = (UserDefaults.standard.string(forKey: "relay.host") ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return host.isEmpty

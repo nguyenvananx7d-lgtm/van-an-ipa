@@ -2,36 +2,37 @@ import SwiftUI
 
 // MARK: - design tokens
 //
-// Warm graphite, quiet surfaces and one sea-glass accent reserved for live
-// controls. Hierarchy comes from spacing and type, not decorative effects.
+// Electric night: near-black canvas with a deep violet underglow and a single
+// charged accent for the one action that matters. Quiet surfaces, hairline
+// edges — hierarchy from light, not decoration.
 
 enum Palette {
-    // Deep black surfaces with a muted sea-glass accent for active controls.
-    static let void       = Color(hex: 0x08090A)
-    static let base       = Color(hex: 0x0D0F11)
-    static let surface    = Color(hex: 0x15181B)
-    static let surfaceHi  = Color(hex: 0x1D2124)
-    static let well       = Color(hex: 0x090B0D)
+    // Near-black surfaces over a violet underglow; accent is one charged hue.
+    static let void       = Color(hex: 0x07060D)
+    static let base       = Color(hex: 0x0B0A14)
+    static let surface    = Color(hex: 0x131120)
+    static let surfaceHi  = Color(hex: 0x1A172B)
+    static let well       = Color(hex: 0x090812)
 
     // edges
-    static let hairline   = Color.white.opacity(0.085)
-    static let edgeTop    = Color.white.opacity(0.10)
-    static let edgeBottom = Color.black.opacity(0.42)
+    static let hairline   = Color.white.opacity(0.09)
+    static let edgeTop    = Color.white.opacity(0.12)
+    static let edgeBottom = Color.black.opacity(0.45)
 
     // type
-    static let text      = Color(hex: 0xF0F1EC)
-    static let textDim   = Color(hex: 0xADB2B0)
-    static let textFaint = Color(hex: 0x7D8582)
+    static let text      = Color(hex: 0xF2F1F8)
+    static let textDim   = Color(hex: 0xAFAEC2)
+    static let textFaint = Color(hex: 0x7E7C95)
 
-    // signal
-    static let accent     = Color(hex: 0x70B9AA)
-    static let accentHi   = Color(hex: 0x9BD3C6)
-    static let accentDeep = Color(hex: 0x244A42)
+    // signal — the one live accent
+    static let accent     = Color(hex: 0x7C5CFF)
+    static let accentHi   = Color(hex: 0xA88BFF)
+    static let accentDeep = Color(hex: 0x2A1B63)
 
     // states
-    static let good = Color(hex: 0x4CC987)
-    static let warn = Color(hex: 0xE2A85B)
-    static let bad  = Color(hex: 0xED6A63)
+    static let good = Color(hex: 0x3DD68C)
+    static let warn = Color(hex: 0xE8A75B)
+    static let bad  = Color(hex: 0xEF6A63)
     static let info = Color(hex: 0x8FA6F0)
 }
 
@@ -64,10 +65,19 @@ extension Color {
 
 // MARK: - background
 
-/// A flat graphite canvas keeps the controls and their state in focus.
+/// A violet underglow rising from the bottom keeps the canvas alive without
+/// competing with the controls on top.
 struct ThemeBackground: View {
     var body: some View {
-        Palette.base
+        LinearGradient(
+            colors: [
+                Palette.void,
+                Palette.base,
+                Palette.accentDeep.opacity(0.55),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }

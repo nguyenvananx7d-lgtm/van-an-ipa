@@ -130,6 +130,46 @@ export function buildPatchRules(): Rule[] {
   return rules;
 }
 
+/**
+ * Layer zero — no patch in the game at all.
+ *
+ * The 1.132.1 dump shows the game already ships server-gated assists:
+ * `COW.EAimAssist` (`AllOn = 0`, `OffOnSighting = 1`, `AllOff = 2`),
+ * `Player.SetEAimAssitMode`, and `GetAimAssistSetting()`. If the settings
+ * response that carries the value is rewritten to `AllOn`, the game aims with
+ * its own code, its own input path, its own statistics. Nothing is injected,
+ * nothing is enumerable, and no iOS version matters — this is the route for
+ * 18.8+ where no code route exists.
+ *
+ * The merge body is environment-driven because the exact field name in the
+ * settings response is only knowable from a capture: set `RELAY_ASSIST_MERGE`
+ * to the JSON to merge (defaults to the EAimAssist ordinal). Same pattern as
+ * `buildPatchRules`: until the env is set, no rules are installed and the
+ * feature says so instead of guessing.
+ */
+export function buildAssistRules(): Rule[] {
+  const host = process.env.RELAY_ASSIST_HOST?.trim().toLowerCase();
+  const pathPattern = process.env.RELAY_ASSIST_PATH?.trim();
+  if (!host || !pathPattern) return [];
+  let merge: Record<string, unknown> = { aim_assist: 0 };
+  const raw = process.env.RELAY_ASSIST_MERGE?.trim();
+  if (raw) {
+    try {
+      merge = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+  }
+  return [{
+    host,
+    pathPattern,
+    action: "json-merge",
+    merge,
+    feature: "native-assist",
+    note: "force the game's own aim assist on",
+  }];
+}
+
 export const FEATURES: Feature[] = [
   {
     id: "telemetry",
@@ -163,6 +203,16 @@ export const FEATURES: Feature[] = [
       + "RELAY_PATCH_FILE (lấy từ một phiên capture). Chưa set thì feature này không gắn rule nào.",
     risky: true,
     rules: buildPatchRules(),
+  },
+  {
+    id: "native-assist",
+    label: "Trợ thủ gốc của game (không patch)",
+    detail:
+      "Ép game tự bật aim assist sẵn có của nó (EAimAssist.AllOn) bằng cách sửa response "
+      + "settings — không có code nào vào game, không gì để quét, chạy mọi iOS. Cần "
+      + "RELAY_ASSIST_HOST + RELAY_ASSIST_PATH (+ RELAY_ASSIST_MERGE tuỳ chỉnh). "
+      + "Chưa set thì không gắn rule nào.",
+    rules: buildAssistRules(),
   },
 ];
 

@@ -290,9 +290,9 @@
 "native_hook_caption" = "Stage 1: hook Player.IsReallyInStealth through the task port and verify the trampoline marker. Replaces the IFix file route.";
 "native_hook_run" = "Plant";
 
-/* Hotfix channel (iOS-version-agnostic) */
-"hotfix_title" = "Hotfix channel";
-"hotfix_caption" = "Every iOS 17–27: the relay points GameVarDef.CodePatchUrl at its own copy of the patch and the game applies it through its own loader. Needs the relay env pinned from one capture session.";
+/* Native assist (no patch — the default route on 18.8+) */
+"hotfix_title" = "Native assist";
+"hotfix_caption" = "No patch enters the game. The relay rewrites the game's own settings so its built-in aim assist turns on. Every iOS 17–27; needs RELAY_ASSIST_HOST + RELAY_ASSIST_PATH pinned from one capture session.";
 "hotfix_check" = "Check";
 
 /* Consume-once staging */

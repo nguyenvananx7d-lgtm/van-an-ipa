@@ -114,6 +114,30 @@ struct InjectView: View {
     private var actionSection: some View {
         VStack(alignment: .leading, spacing: Metrics.stack) {
             VStack(alignment: .leading, spacing: 12) {
+                // The one line that explains the whole product: which route
+                // this iOS takes and whether it is ready.
+                let route = InjectPlan.route()
+                HStack(spacing: 8) {
+                    Image(systemName: route == .nativeHook
+                          ? "waveform.path.ecg" : "sparkles")
+                        .foregroundStyle(Palette.accentHi)
+                    Text(route.displayName)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Palette.text)
+                    Text(InjectPlan.readiness(for: route))
+                        .font(.caption2)
+                        .foregroundStyle(Palette.textFaint)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Palette.surfaceHi.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Palette.hairline, lineWidth: 1)
+                )
+
                 Button {
                     runningTask = Task {
                         await inject.install(
