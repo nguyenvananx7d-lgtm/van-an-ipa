@@ -111,3 +111,25 @@ Order matters; each line gates the next:
 Nothing in this document hides *behaviour*. The aim envelope, the ESP visuals
 and the killguard design in `Logic.Aim.cs` remain the actual anti-ban layer;
 the route only removes the forensic billboard.
+
+## 7. Layer zero: make the game cheat itself (dump evidence)
+
+Before injecting anything, the game already ships the feature, server-gated:
+
+- `COW.EAimAssist` enum: `AllOn = 0`, `OffOnSighting = 1`, `AllOff = 2`
+  (dump 257367) — a built-in aim assist with an explicit all-on mode.
+- `Player.SetEAimAssitMode(COW.EAimAssist)` — public setter (dump 719399),
+  and `COW.GetAimAssistSetting()` static (dump 256971): it is a *setting*,
+  which means some response or preference carries it.
+
+If the value rides the server config (same family as `GameVarDef`), the relay
+can force `AllOn` with a rewrite — the game then aims with its own code, its
+own input path, its own statistics. Nothing injected, nothing to enumerate:
+the anti-cheat cannot flag the game's own assist that the server told it to
+run. The same dump check ruled out the webview-bridge route (no
+`WebViewObject` / `UniWebView` / JS-message classes in the image list), so
+MITM-injected JS is not a channel here.
+
+Layer zero covers aim. ESP has no in-game surface to lean on — a rendering
+surface for enemy boxes must still come from one of the routes above.
+

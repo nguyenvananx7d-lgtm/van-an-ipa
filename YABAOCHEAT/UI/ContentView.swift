@@ -60,10 +60,6 @@ struct ContentView: View {
                     .padding(.bottom, 24)
                 }
             }
-            // The floating ball the web panel opens from. Sits above the
-            // scroll view and below nothing else, so it stays reachable on
-            // every tab.
-            PanelBubble()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .animation(.easeInOut(duration: 0.18), value: selectedTab)
