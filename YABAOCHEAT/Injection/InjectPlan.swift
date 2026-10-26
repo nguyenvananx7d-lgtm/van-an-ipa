@@ -6,22 +6,23 @@ import Foundation
 /// - `.nativeHook` — iOS 17.0–18.7.1: the kernel chain wins, `task_for_pid`
 ///   answers, and a branch stub + trampoline are planted straight into the
 ///   game's address space. Nothing on disk, nothing in IFix's registry.
-/// - `.nativeAssist` — every other iOS (18.8 through 27): no patch at all.
-///   The relay rewrites the game's own settings response so the game turns on
-///   the aim assist it already ships (`EAimAssist.AllOn`). The game aims with
-///   its own code; nothing is injected, nothing is enumerable.
+/// - `.hotfix` — every other iOS (18.8 through 27): the relay points the
+///   game's own `CodePatchUrl` at its copy of the patch, so the game downloads
+///   and applies it through its own loader — ESP *and* aim live, with no
+///   second process ever writing into the container. The relay's
+///   `native-assist` feature rides alongside: the game's own aim assist is
+///   forced on as a no-patch second layer.
 ///
-/// The IFix patch routes (container staging, hotfix channel) are deliberately
-/// not in this table: the patch itself is the detected artifact, so they are
-/// reachable only as explicit fallbacks, not as defaults.
+/// The container-staging route (the one that was detected) is not in this
+/// table; it exists only as a legacy fallback.
 public enum InjectRoute: String, Sendable {
     case nativeHook
-    case nativeAssist
+    case hotfix
 
     public var displayName: String {
         switch self {
         case .nativeHook: return "Native hook (kernel)"
-        case .nativeAssist: return "Native assist (no patch)"
+        case .hotfix: return "Hotfix channel — ESP + aim"
         }
     }
 }
@@ -33,9 +34,9 @@ public struct InjectPlan: Sendable {
             return .nativeHook
         }
         if os.majorVersion == 18 {
-            return os.minorVersion <= 7 ? .nativeHook : .nativeAssist
+            return os.minorVersion <= 7 ? .nativeHook : .hotfix
         }
-        return .nativeAssist
+        return .hotfix
     }
 
     /// One line for the log screen: what was picked and why.
@@ -52,7 +53,7 @@ public struct InjectPlan: Sendable {
             return KernelExploit.kernelRWReady
                 ? "ready — kernel r/w established"
                 : "not ready — run the exploit stage first"
-        case .nativeAssist:
+        case .hotfix:
             let host = (UserDefaults.standard.string(forKey: "relay.host") ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return host.isEmpty

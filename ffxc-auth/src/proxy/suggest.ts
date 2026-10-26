@@ -142,6 +142,51 @@ function escapeRegExp(value: string): string {
 }
 
 /**
+ * Self-pin the hotfix route: find the one captured JSON body that carries
+ * `CodePatchUrl` (the game's var table) and emit the exact merge rule that
+ * points it at the relay's own patch copy. No one reads capture.jsonl by hand
+ * any more — play one match, apply the suggestion, done.
+ *
+ * Only armed when RELAY_PATCH_HOST is set, so a capture-only relay never
+ * proposes a rewrite it cannot serve.
+ */
+export function suggestPatchRules(
+  records: CaptureRecord[],
+  env: { serveHost?: string; servePath?: string } = {},
+): Suggestion[] {
+  const serveHost = env.serveHost ?? process.env.RELAY_PATCH_HOST;
+  const servePath = env.servePath ?? process.env.RELAY_PATCH_PATH ?? "/cdn/patch/Assembly-CSharp-patch.bytes";
+  if (!serveHost) return [];
+
+  const out: Suggestion[] = [];
+  for (const record of records) {
+    if (!record.host || !record.path || record.error) continue;
+    const preview = record.resPreview ?? "";
+    if (!preview.includes("CodePatchUrl")) continue;
+    out.push({
+      host: record.host,
+      path: record.path,
+      action: "json-merge",
+      score: 10,
+      reasons: ["body carries CodePatchUrl"],
+      calls: 1,
+      rule: {
+        host: record.host,
+        pathPattern: `^${escapeRegExp(record.path)}$`,
+        action: "json-merge",
+        merge: {
+          CodePatchUrl: `https://${serveHost}${servePath}`,
+          InjectFixBeforeLaunchGame: true,
+        },
+        feature: "codepatch",
+        note: "auto-pinned from a capture carrying CodePatchUrl",
+      },
+    });
+  }
+  return out;
+}
+
+/**
  * Pre-fill a merge that neutralises the report-shaped fields it can see.
  *
  * The preview may be truncated, so a parse failure simply yields no fields:

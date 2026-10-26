@@ -4,7 +4,7 @@ import { extname, join } from "node:path";
 import { loadOrCreateAuthority } from "./pki.js";
 import { createRelay, type Rule } from "./mitm.js";
 import { buildMobileConfig } from "./profile.js";
-import { type CaptureRecord, suggestRules } from "./suggest.js";
+import { type CaptureRecord, suggestRules, suggestPatchRules } from "./suggest.js";
 import { renderDashboard } from "./dashboard.js";
 import { renderMenu } from "./menu.js";
 import { type VpnPayload } from "./profile.js";
@@ -382,7 +382,7 @@ const admin = http.createServer(async (req, res) => {
 
   if (path === "/suggest") {
     const records = readCaptures(4000);
-    const suggestions = suggestRules(records);
+    const suggestions = [...suggestRules(records), ...suggestPatchRules(records)];
     res
       .writeHead(200, { "content-type": "application/json" })
       .end(JSON.stringify({ captures: records.length, count: suggestions.length, suggestions }, null, 2));
@@ -490,7 +490,7 @@ const admin = http.createServer(async (req, res) => {
       rules,
       features: featureState(records),
       captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
-      suggestions: suggestRules(records),
+      suggestions: [...suggestRules(records), ...suggestPatchRules(records)],
     };
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(view));
     return;
@@ -515,7 +515,7 @@ const admin = http.createServer(async (req, res) => {
           deviceKey,
           rules,
           captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
-          suggestions: suggestRules(records),
+          suggestions: [...suggestRules(records), ...suggestPatchRules(records)],
           loginEnabled: Boolean(authAdminToken),
           version,
           features: featureState(records),
@@ -554,7 +554,7 @@ const admin = http.createServer(async (req, res) => {
           adminPort,
           rules,
           captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
-          suggestions: suggestRules(records),
+          suggestions: [...suggestRules(records), ...suggestPatchRules(records)],
           transport: vpn
             ? { kind: vpn.type, server: vpn.server, proxyInTunnel: Boolean(proxies) }
             : undefined,
