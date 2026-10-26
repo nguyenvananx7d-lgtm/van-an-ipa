@@ -69,7 +69,7 @@ namespace ProjectEspPatch
         // lock without touching the stealth envelope.
         private static float holdGain = 1f;
         // Minimum seconds between SetAimRotation commits.
-        private static float commitInterval = 0.05f;
+        private static float commitInterval = 0.033f;
 
         /// <summary>
         /// One tracking step. Called from Bootstrap, which the game runs during
@@ -369,7 +369,16 @@ namespace ProjectEspPatch
             camera.transform.rotation = next;
             local.m_CurrentAimRotation = next;
 
-            if (now - holdLastCommitAt >= commitInterval && error > aimDeadzone * 2f)
+            // SetAimRotation is the state the camera controller actually
+            // rebuilds from. The bare field write above can be erased by the
+            // game's own touch integration inside the same frame — the game
+            // enters SetAimRotation once per frame while a finger is down, so
+            // entering it once per frame while the assist corrects sits inside
+            // the natural envelope. The 8 ms floor only stops the two drivers
+            // (game hook + GUI pass) double-firing in one frame; the operator's
+            // commit interval still applies above it.
+            float commitFloor = Mathf.Max(commitInterval, 0.008f);
+            if (error > aimDeadzone * 2f && now - holdLastCommitAt >= commitFloor)
             {
                 local.SetAimRotation(next, true);
                 holdLastCommitAt = now;
@@ -419,7 +428,7 @@ namespace ProjectEspPatch
                 aimDeadzone = 0f;
                 aimOvershoot = 0f;
                 aimMaxTurn = 720f;
-                commitInterval = 0.02f;
+                commitInterval = 0.016f;
                 holdGain = 1.35f;
                 return;
             }
@@ -431,7 +440,7 @@ namespace ProjectEspPatch
                 aimDeadzone = 0.14f;
                 aimOvershoot = 1.1f;
                 aimMaxTurn = 240f;
-                commitInterval = 0.04f;
+                commitInterval = 0.025f;
                 holdGain = 1.15f;
             }
             else if (aimStealth == 3)
@@ -451,7 +460,7 @@ namespace ProjectEspPatch
                 aimDeadzone = 0.2f;
                 aimOvershoot = 1.8f;
                 aimMaxTurn = 110f;
-                commitInterval = 0.05f;
+                commitInterval = 0.033f;
                 holdGain = 1f;
             }
         }

@@ -84,6 +84,8 @@ struct SettingView: View {
         } else {
             SectionGroup(title: String(localized: "section_exploit"), symbol: "cpu") {
                 exploitRow
+                nativeHookRow
+                trafficRow
             }
         }
     }
@@ -362,6 +364,60 @@ struct SettingView: View {
             Spacer(minLength: 0)
             Button(buttonKey) { inject.runExploit() }
                 .buttonStyle(ChipButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+    }
+
+    /// Stage-1 of the native hook route (NATIVE_HOOK.md). Only meaningful once
+    /// the exploit stage has won; the button plants the branch stub and reads
+    /// the trampoline marker back. Everything lands in the log screen.
+    private var nativeHookRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform.path.ecg")
+                .foregroundStyle(inject.kernelReady ? Palette.good : Palette.textFaint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("native_hook_title")
+                    .font(.footnote.weight(.semibold))
+                Text("native_hook_caption")
+                    .font(.caption2)
+                    .foregroundStyle(Palette.textFaint)
+            }
+            Spacer(minLength: 0)
+            Button("native_hook_run") { inject.runNativeHook() }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(!inject.kernelReady)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+    }
+
+    /// Hotfix channel (NATIVE_HOOK.md §5): the one route that exists on every
+    /// iOS — 17 through 27 — because it rides the game's own loader through the
+    /// relay instead of a kernel primitive. This row reports readiness.
+    private var trafficRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(inject.trafficReport.contains("armed")
+                                     ? Palette.good : Palette.textFaint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("hotfix_title")
+                        .font(.footnote.weight(.semibold))
+                    Text("hotfix_caption")
+                        .font(.caption2)
+                        .foregroundStyle(Palette.textFaint)
+                }
+                Spacer(minLength: 0)
+                Button("hotfix_check") { inject.runTrafficCheck() }
+                    .buttonStyle(ChipButtonStyle())
+                    .disabled(inject.checkingTraffic)
+            }
+            if !inject.trafficReport.isEmpty {
+                Text(inject.trafficReport)
+                    .font(.caption2)
+                    .foregroundStyle(Palette.textDim)
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)

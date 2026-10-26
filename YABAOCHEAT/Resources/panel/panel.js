@@ -512,7 +512,7 @@
   function demoState() {
     const values = {
       isEnabled: true, aimEnabled: true, silentAim: false, headRate: 55,
-      aimbotRadiusValue: 250, aimTarget: "head", drawFov: true, lineEsp: true,
+      aimbotRadiusValue: 220, aimTarget: "head", drawFov: true, lineEsp: true,
       aimVisibleOnly: true, ignoreKnocked: true, sniperScope: false,
       aimTouchGate: true, hitChance: 50, aimDistance: 120,
       aimSmooth: 0.42, aimReactionMs: 260, aimLeadMs: 60, aimHeight: 0.8,

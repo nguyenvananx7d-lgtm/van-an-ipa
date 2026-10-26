@@ -202,6 +202,13 @@ public struct GameLauncher: Sendable {
         runningProcesses().first.map { "pid \($0.pid) (\($0.comm))" }
     }
 
+    /// The game's pid, or nil — the same fragment-matched lookup every other
+    /// check uses. Exposed for the native hook installer, whose kernel proc
+    /// walk keys on the pid.
+    public func gamePID() -> pid_t? {
+        runningProcesses().first?.pid
+    }
+
     /// Sample of the process table for diagnostics.
     ///
     /// Prefers processes whose `p_comm` looks game-adjacent (Free Fire, Garena,

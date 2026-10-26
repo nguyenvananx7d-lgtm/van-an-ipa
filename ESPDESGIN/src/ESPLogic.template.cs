@@ -621,7 +621,7 @@ namespace ProjectEspPatch
             else aimBone = 0;
 
             aimFov = Mathf.Clamp(CfgNumber(configJson, "FovSize",
-                CfgNumber(configJson, "AimFovRadius", 150f)), 40f, 320f);
+                CfgNumber(configJson, "AimFovRadius", 220f)), 40f, 320f);
             aimSmooth = Mathf.Clamp(CfgNumber(configJson, "AimSmooth", 0.18f), 0.02f, 1f);
             aimHitChance = Mathf.Clamp(CfgNumber(configJson, "HitChance", 85f) > 1f
                 ? CfgNumber(configJson, "HitChance", 85f) / 100f
@@ -2694,7 +2694,12 @@ namespace ProjectEspPatch
                 if (menuTapCount >= 5)
                 {
                     menuTapCount = 0;
-                    menuOpen = true;
+                    // The in-game panel is retired. Every control the patch
+                    // reads is owned by the app UI and the web panel, which
+                    // re-stage the config live — a second, in-match menu was
+                    // a redundant interactive surface and an easy signature.
+                    // The gesture stays recognised but opens nothing.
+                    menuOpen = false;
                 }
                 menuLastTapTime = nowTime;
             }
@@ -2874,10 +2879,14 @@ namespace ProjectEspPatch
                     {
                         try
                         {
-                            // The solve itself runs from Bootstrap so it happens
-                            // once per frame in the update phase. Here the value
-                            // is only replayed, which keeps it in front of the
-                            // frame actually being drawn.
+                            // Solve on this pass too: the game's own per-player
+                            // hook drives the assist, but a GUI repaint is the
+                            // one event we can prove fires while the match
+                            // renders. The solve itself dedupes to one per
+                            // frame, so running it from both hooks costs one
+                            // solve and guarantees a write lands in the frame
+                            // being drawn.
+                            AimFrame();
                             AimReassert();
                         }
                         catch (Exception)

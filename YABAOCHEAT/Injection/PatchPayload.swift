@@ -10,21 +10,18 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (98,397 B, targeting
+    /// The app ships a populated IFix patch (98,437 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
-    /// manifest. It carries the ESP/aim method overrides directly — including
-    /// the three-tab settings overlay built on the app's own design language
-    /// (VISUAL / AIMBOT / EXTRAS), the config-driven ESP block (corner/edge
-    /// boxes with a depth-scaled halo and brackets, gradient fill, segmented
-    /// health track, skeleton with joint rings, tracer, 360° arrows, FOV ring
-    /// with cardinal ticks, head dot), the aim crosshair (ring + centre pip),
-    /// and the aim core: one solve per frame driven from the game's own
-    /// per-player pass rather than from a GUI Repaint event, with continuous
-    /// tracking and the anti-ban envelope expressed as engagement length,
-    /// release beats, turn-rate and a rationed `SetAimRotation` commit instead
-    /// of the old per-frame write dropout — so staging it into the container is
-    /// what turns the features on. It also re-reads `localConfig.json` while the
-    /// match runs, so panel changes land without a relaunch.
+    /// manifest. It carries the ESP/aim method overrides directly — the
+    /// config-driven ESP block (corner/edge boxes, flat tint, health track,
+    /// skeleton with joint rings, tracer, 360° arrows, FOV ring, head dot, name
+    /// plate) and the aim core: one solve per frame driven from the game's own
+    /// per-player pass and re-driven from the GUI pass, with a write every
+    /// frame and `SetAimRotation` entered once per frame while correcting — so
+    /// staging it into the container is what turns the features on. The
+    /// in-game three-tab menu is retired: its gesture opens nothing, and every
+    /// control lives in the app UI and the web panel, which re-stage the config
+    /// live while the match runs.
     ///
     /// This is also the "is the bundle the real blob?" gate: `RuntimeInstaller`
     /// treats a bundle whose length matches this value as the payload to write,

@@ -245,6 +245,73 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// Stage-1 of the native hook route — see `NATIVE_HOOK.md`. Proves the
+    /// task-port channel by hooking `Player.IsReallyInStealth` and reading the
+    /// trampoline marker back. No files, no IFix, no container. The exploit
+    /// stage must have won first; runs detached like `runExploit`.
+    /// Whether the kernel stage has won — gates the native hook row.
+    public var kernelReady: Bool { KernelExploit.kernelRWReady }
+
+    /// Last hotfix-channel readiness verdict, for the settings row.
+    public private(set) var trafficReport: String = ""
+    public private(set) var checkingTraffic = false
+
+    /// Version-agnostic delivery check — `NATIVE_HOOK.md` §5. On iOS without a
+    /// kernel chain (18.8+) this is the primary route; it only reports relay
+    /// readiness, it never mutates anything.
+    public func runTrafficCheck() {
+        guard !checkingTraffic else { return }
+        checkingTraffic = true
+        status = "Checking hotfix channel…"
+        let host = UserDefaults.standard.string(forKey: "relay.host") ?? ""
+        Task.detached(priority: .utility) { [weak self] in
+            let checker = TrafficHotfixInstaller(log: AppLog.shared)
+            let report = await checker.check(relayHost: host)
+            await MainActor.run {
+                guard let self else { return }
+                self.checkingTraffic = false
+                self.trafficReport = report.detail
+                self.status = report.codepatchEnabled
+                    ? "Hotfix channel armed"
+                    : "Hotfix channel: see log"
+            }
+        }
+    }
+
+    public func runNativeHook() {
+        guard KernelExploit.kernelStageSupported else {
+            status = "Native hook unsupported on this iOS (needs 17.0–18.7.1)"
+            log.log(.kernelRW, "native hook: iOS outside the verified exploit range — stage skipped")
+            return
+        }
+        guard KernelExploit.kernelRWReady else {
+            status = "Native hook needs the exploit stage first"
+            log.log(.kernelRW, "native hook: kernel r/w not ready — run the exploit first")
+            return
+        }
+        guard !isRunningExploit else { return }
+        isRunningExploit = true
+        status = "Native hook: planting…"
+
+        let launcher = self.launcher
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let installer = NativeHookInstaller(log: AppLog.shared, launcher: launcher)
+            let result = await installer.installAndVerify()
+            await MainActor.run {
+                guard let self else { return }
+                self.isRunningExploit = false
+                if result.fired {
+                    self.status = String(format: "Native hook verified @ 0x%llx", result.targetVA)
+                } else {
+                    self.status = result.armed
+                        ? "Native hook armed but not verified — see log"
+                        : "Native hook failed — see log"
+                }
+                self.log.log(.kernelRW, "native hook result: \(result.detail)")
+            }
+        }
+    }
+
     /// Sophia parity. The vendor build runs its kernel chain implicitly at the
     /// front of every inject instead of waiting for an opt-in button: kernel
     /// R/W / sandbox escape first, then the container work runs against direct

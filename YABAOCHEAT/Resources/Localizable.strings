@@ -285,6 +285,16 @@
 "aim_stealth_note" = "The assist now corrects every frame instead of rationing writes by duty cycle — skipping frames is what let the reticle slide off. Stealth moved to where it actually counts: how long a lock may run, how fast it may turn, and how often it enters the game's own counted aim call. Lock is tier 0 and gives all of that up.";
 "aim_origin_note" = "In third person the camera sits metres behind the aim axis. Solving from the camera puts the reticle on the enemy; solving from the eye puts the shot on him. The gap grows with range.";
 
+/* Native hook route (NATIVE_HOOK.md) */
+"native_hook_title" = "Native hook (no files)";
+"native_hook_caption" = "Stage 1: hook Player.IsReallyInStealth through the task port and verify the trampoline marker. Replaces the IFix file route.";
+"native_hook_run" = "Plant";
+
+/* Hotfix channel (iOS-version-agnostic) */
+"hotfix_title" = "Hotfix channel";
+"hotfix_caption" = "Every iOS 17–27: the relay points GameVarDef.CodePatchUrl at its own copy of the patch and the game applies it through its own loader. Needs the relay env pinned from one capture session.";
+"hotfix_check" = "Check";
+
 /* Consume-once staging */
 "consume_payload" = "Consume payload";
 "consume_payload_caption" = "After launch, delete the staged patch and config from the game container once the target has read them. The next inject stages them again; a direct launch of the game afterwards has no ESP.";

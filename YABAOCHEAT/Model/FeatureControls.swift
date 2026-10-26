@@ -276,7 +276,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         isEnabled: Bool = false,
         aimEnabled: Bool = false,
         radiusValue: Double = 0,
-        aimbotRadiusValue: Double = 95.0,
+        aimbotRadiusValue: Double = 220.0,
         radiusPolicy: ControlPolicy = .value,
         headshotValue: Bool = false,
         headshotPolicy: ControlPolicy = .value,
@@ -361,7 +361,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         aimStealth: Int = 2,
         aimFrom: String = "camera",
         aimHoldGain: Double = 1.0,
-        aimCommitMs: Int = 50,
+        aimCommitMs: Int = 33,
         antiBanBudget: Bool = true,
         antiBanDutyCycle: Int = 45,
         antiBanMaxEngageMs: Int = 2400,
@@ -788,11 +788,11 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         case 0:
             antiBanMaxEngageMs = 8000; antiBanCooldownMs = 0
             aimHumanize = false; aimDeadzone = 0; aimOvershootDeg = 0
-            aimMaxTurn = 720; aimCommitMs = 20; aimHoldGain = 1.35
+            aimMaxTurn = 720; aimCommitMs = 16; aimHoldGain = 1.35
         case 1:
             antiBanMaxEngageMs = 4000; antiBanCooldownMs = 500
             aimHumanize = true; aimDeadzone = 0.14; aimOvershootDeg = 1.1
-            aimMaxTurn = 240; aimCommitMs = 40; aimHoldGain = 1.15
+            aimMaxTurn = 240; aimCommitMs = 25; aimHoldGain = 1.15
         case 3:
             antiBanMaxEngageMs = 1400; antiBanCooldownMs = 1400
             aimHumanize = true; aimDeadzone = 0.30; aimOvershootDeg = 2.6
@@ -800,7 +800,7 @@ public struct FeatureControls: Codable, Equatable, Sendable {
         default:
             antiBanMaxEngageMs = 2400; antiBanCooldownMs = 900
             aimHumanize = true; aimDeadzone = 0.20; aimOvershootDeg = 1.8
-            aimMaxTurn = 110; aimCommitMs = 50; aimHoldGain = 1.0
+            aimMaxTurn = 110; aimCommitMs = 33; aimHoldGain = 1.0
         }
     }
 
