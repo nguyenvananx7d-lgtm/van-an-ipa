@@ -448,12 +448,20 @@ function renderSuggestions(list) {
       suggestion.action + ' · score ' + suggestion.score + ' · ' + suggestion.calls + ' lần',
       'Bật', 'on-btn',
       async () => {
-        const next = state.rules.filter((r) =>
-          !(r.host === suggestion.rule.host && r.pathPattern === suggestion.rule.pathPattern));
-        next.push(suggestion.rule);
-        const response = await post('/rules', next);
+        const isPin = suggestion.rule.action === 'respond' && Boolean(suggestion.rule.bodyFile);
+        let response;
+        if (isPin) {
+          response = await post('/pin', suggestion.rule);
+        } else {
+          const next = state.rules.filter((r) =>
+            !(r.host === suggestion.rule.host && r.pathPattern === suggestion.rule.pathPattern));
+          next.push(suggestion.rule);
+          response = await post('/rules', next);
+        }
         note.className = response.ok ? 'note' : 'note bad';
-        note.textContent = response.ok ? 'Đã bật — có hiệu lực ngay' : 'Bật thất bại (' + response.status + ')';
+        note.textContent = response.ok
+          ? (isPin ? 'Đã pin patch tại URL thật — sống ngay' : 'Đã bật — có hiệu lực ngay')
+          : (isPin ? 'Pin thất bại (' + response.status + ')' : 'Bật thất bại (' + response.status + ')');
         refresh();
       }
     ));

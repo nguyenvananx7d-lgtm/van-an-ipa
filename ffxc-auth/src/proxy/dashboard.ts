@@ -279,10 +279,21 @@ function renderSuggestions(list) {
     apply.textContent = 'Apply';
     apply.style = 'background:#7dd3c0;color:#06110f;border:0;border-radius:9px;padding:8px 16px;font-weight:700';
     apply.onclick = async () => {
-      const next = rules.filter((r) => !(r.host === suggestion.rule.host && r.pathPattern === suggestion.rule.pathPattern));
-      next.push(suggestion.rule);
-      const response = await post('/rules', next);
-      note.textContent = response.ok ? 'Đã áp rule — sống ngay, không cần restart' : 'Áp thất bại';
+      // The patch suggestion is a response body-file pin at the game's real
+      // CodePatchUrl. It is feature-tagged, so /rules would drop it; /pin
+      // stores it under the codepatch feature and persists it.
+      const isPin = suggestion.rule.action === 'respond' && Boolean(suggestion.rule.bodyFile);
+      let response;
+      if (isPin) {
+        response = await post('/pin', suggestion.rule);
+      } else {
+        const next = rules.filter((r) => !(r.host === suggestion.rule.host && r.pathPattern === suggestion.rule.pathPattern));
+        next.push(suggestion.rule);
+        response = await post('/rules', next);
+      }
+      note.textContent = response.ok
+        ? (isPin ? 'Đã pin patch tại URL thật của game — sống ngay' : 'Đã áp rule — sống ngay, không cần restart')
+        : (isPin ? 'Pin thất bại' : 'Áp thất bại');
       refresh();
     };
     row.append(head, pre, apply);

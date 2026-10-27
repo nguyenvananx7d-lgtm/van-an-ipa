@@ -188,8 +188,10 @@ export function createRelay(config: RelayConfig): RelayHandle {
     res: http.ServerResponse,
     host: string,
     port: number,
+    secure = true,
+    pathOverride?: string,
   ) {
-    const path = req.url ?? "/";
+    const path = pathOverride ?? req.url ?? "/";
     const rulesHit = rulesFor(rules, host, path);
     if (rulesHit.some((rule) => rule.action === "block")) {
       log(`relay: blocked ${host}${path} by rule`);
@@ -234,7 +236,7 @@ export function createRelay(config: RelayConfig): RelayHandle {
     });
     req.on("end", () => {
       const requestBody = overflow ? Buffer.alloc(0) : Buffer.concat(chunks);
-      forward(req, res, host, port, path, requestBody, overflow, rulesHit);
+      forward(req, res, host, port, path, requestBody, overflow, rulesHit, secure);
     });
     req.on("error", () => res.destroy());
   }
@@ -297,6 +299,7 @@ export function createRelay(config: RelayConfig): RelayHandle {
     requestBody: Buffer,
     streaming: boolean,
     rulesHit: Rule[],
+    secure: boolean,
   ) {
     const headers: http.OutgoingHttpHeaders = { ...req.headers };
     delete headers["proxy-connection"];
@@ -309,7 +312,10 @@ export function createRelay(config: RelayConfig): RelayHandle {
       headers["content-length"] = requestBody.length;
     }
 
-    const upstream = https.request(
+    // Plain-HTTP proxy requests (absolute-form) share this path without
+    // SNI/verification; the transport chooses http vs https.
+    const transport = (secure ? https : http) as typeof https;
+    const upstream = transport.request(
       {
         host: config.upstreamHostFor?.(host) ?? host,
         port,
@@ -325,9 +331,22 @@ export function createRelay(config: RelayConfig): RelayHandle {
         const worth = /json|text|javascript|xml/i.test(contentType);
         const chunks: Buffer[] = [];
         let buffered = 0;
+        let streamed = 0;
         let overflow = !worth;
+        let headSent = false;
+
+        // Headers are committed by the first streamed byte. A binary body used
+        // to hit `writeHead` at the end and crash with ERR_HTTP_HEADERS_SENT.
+        const streamHeaders: http.OutgoingHttpHeaders = { ...upstreamRes.headers };
+        delete streamHeaders["transfer-encoding"];
+        const startStreaming = () => {
+          if (headSent) return;
+          headSent = true;
+          res.writeHead(upstreamRes.statusCode ?? 502, streamHeaders);
+        };
 
         upstreamRes.on("data", (chunk: Buffer) => {
+          streamed += chunk.length;
           if (!overflow) {
             buffered += chunk.length;
             if (buffered > maxBody) {
@@ -338,7 +357,8 @@ export function createRelay(config: RelayConfig): RelayHandle {
             }
           }
           // Overflow: stop buffering and flush what we have, then stream.
-          if (buffered > 0) {
+          startStreaming();
+          if (chunks.length > 0) {
             res.write(Buffer.concat(chunks));
             chunks.length = 0;
           }
@@ -350,36 +370,42 @@ export function createRelay(config: RelayConfig): RelayHandle {
           const applied: string[] = [];
           let out = body;
 
-          for (const rule of rulesHit) {
-            if (rule.action === "json-merge" && rule.merge) {
-              try {
-                const parsed = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-                Object.assign(parsed, rule.merge);
-                out = Buffer.from(JSON.stringify(parsed), "utf8");
-                applied.push(`json-merge(${rule.note ?? rule.pathPattern})`);
-              } catch {
-                log(`relay: json-merge skipped for ${host}${path} — body is not JSON`);
+          if (!overflow) {
+            for (const rule of rulesHit) {
+              if (rule.action === "json-merge" && rule.merge) {
+                try {
+                  const parsed = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
+                  Object.assign(parsed, rule.merge);
+                  out = Buffer.from(JSON.stringify(parsed), "utf8");
+                  applied.push(`json-merge(${rule.note ?? rule.pathPattern})`);
+                } catch {
+                  log(`relay: json-merge skipped for ${host}${path} — body is not JSON`);
+                }
               }
-            }
-            if (rule.action === "text-replace" && rule.find) {
-              const text = out.toString("utf8");
-              if (text.includes(rule.find)) {
-                out = Buffer.from(text.split(rule.find).join(rule.replace ?? ""), "utf8");
-                applied.push(`text-replace(${rule.note ?? rule.find})`);
+              if (rule.action === "text-replace" && rule.find) {
+                const text = out.toString("utf8");
+                if (text.includes(rule.find)) {
+                  out = Buffer.from(text.split(rule.find).join(rule.replace ?? ""), "utf8");
+                  applied.push(`text-replace(${rule.note ?? rule.find})`);
+                }
               }
             }
           }
 
-          const responseHeaders: http.OutgoingHttpHeaders = { ...upstreamRes.headers };
-          delete responseHeaders["transfer-encoding"];
-          delete responseHeaders["content-encoding"];
-          if (!overflow && out !== body) {
-            responseHeaders["content-length"] = out.length;
-            applied.push("length-fixed");
+          if (overflow) {
+            startStreaming();
+            res.end();
+          } else {
+            const responseHeaders: http.OutgoingHttpHeaders = { ...upstreamRes.headers };
+            delete responseHeaders["transfer-encoding"];
+            delete responseHeaders["content-encoding"];
+            if (out !== body) {
+              responseHeaders["content-length"] = out.length;
+              applied.push("length-fixed");
+            }
+            res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
+            res.end(out);
           }
-
-          res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
-          res.end(overflow ? undefined : out);
 
           capture({
             ts: new Date().toISOString(),
@@ -389,7 +415,7 @@ export function createRelay(config: RelayConfig): RelayHandle {
             status: upstreamRes.statusCode,
             contentType,
             reqBytes: requestBody.length,
-            resBytes: overflow ? buffered : body.length,
+            resBytes: overflow ? streamed : body.length,
             applied,
             features: appliedFeatures(rulesHit),
             reqPreview: requestBody.length ? preview(requestBody, previewBytes) : undefined,
@@ -422,9 +448,30 @@ export function createRelay(config: RelayConfig): RelayHandle {
   }
 
   // The CONNECT side: answer in plain text, then hand the socket to the TLS
-  // server so the client's handshake lands on the per-host certificate.
+  // server so the client's handshake lands on the per-host certificate. Plain
+  // `http://` proxy requests arrive here in absolute-form; forwarding them is
+  // what keeps the admin page and the app's own readiness probe reachable
+  // while the phone is using this proxy.
   const proxy = http.createServer((req, res) => {
-    res.writeHead(405, { "content-type": "text/plain" }).end("relay: CONNECT only");
+    const raw = req.url ?? "";
+    let target: URL;
+    try {
+      target = new URL(raw);
+    } catch {
+      res
+        .writeHead(400, { "content-type": "text/plain" })
+        .end("relay: absolute-form HTTP request required");
+      return;
+    }
+    if (target.protocol !== "http:") {
+      res
+        .writeHead(400, { "content-type": "text/plain" })
+        .end("relay: use CONNECT for TLS");
+      return;
+    }
+    const port = Number(target.port || 80);
+    const path = `${target.pathname}${target.search}`;
+    handleRequest(req, res, target.hostname, port, false, path);
   });
   proxy.on("connect", (req, clientSocket, head) => {
     const target = hostOnly(req.url);
