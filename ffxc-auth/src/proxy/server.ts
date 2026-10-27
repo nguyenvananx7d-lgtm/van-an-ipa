@@ -343,6 +343,9 @@ const relay = createRelay({
   capturePath,
   rules,
   passthrough,
+  // A var table can carry CodePatchUrl late in the body; the autopin scan reads
+  // this preview, so give it enough room to see the field.
+  previewBytes: Number(process.env.RELAY_PREVIEW_BYTES ?? 2048),
   log: (line) => console.log(line),
 });
 
