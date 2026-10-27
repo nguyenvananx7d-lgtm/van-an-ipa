@@ -178,11 +178,7 @@ struct SettingView: View {
     /// Builds a relay URL from whatever the user typed: `host`, `host:port`,
     /// `https://host`, or `https://host/relay` when Caddy fronts the relay.
     private func relayURL(_ suffix: String) -> URL? {
-        let trimmed = relayHost.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let base = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-        let normalized = base.hasSuffix("/") ? String(base.dropLast()) : base
-        return URL(string: normalized + "/" + suffix)
+        RelayEndpoint(host: relayHost)?.url(suffix)
     }
 
     private var relayProfileURL: URL? { relayURL("profile.mobileconfig") }
@@ -240,6 +236,13 @@ struct SettingView: View {
             .padding(.vertical, 11)
             .padding(.horizontal, Metrics.rowPaddingH)
             .rowDivider()
+
+            Text(String(localized: "relay_host_hint"))
+                .font(.caption.monospaced())
+                .foregroundStyle(Palette.textFaint)
+                .padding(.horizontal, Metrics.rowPaddingH)
+                .padding(.vertical, 8)
+                .rowDivider()
 
             HStack(spacing: 10) {
                 Text(String(localized: "relay_install_caption"))

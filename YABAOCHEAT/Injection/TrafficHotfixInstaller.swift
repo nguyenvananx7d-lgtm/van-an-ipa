@@ -42,14 +42,14 @@ public struct TrafficHotfixInstaller: Sendable {
                           detail: "Set the relay host in Settings first")
         }
         // The relay dashboard (proxy server) lives on the admin port; the host
-        // field in Settings carries the bare LAN IP.
-        let urlString = "http://\(host):8080/state"
-        guard let url = URL(string: urlString) else {
+        // field in Settings can be a bare LAN IP or a full URL, and one helper
+        // resolves both to the same base.
+        guard let endpoint = RelayEndpoint(host: host) else {
             return Report(reachable: false, codepatchEnabled: false,
                           captureMode: false, ruleCount: 0,
                           detail: "bad relay host")
         }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: endpoint.url("state"))
         request.timeoutInterval = 15
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -65,9 +65,20 @@ public struct TrafficHotfixInstaller: Sendable {
                               detail: "relay answered HTTP \(http.statusCode)")
             }
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            let features = object?["features"] as? [String: Any]
-            let codepatch = features?["codepatch"] as? [String: Any]
-            let enabled = (codepatch?["enabled"] as? Bool) ?? false
+            // `/state` ships features as an array (the menu renders it that
+            // way). Older relays used a dictionary; accept both so the check
+            // reports what the relay actually has instead of a permanent "off".
+            let features = object?["features"]
+            var enabled = false
+            if let list = features as? [[String: Any]] {
+                enabled = list.contains { entry in
+                    (entry["id"] as? String) == "codepatch"
+                        && (entry["enabled"] as? Bool) == true
+                }
+            } else if let map = features as? [String: Any],
+                      let codepatch = map["codepatch"] as? [String: Any] {
+                enabled = (codepatch["enabled"] as? Bool) ?? false
+            }
             let rules = (object?["rules"] as? [Any]) ?? []
             let captureMode = rules.isEmpty
 
