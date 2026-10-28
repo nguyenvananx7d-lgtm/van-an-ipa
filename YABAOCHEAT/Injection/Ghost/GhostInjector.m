@@ -10,6 +10,8 @@
 #import <mach/arm/thread_status.h>
 #import <mach/task_info.h>
 #import <mach/thread_info.h>
+#import <objc/message.h>
+#import <objc/runtime.h>
 #import <signal.h>
 #import <stdarg.h>
 #import <stdlib.h>
@@ -65,6 +67,51 @@ static pid_t ghost_process_id(CFStringRef bundle) {
     GhostSBSPid pidForBundle = (GhostSBSPid)dlsym(handle, "SBSProcessIDForDisplayIdentifier");
     if (pidForBundle == NULL) return 0;
     return pidForBundle(bundle);
+}
+
+/* SBSProcessIDForDisplayIdentifier answers 0 on iOS 26 builds even while the
+   game is running. The kernel proc table is what a jailed app can still read,
+   so the pid is matched by short name. */
+static pid_t ghost_scan_pid(const pid_t *exclude) {
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+    size_t size = 0;
+    if (sysctl(mib, 4, NULL, &size, NULL, 0) != 0 || size == 0) return 0;
+    struct kinfo_proc *procs = malloc(size);
+    if (procs == NULL) return 0;
+    if (sysctl(mib, 4, procs, &size, NULL, 0) != 0) {
+        free(procs);
+        return 0;
+    }
+    size_t count = size / sizeof(struct kinfo_proc);
+    pid_t found = 0;
+    for (size_t i = 0; i < count; i++) {
+        const char *comm = procs[i].kp_proc.p_comm;
+        if (comm[0] == '\0') continue;
+        if (strcasestr(comm, "freefire") == NULL &&
+            strcasestr(comm, "free fire") == NULL) {
+            continue;
+        }
+        pid_t candidate = procs[i].kp_proc.p_pid;
+        if (exclude != NULL && candidate == *exclude) continue;
+        found = candidate;
+    }
+    free(procs);
+    return found;
+}
+
+/* LSApplicationWorkspace is the second launch route: SpringBoard's launch
+   call answers 9 on iOS 26 even when SpringBoard is willing to open the
+   title, and the workspace path does not depend on that code. */
+static BOOL ghost_workspace_open(CFStringRef bundle) {
+    Class cls = NSClassFromString(@"LSApplicationWorkspace");
+    if (cls == Nil) return NO;
+    id workspace = ((id (*)(id, SEL))objc_msgSend)((id)cls,
+                                                   sel_registerName("defaultWorkspace"));
+    if (workspace == nil) return NO;
+    SEL selector = sel_registerName("openApplicationWithBundleID:");
+    if (![workspace respondsToSelector:selector]) return NO;
+    return ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, selector,
+                                                 (__bridge id)bundle);
 }
 
 static int ghost_launch(CFStringRef bundle) {
@@ -243,6 +290,7 @@ static int ghost_pick_thread(thread_act_array_t threads,
 + (void)terminateBundle:(NSString *)bundleID {
     CFStringRef bundle = (__bridge CFStringRef)bundleID;
     pid_t pid = ghost_process_id(bundle);
+    if (pid <= 0) pid = ghost_scan_pid(NULL);
     if (pid <= 0) return;
     kill(pid, SIGKILL);
     usleep(700 * 1000);
@@ -444,9 +492,16 @@ cleanup:
     }
 
     pid_t pid = 0;
-    for (int i = 0; i < 250; i++) {
+    BOOL triedWorkspace = NO;
+    for (int i = 0; i < 400; i++) { /* 8 s */
         pid = ghost_process_id(bundle);
+        if (pid <= 0) pid = ghost_scan_pid(NULL);
         if (pid > 0) break;
+        if (!triedWorkspace && i >= 75) { /* ~1.5 s with nothing: second route */
+            triedWorkspace = YES;
+            BOOL opened = ghost_workspace_open(bundle);
+            ghost_log(log, @"[ghost] workspace launch %@", opened ? @"accepted" : @"refused");
+        }
         usleep(20 * 1000);
     }
     if (pid <= 0) {
