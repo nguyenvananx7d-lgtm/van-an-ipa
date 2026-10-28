@@ -57,14 +57,19 @@ public final class AuthorizationStore: ObservableObject {
         let host = Self.relayHost
         if !host.isEmpty {
             do {
+                // The device id is a keychain-backed hash; resolve it off the
+                // main actor so a slow securityd cannot stall the UI.
+                let deviceKey = await Self.deviceKey()
                 let activation = try await RelayActivationClient.activate(
                     host: host,
                     key: key,
                     password: password,
-                    deviceKey: DeviceIdentityProvider.shared.activationId
+                    deviceKey: deviceKey
                 )
-                try? SecureStore.storeLicenseKey(activation.key)
-                try? SecureStore.storePassword(password)
+                Task.detached(priority: .utility) {
+                    try? SecureStore.storeLicenseKey(activation.key)
+                    try? SecureStore.storePassword(password)
+                }
                 sessionToken = activation.session
                 let pins = PatchPayload.localPins()
                 expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
@@ -123,12 +128,24 @@ public final class AuthorizationStore: ObservableObject {
         }
     }
     private func performRevalidation() async {
-        guard let key = try? SecureStore.licenseKey(), !key.isEmpty else {
+        // Keychain is a synchronous XPC to securityd; read it away from the
+        // main actor so a slow daemon cannot trip the scene-update watchdog.
+        let stored = await Task.detached(priority: .userInitiated) { () -> (key: String, password: String)? in
+            guard let key = try? SecureStore.licenseKey(), !key.isEmpty else { return nil }
+            return (key, (try? SecureStore.password()) ?? "")
+        }.value
+        guard let stored else {
             apply(.unknown)
             return
         }
-        let password = (try? SecureStore.password()) ?? ""
-        await submit(key: key, password: password)
+        await submit(key: stored.key, password: stored.password)
+    }
+
+    private static func deviceKey() async -> String {
+        let provider = DeviceIdentityProvider.shared
+        return await Task.detached(priority: .userInitiated) {
+            provider.activationId
+        }.value
     }
 
     /// The relay host the portal lives on. Read from the same `UserDefaults`
@@ -154,8 +171,10 @@ public final class AuthorizationStore: ObservableObject {
                 session: session
             )
             sessionToken = nil
-            SecureStore.clearLicenseKey()
-            SecureStore.clearPassword()
+            Task.detached(priority: .utility) {
+                SecureStore.clearLicenseKey()
+                SecureStore.clearPassword()
+            }
             revocationMessage = nil
             noticeMessage = message
             apply(.unknown)
@@ -173,8 +192,10 @@ public final class AuthorizationStore: ObservableObject {
         revalidationTask?.cancel()
         revalidationTask = nil
         Task { await self.live.stop() }
-        SecureStore.clearLicenseKey()
-        SecureStore.clearPassword()
+        Task.detached(priority: .utility) {
+            SecureStore.clearLicenseKey()
+            SecureStore.clearPassword()
+        }
         sessionToken = nil
         catalog = []
         expectedPatchSHA256 = nil
@@ -192,7 +213,9 @@ public final class AuthorizationStore: ObservableObject {
         revocationMessage = nil
         if let code = response.errorCode {
             if code.invalidatesKey {
-                SecureStore.clearLicenseKey()
+                Task.detached(priority: .utility) {
+                    SecureStore.clearLicenseKey()
+                }
                 revocationMessage = response.message ?? code.localizedDescription
             }
             apply(.invalid(code))

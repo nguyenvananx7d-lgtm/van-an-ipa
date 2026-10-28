@@ -151,7 +151,40 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
     /// across launches, different after a reinstall, and never the raw UDID.
     /// The relay binds the key to this string, the same way the web portal binds
     /// its own per-browser key.
+    ///
+    /// Keychain reads block in a synchronous XPC to securityd. This property is
+    /// read from SwiftUI bodies, and one slow securityd round trip there is
+    /// enough for the scene-update watchdog to kill the app, so the computation
+    /// runs once on a background queue and callers on main get the cached value
+    /// (or a placeholder for the first instant).
+    private static let idLock = NSLock()
+    private static var cachedActivationId: String?
+    private static var computingActivationId = false
+
     public var activationId: String {
+        Self.idLock.lock()
+        if let cached = Self.cachedActivationId {
+            Self.idLock.unlock()
+            return cached
+        }
+        let started = !Self.computingActivationId
+        if started { Self.computingActivationId = true }
+        Self.idLock.unlock()
+
+        if !Thread.isMainThread {
+            let value = computeActivationId()
+            Self.idLock.lock()
+            Self.cachedActivationId = value
+            Self.computingActivationId = false
+            Self.idLock.unlock()
+            return value
+        }
+
+        if started { warmActivationId() }
+        return "…"
+    }
+
+    private func computeActivationId() -> String {
         // `credentialId` is written when the signing key is generated. Make
         // sure that has happened before hashing, otherwise the first launch
         // would publish the literal "unbound" seed and change after a restart.
@@ -159,6 +192,20 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
         let seed = "\(credentialId)|\(hwid)|\(mac)"
         let digest = SHA256.hash(data: Data(seed.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func warmActivationId() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            let value = self.computeActivationId()
+            Self.idLock.lock()
+            Self.cachedActivationId = value
+            Self.computingActivationId = false
+            Self.idLock.unlock()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Notifications.deviceIdReady, object: nil)
+            }
+        }
     }
 
     // MARK: - simulator / hardware gate

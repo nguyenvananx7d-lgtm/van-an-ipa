@@ -20,6 +20,8 @@ struct LicenseView: View {
     @State private var revealPassword: Bool = false
     @State private var copied: Bool = false
     @State private var formError: String?
+    /// Bumped when the cached device id lands, so the ID field re-renders.
+    @State private var deviceIdTick: Int = 0
 
     @FocusState private var focus: Field?
 
@@ -67,6 +69,9 @@ struct LicenseView: View {
         }
         .onChange(of: focus) { _ in
             formError = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notifications.deviceIdReady)) { _ in
+            deviceIdTick &+= 1
         }
     }
 

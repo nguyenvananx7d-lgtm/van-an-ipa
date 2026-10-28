@@ -28,6 +28,8 @@ struct SetupView: View {
     @State private var showCertificateHelp: Bool = false
     @State private var showProxyHelp: Bool = false
     @State private var runningTask: Task<Void, Never>?
+    /// Bumped when the cached device id lands, so the ID rows re-render.
+    @State private var deviceIdTick: Int = 0
 
     private let superProxyURL = URL(
         string: "https://apps.apple.com/vn/app/super-proxy-tunnel-your-apps/id6478274781?l=vi"
@@ -104,6 +106,9 @@ struct SetupView: View {
             Text("Thiết bị này sẽ được gỡ khỏi key. Bạn còn tối đa 2 lần reset mỗi ngày.")
         }
         .animation(.easeInOut(duration: 0.2), value: auth.revocationMessage)
+        .onReceive(NotificationCenter.default.publisher(for: Notifications.deviceIdReady)) { _ in
+            deviceIdTick &+= 1
+        }
     }
 
     // MARK: - header

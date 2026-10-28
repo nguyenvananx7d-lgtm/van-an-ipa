@@ -133,4 +133,6 @@ public enum Notifications {
     public static let integrityFailed        = Notification.Name("FFXCIntegrityFailed")
     public static let integrityRestored      = Notification.Name("FFXCIntegrityRestored")
     public static let languageSelected       = Notification.Name("ffxc.langSelected")
+    /// Posted on the main queue once the cached activation id is computed.
+    public static let deviceIdReady          = Notification.Name("FFXCDeviceIdReady")
 }
