@@ -341,8 +341,10 @@ public final class InjectStore: ObservableObject {
                 // The route choice no longer depends on a probe that lies on
                 // some signing setups; a real failure here is the proof. Fall
                 // back to the relay channel instead of leaving the game dead.
-                log.log(.launch, "ghost failed: \(error.localizedDescription) — falling back to the hotfix channel")
-                status = "Ghost failed — trying the relay…"
+                let reason = (error as? GhostRuntime.Failure).map { ghostFailureText($0) }
+                    ?? error.localizedDescription
+                log.log(.launch, "ghost failed: \(reason) — falling back to the hotfix channel")
+                status = "Ghost failed — \(reason). Trying the relay…"
                 activeRoute = .hotfix
                 await startHotfixRoute()
             }
@@ -369,6 +371,15 @@ public final class InjectStore: ObservableObject {
         runTrafficCheck()
         try? launcher.launch(game: game)
         status = "ESP + aim via relay — game pulls the patch itself"
+    }
+
+    private func ghostFailureText(_ failure: GhostRuntime.Failure) -> String {
+        switch failure {
+        case .payloadMissing:
+            return "payload missing from the bundle"
+        case .injectFailed(let code):
+            return "inject error \(code)"
+        }
     }
 
     public func runNativeHook() {
