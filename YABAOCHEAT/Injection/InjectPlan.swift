@@ -37,16 +37,17 @@ public enum InjectRoute: String, Sendable {
 }
 
 public struct InjectPlan: Sendable {
-    /// Ghost is preferred whenever its payload is in the bundle. The task-port
-    /// test is deliberately NOT part of this gate: the probe lies on some
-    /// signing setups (it answered NO on a working TrollStore install), so the
-    /// inject itself proves the route and falls back to the relay on failure.
+    /// Whether this install can take a task port at all. The probe is a
+    /// `task_for_pid` self test, cached once per process: when it answers NO
+    /// (a certificate-signed install that dropped the private entitlements),
+    /// the whole process table is walled off too and the launch-time map has
+    /// nothing to work with, so the picker goes straight to the relay.
     private static let ghostCapable: Bool = {
-        GhostInjector.payloadAvailable()
+        GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed()
     }()
 
-    /// The route this device takes. Ghost first when its payload is bundled;
-    /// the kernel route on 17.0–18.7.1, the relay on everything else.
+    /// The route this device takes. Ghost when the install can take a task
+    /// port, the kernel route on 17.0–18.7.1, the relay on everything else.
     public static func route(for os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> InjectRoute {
         if ghostCapable {
             return .ghost
@@ -77,10 +78,9 @@ public struct InjectPlan: Sendable {
             guard GhostInjector.payloadAvailable() else {
                 return "not ready — GhostPayload.dylib is missing from the bundle"
             }
-            let task = GhostInjector.taskPortAllowed()
-            return task
+            return ghostCapable
                 ? "ready — launch-time map, no container, no IFix"
-                : "ready — tries the launch-time map, falls back to the relay"
+                : "not ready — this install cannot take task ports"
         case .nativeHook:
             return KernelExploit.kernelRWReady
                 ? "ready — kernel r/w established"
