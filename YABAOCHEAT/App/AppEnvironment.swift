@@ -56,7 +56,9 @@ public final class AppEnvironment: ObservableObject {
         }
 
         authorization.revalidate()
-        inject.evaluate()
+        // The container scan runs on the inject screen, off the main thread.
+        // Doing it here as well put an MCM round trip in front of the first
+        // frame on every launch — the one place a sealed container can hang.
 
         // Track authorization so the root view can swap between the license
         // screen and the main shell without polling.

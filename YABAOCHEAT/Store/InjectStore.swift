@@ -79,6 +79,10 @@ public final class InjectStore: ObservableObject {
 
     private var cancellables: Set<AnyCancellable> = []
 
+    /// Guards against overlapping container scans when the screen re-appears
+    /// while a previous evaluate() is still in flight.
+    private var evaluationInFlight = false
+
     private init(
         log: AppLog = .shared,
         menu: MenuStore = .shared,
@@ -146,7 +150,11 @@ public final class InjectStore: ObservableObject {
     // MARK: - capability gate
 
     /// Work out whether injection is even possible, and set the state to match.
-    /// Cheap enough to run every time the inject screen appears.
+    ///
+    /// The container probe is an MCM round trip and a filesystem scan; on a
+    /// sealed container it can stall for an unbounded time. It runs on a
+    /// detached task and the state lands back here on the main actor — a boot
+    /// path must never wait on it, or the first frame never commits.
     public func evaluate() {
         let device = DeviceIdentityProvider.shared
 
@@ -166,34 +174,50 @@ public final class InjectStore: ObservableObject {
             set(.unsupportedOS, "Unsupported iOS \(DeviceOS.displayString)")
             return
         }
-        if false {
-            set(.unsupportedHardware, "This device is not on the supported list")
-            return
-        }
 
-        switch bridge.resolve(game: game) {
+        if evaluationInFlight { return }
+        evaluationInFlight = true
+
+        let game = self.game
+        let bridge = self.bridge
+        Task { [weak self] in
+            let outcome = await Task.detached(priority: .userInitiated) { () -> (Game, ContainerBridge.Resolution) in
+                let primary = bridge.resolve(game: game)
+                if case .notFound = primary {
+                    // The selected title may not be the one installed; when the
+                    // other title resolves, report that one instead.
+                    let other: Game = game == .freeFire ? .freeFireMax : .freeFire
+                    if case .resolved = bridge.resolve(game: other) {
+                        return (other, .resolved)
+                    }
+                }
+                return (game, primary)
+            }.value
+
+            guard let self else { return }
+            self.evaluationInFlight = false
+            self.applyResolution(outcome.1, game: outcome.0)
+        }
+    }
+
+    private func applyResolution(_ resolution: ContainerBridge.Resolution, game resolved: Game) {
+        if resolved != menu.selectedGame {
+            log.log(.mcm, "\(game.displayName) not installed; switching to \(resolved.displayName)")
+            menu.selectedGame = resolved
+        }
+        switch resolution {
         case .resolved:
-            menu.resolutions[game] = .resolved
+            menu.resolutions[resolved] = .resolved
             filesWiped = false
             set(.ready, nil)
         case .notFound:
-            menu.resolutions[game] = .notFound
-            // The selected title may not be the one that is installed. If the
-            // other title resolves, switch selection to the game actually
-            // present on the device.
-            let other: Game = game == .freeFire ? .freeFireMax : .freeFire
-            if case .resolved = bridge.resolve(game: other) {
-                log.log(.mcm, "\(game.displayName) not installed; switching to \(other.displayName)")
-                menu.selectedGame = other
-                // InjectView re-runs evaluate() via onChange(of: selectedGame).
-                return
-            }
-            set(.gameNotInstalled, "\(game.displayName) (\(game.bundleIdentifier)) is not installed")
+            menu.resolutions[resolved] = .notFound
+            set(.gameNotInstalled, "\(resolved.displayName) (\(resolved.bundleIdentifier)) is not installed")
         case .accessDenied:
-            menu.resolutions[game] = .accessDenied
+            menu.resolutions[resolved] = .accessDenied
             set(.containerAccessDenied, "The app container is sealed — \(bridge.sandboxDiagnosis)")
         case .bridgeUnavailable:
-            menu.resolutions[game] = .bridgeUnavailable
+            menu.resolutions[resolved] = .bridgeUnavailable
             set(.containerBridgeUnavailable, "The container bridge is unavailable")
         }
     }
