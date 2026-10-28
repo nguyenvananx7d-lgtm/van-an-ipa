@@ -14,6 +14,7 @@
 #import <objc/runtime.h>
 #import <signal.h>
 #import <stdarg.h>
+#import <stdio.h>
 #import <stdlib.h>
 #import <string.h>
 #import <sys/sysctl.h>
@@ -71,7 +72,49 @@ static pid_t ghost_process_id(CFStringRef bundle) {
 
 /* SBSProcessIDForDisplayIdentifier answers 0 on iOS 26 builds even while the
    game is running. The kernel proc table is what a jailed app can still read,
-   so the pid is matched by short name. */
+   so the pid is matched by short name. The fragments are deliberately broad:
+   the Unity target may ship as "Free Fire", "Garena…" or even a Unity default
+   name, and a wrong guess is just an empty scan, not a wrong kill. */
+static int ghost_comm_is_game(const char *comm) {
+    if (comm == NULL || comm[0] == '\0') return 0;
+    if (strcasestr(comm, "freefire") != NULL) return 1;
+    if (strcasestr(comm, "free fire") != NULL) return 1;
+    if (strcasestr(comm, "garena") != NULL) return 1;
+    if (strcasestr(comm, "gff") != NULL) return 1;
+    return 0;
+}
+
+static int ghost_comm_is_unity(const char *comm) {
+    return comm != NULL && strcasestr(comm, "unity") != NULL;
+}
+
+static void ghost_proc_sample(char *out, size_t capacity) {
+    if (out == NULL || capacity == 0) return;
+    out[0] = '\0';
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+    size_t size = 0;
+    if (sysctl(mib, 4, NULL, &size, NULL, 0) != 0 || size == 0) return;
+    struct kinfo_proc *procs = malloc(size);
+    if (procs == NULL) return;
+    if (sysctl(mib, 4, procs, &size, NULL, 0) != 0) {
+        free(procs);
+        return;
+    }
+    size_t count = size / sizeof(struct kinfo_proc);
+    size_t used = 0;
+    int shown = 0;
+    for (size_t i = 0; i < count && shown < 24; i++) {
+        const char *comm = procs[i].kp_proc.p_comm;
+        if (comm[0] == '\0') continue;
+        int written = snprintf(out + used, capacity - used, "%s%s",
+                               shown == 0 ? "" : ",", comm);
+        if (written < 0 || (size_t)written >= capacity - used) break;
+        used += (size_t)written;
+        shown++;
+    }
+    free(procs);
+}
+
 static pid_t ghost_scan_pid(const pid_t *exclude) {
     int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
     size_t size = 0;
@@ -83,20 +126,27 @@ static pid_t ghost_scan_pid(const pid_t *exclude) {
         return 0;
     }
     size_t count = size / sizeof(struct kinfo_proc);
-    pid_t found = 0;
+    pid_t strong = 0;
+    pid_t unity = 0;
+    int unityCount = 0;
     for (size_t i = 0; i < count; i++) {
         const char *comm = procs[i].kp_proc.p_comm;
-        if (comm[0] == '\0') continue;
-        if (strcasestr(comm, "freefire") == NULL &&
-            strcasestr(comm, "free fire") == NULL) {
-            continue;
-        }
         pid_t candidate = procs[i].kp_proc.p_pid;
         if (exclude != NULL && candidate == *exclude) continue;
-        found = candidate;
+        if (ghost_comm_is_game(comm)) {
+            strong = candidate;
+            continue;
+        }
+        if (ghost_comm_is_unity(comm)) {
+            unity = candidate;
+            unityCount++;
+        }
     }
     free(procs);
-    return found;
+    if (strong != 0) return strong;
+    /* A Unity-built title with a neutral binary name: accept it only when it
+       is the single Unity process on the device. */
+    return unityCount == 1 ? unity : 0;
 }
 
 /* LSApplicationWorkspace is the second launch route: SpringBoard's launch
@@ -505,7 +555,9 @@ cleanup:
         usleep(20 * 1000);
     }
     if (pid <= 0) {
-        ghost_log(log, @"[ghost] pid never appeared");
+        char sample[512];
+        ghost_proc_sample(sample, sizeof(sample));
+        ghost_log(log, @"[ghost] pid never appeared — proc sample: %s", sample);
         return GhostInjectorErrorPidTimeout;
     }
     ghost_log(log, @"[ghost] pid %d", pid);
