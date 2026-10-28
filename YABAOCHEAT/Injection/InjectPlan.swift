@@ -37,16 +37,16 @@ public enum InjectRoute: String, Sendable {
 }
 
 public struct InjectPlan: Sendable {
-    /// Whether this install can take the game's task port. Computed once: the
-    /// probe is a `task_for_pid` self test, and a body must never repeat
-    /// kernel calls — but one cached call per process is negligible.
+    /// Ghost is preferred whenever its payload is in the bundle. The task-port
+    /// test is deliberately NOT part of this gate: the probe lies on some
+    /// signing setups (it answered NO on a working TrollStore install), so the
+    /// inject itself proves the route and falls back to the relay on failure.
     private static let ghostCapable: Bool = {
-        GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed()
+        GhostInjector.payloadAvailable()
     }()
 
-    /// The route this device takes. Ghost wins whenever its payload is in the
-    /// bundle and the process carries `get-task-allow`; the kernel route is the
-    /// fallback on 17.0–18.7.1, the relay on everything else.
+    /// The route this device takes. Ghost first when its payload is bundled;
+    /// the kernel route on 17.0–18.7.1, the relay on everything else.
     public static func route(for os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> InjectRoute {
         if ghostCapable {
             return .ghost
@@ -77,9 +77,10 @@ public struct InjectPlan: Sendable {
             guard GhostInjector.payloadAvailable() else {
                 return "not ready — GhostPayload.dylib is missing from the bundle"
             }
-            return ghostCapable
+            let task = GhostInjector.taskPortAllowed()
+            return task
                 ? "ready — launch-time map, no container, no IFix"
-                : "not ready — task port denied (entitlements not honoured)"
+                : "ready — tries the launch-time map, falls back to the relay"
         case .nativeHook:
             return KernelExploit.kernelRWReady
                 ? "ready — kernel r/w established"

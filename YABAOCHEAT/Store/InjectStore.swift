@@ -338,10 +338,13 @@ public final class InjectStore: ObservableObject {
                 status = "Ghost mapped — ESP + aim live"
                 log.log(.launch, "ghost: payload mapped; settings pushed over loopback")
             case .failure(let error):
-                isActive = false
-                menu.injectStates[game] = .failed
-                status = "Ghost failed — \(error.localizedDescription)"
-                log.log(.launch, "ghost failed: \(error.localizedDescription)")
+                // The route choice no longer depends on a probe that lies on
+                // some signing setups; a real failure here is the proof. Fall
+                // back to the relay channel instead of leaving the game dead.
+                log.log(.launch, "ghost failed: \(error.localizedDescription) — falling back to the hotfix channel")
+                status = "Ghost failed — trying the relay…"
+                activeRoute = .hotfix
+                await startHotfixRoute()
             }
         case .nativeHook:
             await ensureExploitBeforeInject()
@@ -354,14 +357,18 @@ public final class InjectStore: ObservableObject {
             try? launcher.launch(game: game)
             status = "Native hook planted — see log"
         case .hotfix:
-            // No file is ever planted: the game pulls the patch through its
-            // own CodePatchUrl, which the relay rewrites. Native-assist rides
-            // alongside as the game's own second aim layer.
-            await ensureExploitBeforeInject()
-            runTrafficCheck()
-            try? launcher.launch(game: game)
-            status = "ESP + aim via relay — game pulls the patch itself"
+            await startHotfixRoute()
         }
+    }
+
+    /// The relay route: no file is ever planted; the game pulls the patch
+    /// through its own CodePatchUrl, which the relay rewrites. Native-assist
+    /// rides alongside as the game's own second aim layer.
+    private func startHotfixRoute() async {
+        await ensureExploitBeforeInject()
+        runTrafficCheck()
+        try? launcher.launch(game: game)
+        status = "ESP + aim via relay — game pulls the patch itself"
     }
 
     public func runNativeHook() {
