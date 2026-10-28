@@ -181,6 +181,29 @@ struct SetupView: View {
                     items: Game.allCases.map { SegItem(value: $0, title: $0.displayName) }
                 )
 
+                // Two delivery paths. Modern = relay hotfix (needs Super Proxy
+                // and the CA). Legacy = the patch is staged into the game's
+                // container, which this install can write — no proxy, so the
+                // phone never loses its network.
+                Toggle(isOn: Binding(
+                    get: { menu.controls.preferModernInjection },
+                    set: { value in
+                        var controls = menu.controls
+                        controls.preferModernInjection = value
+                        menu.controls = controls
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Injection hiện đại")
+                            .font(.ui(14, weight: .medium))
+                            .foregroundStyle(Palette.text)
+                        Text("Tắt để stage patch thẳng vào container — không cần proxy, không mất mạng")
+                            .font(.ui(11))
+                            .foregroundStyle(Palette.textFaint)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
                 let route = InjectPlan.route()
                 HStack(spacing: 8) {
                     Image(systemName: route == .ghost ? "sparkles" : "waveform.path.ecg")
