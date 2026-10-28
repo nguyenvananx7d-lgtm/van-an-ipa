@@ -2025,20 +2025,37 @@ namespace ProjectEspPatch
             Vector2 center = new Vector2(rect.x + rect.width * 0.5f,
                 rect.y + rect.height * 0.5f);
             float radius = rect.width * 0.5f;
-            // Idle orb sits quiet: low fill, thin ring. It wakes only under a
-            // recent touch, so a clean screen never carries a bright marker.
+            // Idle orb sits quiet: low fill, thin ring. It wakes under a recent
+            // touch, so a clean screen never carries a bright badge.
             bool awake = Time.unscaledTime - orbLastTouch < 4f;
-            float ringAlpha = awake ? 0.85f : 0.42f;
-            float fillAlpha = awake ? 0.55f : 0.30f;
+            float ringAlpha = awake ? 0.90f : 0.45f;
+            float fillAlpha = awake ? 0.62f : 0.32f;
             Color accent = BaseColor();
             Color fill = new Color(0.02f, 0.03f, 0.04f, fillAlpha);
             for (float inner = radius - 1f; inner > 1f; inner -= 2f)
             {
-                DrawCircle(center, inner, 20, fill, screenWidth, screenHeight);
+                DrawCircle(center, inner, 22, fill, screenWidth, screenHeight);
             }
-            DrawCircle(center, radius, 44, WithAlpha(accent, ringAlpha),
+            DrawCircle(center, radius, 48, WithAlpha(accent, ringAlpha),
                 screenWidth, screenHeight);
-            DrawCircle(center, radius * 0.66f, 36, WithAlpha(accent, ringAlpha * 0.5f),
+            // Four ticks and a centre pip: the app's mark, so the floating
+            // entry reads as a product icon rather than a bare reticle.
+            float outer = radius * 0.94f;
+            float innerTick = radius * 0.64f;
+            Color tick = WithAlpha(accent, ringAlpha * 0.9f);
+            DrawGlowLine(new Vector2(center.x - outer, center.y),
+                new Vector2(center.x - innerTick, center.y), tick, 0f,
+                screenWidth, screenHeight);
+            DrawGlowLine(new Vector2(center.x + innerTick, center.y),
+                new Vector2(center.x + outer, center.y), tick, 0f,
+                screenWidth, screenHeight);
+            DrawGlowLine(new Vector2(center.x, center.y - outer),
+                new Vector2(center.x, center.y - innerTick), tick, 0f,
+                screenWidth, screenHeight);
+            DrawGlowLine(new Vector2(center.x, center.y + innerTick),
+                new Vector2(center.x, center.y + outer), tick, 0f,
+                screenWidth, screenHeight);
+            DrawCircle(center, radius * 0.26f, 26, WithAlpha(accent, ringAlpha * 0.85f),
                 screenWidth, screenHeight);
             DrawCircle(center, 2.2f * scale, 10, WithAlpha(accent, ringAlpha),
                 screenWidth, screenHeight);
