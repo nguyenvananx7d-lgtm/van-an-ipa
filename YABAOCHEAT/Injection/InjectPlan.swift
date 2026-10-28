@@ -37,12 +37,18 @@ public enum InjectRoute: String, Sendable {
 }
 
 public struct InjectPlan: Sendable {
+    /// Whether this install can take the game's task port. Computed once: the
+    /// probe sits under `taskPortAllowed` (a csops syscall), but the route is
+    /// read from view bodies, and a body must never repeat system calls.
+    private static let ghostCapable: Bool = {
+        GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed()
+    }()
+
     /// The route this device takes. Ghost wins whenever its payload is in the
-    /// bundle and the process can actually take a foreign task port; the
-    /// kernel route is the fallback on 17.0–18.7.1, the relay on everything
-    /// else.
+    /// bundle and the process carries `get-task-allow`; the kernel route is the
+    /// fallback on 17.0–18.7.1, the relay on everything else.
     public static func route(for os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> InjectRoute {
-        if GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed() {
+        if ghostCapable {
             return .ghost
         }
         if os.majorVersion == 17 {
@@ -69,7 +75,7 @@ public struct InjectPlan: Sendable {
             guard GhostInjector.payloadAvailable() else {
                 return "not ready — GhostPayload.dylib is missing from the bundle"
             }
-            return GhostInjector.taskPortAllowed()
+            return ghostCapable
                 ? "ready — launch-time map, no container, no IFix"
                 : "not ready — task port denied (entitlements not honoured)"
         case .nativeHook:

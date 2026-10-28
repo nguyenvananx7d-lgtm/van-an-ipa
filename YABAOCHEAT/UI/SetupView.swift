@@ -72,7 +72,11 @@ struct SetupView: View {
             if host.isEmpty {
                 host = storedHost.isEmpty ? RelayActivationClient.configuredHost : storedHost
             }
-            inject.evaluate()
+            /* Container resolution (MCM) is file-system work with an XPC
+               round trip; running it straight off onAppear stalls the first
+               frame on a busy device. Hand it to a task so the UI commits
+               first. */
+            Task { inject.evaluate() }
         }
         .fullScreenCover(isPresented: $showMenu) {
             RelayMenuView(host: host)

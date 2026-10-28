@@ -40,6 +40,18 @@ extern kern_return_t task_for_pid(mach_port_t target, int pid, mach_port_t *task
 typedef int (*GhostSBSLaunch)(CFStringRef identifier, Boolean suspended);
 typedef pid_t (*GhostSBSPid)(CFStringRef identifier);
 
+/* csops is a libsystem_kernel syscall stub; the public SDK does not declare
+   it, so the prototype is repeated here. CS_OPS_STATUS reads the code-signing
+   flags taskgated itself uses. */
+extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+
+#ifndef CS_OPS_STATUS
+#define CS_OPS_STATUS 0
+#endif
+#ifndef CS_GET_TASK_ALLOW
+#define CS_GET_TASK_ALLOW 0x00000004
+#endif
+
 static void ghost_log(void (^log)(NSString *), NSString *format, ...) {
     if (log == nil) return;
     va_list args;
@@ -225,17 +237,15 @@ static int ghost_pick_thread(thread_act_array_t threads,
 }
 
 + (BOOL)taskPortAllowed {
-    /* The right probe is a task we do not own. A self-test answers whether
-       the entitlements survived the install at all — `task_for_pid` on a
-       foreign pid can still fail on hardened installs, and the route picker
-       must not bet on it. */
-    mach_port_t task = MACH_PORT_NULL;
-    kern_return_t kr = task_for_pid(mach_task_self(), getpid(), &task);
-    if (kr == KERN_SUCCESS && task != MACH_PORT_NULL) {
-        mach_port_deallocate(mach_task_self(), task);
-        return YES;
+    /* A plain syscall, not a task-port round trip: this probe runs inside
+       SwiftUI body evaluation, and any Mach call there risks stalling the
+       first frame. The GET_TASK_ALLOW flag is the same signal taskgated uses
+       to decide whether `task_for_pid` may answer at all. */
+    uint32_t flags = 0;
+    if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) != 0) {
+        return NO;
     }
-    return NO;
+    return (flags & CS_GET_TASK_ALLOW) != 0;
 }
 
 + (void)terminateBundle:(NSString *)bundleID {
