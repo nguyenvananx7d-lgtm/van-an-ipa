@@ -38,8 +38,8 @@ public enum InjectRoute: String, Sendable {
 
 public struct InjectPlan: Sendable {
     /// Whether this install can take the game's task port. Computed once: the
-    /// probe sits under `taskPortAllowed` (a csops syscall), but the route is
-    /// read from view bodies, and a body must never repeat system calls.
+    /// probe is a `task_for_pid` self test, and a body must never repeat
+    /// kernel calls — but one cached call per process is negligible.
     private static let ghostCapable: Bool = {
         GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed()
     }()
