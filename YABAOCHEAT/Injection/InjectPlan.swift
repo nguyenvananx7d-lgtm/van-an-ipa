@@ -62,7 +62,9 @@ public struct InjectPlan: Sendable {
 
     /// One line for the log screen: what was picked and why.
     public static func decision(for os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> String {
-        "inject route: \(route(for: os).displayName) (iOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion))"
+        let payload = GhostInjector.payloadAvailable()
+        let task = payload && GhostInjector.taskPortAllowed()
+        return "inject route: \(route(for: os).displayName) (iOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)) — ghost payload=\(payload ? 1 : 0) task=\(task ? 1 : 0)"
     }
 
     /// Whether the picked route is usable right now, without device passes.
