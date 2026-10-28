@@ -81,6 +81,10 @@ jobs:
             test -f "$APP/$f" || { echo "::error::required resource missing from bundle: $f"; exit 1; }
             echo "ok $f"
           done
+          for f in GhostPayload.dylib Rajdhani-Regular.ttf Rajdhani-Bold.ttf Rajdhani-SemiBold.ttf Rajdhani-Medium.ttf Cinzel.ttf; do
+            test -f "$APP/$f" || { echo "::error::ghost/font asset missing from bundle: $f"; exit 1; }
+            echo "ok $f"
+          done
 
       - name: Sign ad-hoc with entitlements
         shell: bash

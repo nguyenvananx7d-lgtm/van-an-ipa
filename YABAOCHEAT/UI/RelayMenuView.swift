@@ -38,10 +38,10 @@ struct RelayMenuView: View {
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(Palette.textFaint)
                     Text("Chưa cấu hình máy chủ relay.")
-                        .font(.body.weight(.medium))
+                        .font(.ui(15, weight: .medium))
                         .foregroundStyle(Palette.text)
                     Text("Nhập địa chỉ relay ở màn hình cài đặt rồi mở lại.")
-                        .font(.footnote)
+                        .font(.ui(13))
                         .foregroundStyle(Palette.textDim)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,11 +68,11 @@ struct RelayMenuView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("WEB MENU")
-                    .font(.caption.weight(.bold))
+                    .font(.ui(12, weight: .bold))
                     .tracking(0.9)
                     .foregroundStyle(Palette.text)
                 Text(host)
-                    .font(.caption2.monospaced())
+                    .font(.ui(11))
                     .foregroundStyle(Palette.textFaint)
                     .lineLimit(1)
                     .truncationMode(.middle)

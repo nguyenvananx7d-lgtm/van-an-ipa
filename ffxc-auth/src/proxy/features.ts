@@ -133,41 +133,81 @@ export function buildPatchRules(): Rule[] {
 /**
  * Layer zero — no patch in the game at all.
  *
- * The 1.132.1 dump shows the game already ships server-gated assists:
- * `COW.EAimAssist` (`AllOn = 0`, `OffOnSighting = 1`, `AllOff = 2`),
- * `Player.SetEAimAssitMode`, and `GetAimAssistSetting()`. If the settings
- * response that carries the value is rewritten to `AllOn`, the game aims with
- * its own code, its own input path, its own statistics. Nothing is injected,
- * nothing is enumerable, and no iOS version matters — this is the route for
- * 18.8+ where no code route exists.
+ * The 1.132.1 dump shows the game already ships every behaviour a cheat panel
+ * sells, gated by values it receives from its own live-ops server:
  *
- * The merge body is environment-driven because the exact field name in the
- * settings response is only knowable from a capture: set `RELAY_ASSIST_MERGE`
- * to the JSON to merge (defaults to the EAimAssist ordinal). Same pattern as
- * `buildPatchRules`: until the env is set, no rules are installed and the
- * feature says so instead of guessing.
+ *   COW.GameVarDef.EnableShowPlayerOutline      player outline through walls
+ *   COW.GameVarDef.ShowPlayerOutline*           range, alpha, width
+ *   COW.GameVarDef.EnableStropAimAssist         native aim assist while sliding
+ *   COW.GameVarDef.EnableBeAimAssistWhenStropDash
+ *   COW.EAimAssist { AllOn=0, OffOnSighting=1, AllOff=2 }
+ *
+ * The client renders and aims with its own code. We only answer the config
+ * request with a document the game could have received from its operator. No
+ * code, no file, no hook, no iOS version dependency — and nothing to find in a
+ * memory scan because the only "anomaly" is a field value.
+ *
+ * The rule is deliberately host-agnostic and uses the `**.Key` form: the var
+ * table's host and nesting change between releases, the field names do not.
+ * `json-set` only touches objects that already carry the key, so a JSON body
+ * that merely contains the word is not rewritten.
  */
+const OUTLINE_OPS = [
+  { path: "**.EnableShowPlayerOutline", value: true },
+  { path: "**.EnableOutlineFuncInScript", value: true },
+  { path: "**.OutlineVisibleJudgeInUpDate", value: true },
+  { path: "**.ShowPlayerOutlineMinDistance", value: 0 },
+  { path: "**.ShowPlayerOutlineMaxDistance", value: 400 },
+  { path: "**.ShowPlayerOutlineMinAlpha", value: 0.35 },
+  { path: "**.ShowPlayerOutlineMaxAlpha", value: 1 },
+  { path: "**.ShowPlayerOutlineWidth", value: 2 },
+  { path: "**.ShowPlayerOutlineMinWidth", value: 1 },
+  { path: "**.ShowPlayerOutlineMaxWidth", value: 4 },
+];
+
+const ASSIST_OPS = [
+  { path: "**.EnableStropAimAssist", value: true },
+  { path: "**.EnableBeAimAssistWhenStropDash", value: true },
+];
+
+export function buildNativeEspRules(): Rule[] {
+  return [{
+    pathPattern: "^/",
+    action: "json-set",
+    jsonOps: OUTLINE_OPS,
+    feature: "native-esp",
+    note: "native player outline through the game's own var table",
+  }];
+}
+
 export function buildAssistRules(): Rule[] {
+  const rules: Rule[] = [{
+    pathPattern: "^/",
+    action: "json-set",
+    jsonOps: ASSIST_OPS,
+    feature: "native-assist",
+    note: "native aim-assist switches through the game's own var table",
+  }];
+
+  // Settings sync: `CSPlayerSettingsRes.settings` is a byte array holding
+  // `COW.SettingDetail`, whose `aim_assist` is the EAimAssist ordinal. The
+  // field number is only knowable from a capture, so this half is opt-in.
+  // `RELAY_ASSIST_PROTO=**.16` patches field 16 in every submessage; the
+  // operator confirms the number from one capture first.
   const host = process.env.RELAY_ASSIST_HOST?.trim().toLowerCase();
   const pathPattern = process.env.RELAY_ASSIST_PATH?.trim();
-  if (!host || !pathPattern) return [];
-  let merge: Record<string, unknown> = { aim_assist: 0 };
-  const raw = process.env.RELAY_ASSIST_MERGE?.trim();
-  if (raw) {
-    try {
-      merge = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      return [];
-    }
+  const fieldPath = process.env.RELAY_ASSIST_PROTO?.trim();
+  if (host && pathPattern && fieldPath) {
+    rules.push({
+      host,
+      pathPattern,
+      action: "proto-set",
+      protoOps: [{ path: fieldPath, value: 0, wire: "varint" }],
+      feature: "native-assist",
+      note: "force EAimAssist.AllOn in the settings blob",
+    });
   }
-  return [{
-    host,
-    pathPattern,
-    action: "json-merge",
-    merge,
-    feature: "native-assist",
-    note: "force the game's own aim assist on",
-  }];
+  return rules;
 }
 
 export const FEATURES: Feature[] = [
@@ -205,13 +245,22 @@ export const FEATURES: Feature[] = [
     rules: buildPatchRules(),
   },
   {
-    id: "native-assist",
-    label: "Trợ thủ gốc của game (không patch)",
+    id: "native-esp",
+    label: "ESP gốc của game (layer zero)",
     detail:
-      "Ép game tự bật aim assist sẵn có của nó (EAimAssist.AllOn) bằng cách sửa response "
-      + "settings — không có code nào vào game, không gì để quét, chạy mọi iOS. Cần "
-      + "RELAY_ASSIST_HOST + RELAY_ASSIST_PATH (+ RELAY_ASSIST_MERGE tuỳ chỉnh). "
-      + "Chưa set thì không gắn rule nào.",
+      "Bật EnableShowPlayerOutline và các tham số outline trong bảng var của chính game. "
+      + "Không patch, không file, không hook: game tự vẽ outline bằng code của nó. "
+      + "Chỉ sửa response, không đụng client. Không phụ thuộc iOS.",
+    rules: buildNativeEspRules(),
+  },
+  {
+    id: "native-assist",
+    label: "Trợ thủ gốc của game (layer zero)",
+    detail:
+      "Bật các cờ aim assist có sẵn trong bảng var (EnableStropAimAssist, "
+      + "EnableBeAimAssistWhenStropDash). Tuỳ chọn: đặt RELAY_ASSIST_HOST/PATH/PROTO "
+      + "để ép aim_assist=AllOn trong blob settings sau khi đã xác nhận số field "
+      + "bằng một phiên capture.",
     rules: buildAssistRules(),
   },
 ];

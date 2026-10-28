@@ -4,7 +4,12 @@ import { extname, join } from "node:path";
 import { loadOrCreateAuthority } from "./pki.js";
 import { createRelay, type Rule } from "./mitm.js";
 import { buildMobileConfig } from "./profile.js";
-import { type CaptureRecord, suggestRules, suggestPatchRules } from "./suggest.js";
+import {
+  type CaptureRecord,
+  suggestArsenalRules,
+  suggestPatchRules,
+  suggestRules,
+} from "./suggest.js";
 import { renderDashboard } from "./dashboard.js";
 import { renderMenu } from "./menu.js";
 import { renderDevice, renderLogin } from "./portal.js";
@@ -910,10 +915,57 @@ const admin = http.createServer(async (req, res) => {
 
   if (path === "/suggest") {
     const records = readCaptures(4000);
-    const suggestions = [...suggestRules(records), ...suggestPatchRules(records)];
+    const suggestions = [
+      ...suggestRules(records),
+      ...suggestPatchRules(records),
+      ...suggestArsenalRules(records),
+    ];
     res
       .writeHead(200, { "content-type": "application/json" })
       .end(JSON.stringify({ captures: records.length, count: suggestions.length, suggestions }, null, 2));
+    return;
+  }
+
+  // The config-plane armory. One request answers "what can this route do right
+  // now, which fields does it own, and what did the captures prove?" so the
+  // dashboard never has to explain a feature with no rule behind it.
+  if (path === "/arsenal") {
+    const records = readCaptures(4000);
+    const candidates = suggestArsenalRules(records);
+    const formats: Record<string, number> = {};
+    for (const record of records) {
+      const key = record.resFormat ?? "unknown";
+      formats[key] = (formats[key] ?? 0) + 1;
+    }
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+      route: "config-plane",
+      principle: "rewrite the server's own config; never touch the client",
+      fields: {
+        outline: [
+          "EnableShowPlayerOutline",
+          "EnableOutlineFuncInScript",
+          "OutlineVisibleJudgeInUpDate",
+          "ShowPlayerOutlineMinDistance",
+          "ShowPlayerOutlineMaxDistance",
+          "ShowPlayerOutlineMinAlpha",
+          "ShowPlayerOutlineMaxAlpha",
+          "ShowPlayerOutlineWidth",
+          "ShowPlayerOutlineMinWidth",
+          "ShowPlayerOutlineMaxWidth",
+        ],
+        assist: ["EnableStropAimAssist", "EnableBeAimAssistWhenStropDash", "SettingDetail.aim_assist"],
+      },
+      bodyFormats: formats,
+      captures: records.length,
+      candidates,
+      features: FEATURES.filter((feature) => feature.id === "native-esp" || feature.id === "native-assist")
+        .map((feature) => ({
+          id: feature.id,
+          label: feature.label,
+          enabled: enabledFeatures.has(feature.id),
+          rules: feature.rules.length,
+        })),
+    }, null, 2));
     return;
   }
 
@@ -1100,7 +1152,11 @@ const admin = http.createServer(async (req, res) => {
       rules,
       features: featureState(records),
       captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
-      suggestions: [...suggestRules(records), ...suggestPatchRules(records)],
+      suggestions: [
+        ...suggestRules(records),
+        ...suggestPatchRules(records),
+        ...suggestArsenalRules(records),
+      ],
     };
     res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(view));
     return;

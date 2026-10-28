@@ -3,6 +3,13 @@ import Foundation
 /// The one inject matrix. Everything in the app that decides *how* the cheat
 /// reaches the game goes through here.
 ///
+/// - `.ghost` — the default on any install whose entitlements are honoured:
+///   SpringBoard opens the game, the app takes its task port while it is still
+///   inside `UIApplicationMain`, and a thread is pointed at `dlopen` so
+///   `GhostPayload.dylib` is inside the process before IL2CPP has a domain.
+///   Nothing is written into the game's container, nothing is registered in
+///   IFix, no certificate is installed, and the payload resolves every symbol
+///   by name instead of by dump offset.
 /// - `.nativeHook` — iOS 17.0–18.7.1: the kernel chain wins, `task_for_pid`
 ///   answers, and a branch stub + trampoline are planted straight into the
 ///   game's address space. Nothing on disk, nothing in IFix's registry.
@@ -16,11 +23,13 @@ import Foundation
 /// The container-staging route (the one that was detected) is not in this
 /// table; it exists only as a legacy fallback.
 public enum InjectRoute: String, Sendable {
+    case ghost
     case nativeHook
     case hotfix
 
     public var displayName: String {
         switch self {
+        case .ghost: return "Ghost — launch-time native map"
         case .nativeHook: return "Native hook (kernel)"
         case .hotfix: return "Hotfix channel — ESP + aim"
         }
@@ -28,8 +37,14 @@ public enum InjectRoute: String, Sendable {
 }
 
 public struct InjectPlan: Sendable {
-    /// The route this device takes, from the OS version alone.
+    /// The route this device takes. Ghost wins whenever its payload is in the
+    /// bundle and the process can actually take a foreign task port; the
+    /// kernel route is the fallback on 17.0–18.7.1, the relay on everything
+    /// else.
     public static func route(for os: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> InjectRoute {
+        if GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed() {
+            return .ghost
+        }
         if os.majorVersion == 17 {
             return .nativeHook
         }
@@ -45,10 +60,18 @@ public struct InjectPlan: Sendable {
     }
 
     /// Whether the picked route is usable right now, without device passes.
-    /// `.nativeHook` needs the kernel chain to have won; `.nativeAssist` needs
-    /// a relay host and one capture-pinned rule on the relay.
+    /// `.ghost` needs the payload in the bundle and a foreign task port;
+    /// `.nativeHook` needs the kernel chain to have won; `.hotfix` needs a
+    /// relay host and one capture-pinned rule on the relay.
     public static func readiness(for route: InjectRoute) -> String {
         switch route {
+        case .ghost:
+            guard GhostInjector.payloadAvailable() else {
+                return "not ready — GhostPayload.dylib is missing from the bundle"
+            }
+            return GhostInjector.taskPortAllowed()
+                ? "ready — launch-time map, no container, no IFix"
+                : "not ready — task port denied (entitlements not honoured)"
         case .nativeHook:
             return KernelExploit.kernelRWReady
                 ? "ready — kernel r/w established"

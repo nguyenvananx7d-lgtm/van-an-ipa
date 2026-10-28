@@ -21,10 +21,10 @@ struct LogView: View {
                 Spacer()
                 VStack(spacing: 8) {
                     Image(systemName: "text.alignleft")
-                        .font(.title3)
+                        .font(.ui(20, weight: .semibold))
                         .foregroundStyle(Palette.textFaint)
                     Text("log_empty")
-                        .font(.footnote)
+                        .font(.ui(13))
                         .foregroundStyle(Palette.textDim)
                 }
                 .frame(maxWidth: .infinity)
@@ -54,14 +54,14 @@ struct LogView: View {
                 }
             } label: {
                 Label(filter?.rawValue ?? "all", systemImage: "line.3.horizontal.decrease.circle")
-                    .font(.caption.weight(.semibold))
+                    .font(.ui(12, weight: .semibold))
             }
 
             Spacer()
 
             if copied {
                 Label("copied", systemImage: "checkmark")
-                    .font(.caption)
+                    .font(.ui(12))
                     .foregroundStyle(Palette.good)
             }
 
@@ -104,17 +104,17 @@ struct LogView: View {
     private func row(_ entry: AppLog.Entry) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(entry.date, style: .time)
-                .font(.caption2.monospacedDigit())
+                .font(.ui(11))
                 .foregroundStyle(Palette.textFaint)
                 .frame(width: 58, alignment: .leading)
 
             Text(entry.subsystem.rawValue)
-                .font(.caption2.weight(.bold))
+                .font(.ui(11, weight: .bold))
                 .foregroundStyle(tone(entry.subsystem))
                 .frame(width: 66, alignment: .leading)
 
             Text(entry.message)
-                .font(.caption)
+                .font(.ui(12))
                 .foregroundStyle(Palette.text)
                 .fixedSize(horizontal: false, vertical: true)
 

@@ -82,12 +82,12 @@ struct LicenseView: View {
                         .tracking(0.6)
                         .foregroundStyle(Palette.text)
                     Text("®")
-                        .font(.caption.weight(.semibold))
+                        .font(.ui(12, weight: .semibold))
                         .foregroundStyle(Palette.textFaint)
                         .baselineOffset(9)
                 }
                 Text("Kích hoạt menu")
-                    .font(.subheadline.weight(.medium))
+                    .font(.ui(14, weight: .medium))
                     .foregroundStyle(Palette.textDim)
             }
         }
@@ -103,12 +103,12 @@ struct LicenseView: View {
                     .fill(Palette.accent)
                     .frame(width: 6, height: 6)
                 Text("ĐĂNG NHẬP")
-                    .font(.caption2.weight(.bold))
+                    .font(.ui(11, weight: .bold))
                     .tracking(1.4)
                     .foregroundStyle(Palette.textFaint)
                 Spacer()
                 Text("MIZZE 4.0")
-                    .font(.caption2.monospaced().weight(.semibold))
+                    .font(.ui(11, weight: .semibold))
                     .foregroundStyle(Palette.textFaint)
             }
 
@@ -125,7 +125,7 @@ struct LicenseView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.asciiCapable)
                     .focused($focus, equals: .key)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.ui(15))
                     .foregroundStyle(Palette.text)
                     .submitLabel(.next)
                     .onSubmit { focus = .password }
@@ -148,7 +148,7 @@ struct LicenseView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.asciiCapable)
                     .focused($focus, equals: .password)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.ui(15))
                     .foregroundStyle(Palette.text)
                     .submitLabel(.go)
                     .onSubmit { submit() }
@@ -184,7 +184,7 @@ struct LicenseView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Sao chép ID máy")
                         Text("\(device.activationId.count)/64")
-                            .font(.caption2.monospacedDigit())
+                            .font(.ui(11))
                             .foregroundStyle(Palette.textFaint)
                     }
                 }
@@ -198,7 +198,7 @@ struct LicenseView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                     .focused($focus, equals: .host)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.ui(15))
                     .foregroundStyle(Palette.text)
                     .submitLabel(.go)
                     .onSubmit { submit() }
@@ -213,7 +213,7 @@ struct LicenseView: View {
                             .scaleEffect(0.85)
                     }
                     Text("Enter")
-                        .font(.headline)
+                        .font(.ui(17, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
@@ -226,7 +226,7 @@ struct LicenseView: View {
                     .font(.system(size: 10, weight: .semibold))
                 Text("Reset thiết bị · 2 lần mỗi ngày")
             }
-            .font(.caption)
+            .font(.ui(12))
             .foregroundStyle(Palette.textFaint)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 1)
@@ -238,7 +238,7 @@ struct LicenseView: View {
     private func field<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.ui(12, weight: .semibold))
                 .foregroundStyle(Palette.textDim)
             content()
         }
@@ -263,9 +263,9 @@ struct LicenseView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "globe")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.ui(12, weight: .semibold))
                     Text(language.selected.displayName)
-                        .font(.caption.weight(.medium))
+                        .font(.ui(12, weight: .medium))
                         .lineLimit(1)
                 }
                 .foregroundStyle(Palette.textDim)
@@ -275,7 +275,7 @@ struct LicenseView: View {
             Spacer(minLength: 8)
 
             Text("VORTEX © 2026")
-                .font(.caption2.monospaced())
+                .font(.ui(11))
                 .foregroundStyle(Palette.textFaint)
         }
         .padding(.top, 2)

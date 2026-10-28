@@ -18,7 +18,7 @@ struct YABAOCHEATApp: App {
                 .environmentObject(environment.menu)
                 .environmentObject(environment.authorization)
                 .environmentObject(environment.inject)
-                .preferredColorScheme(environment.isDarkMode ? .dark : .light)
+                .preferredColorScheme(.dark)
                 .onOpenURL { url in handle(url) }
         }
         .onChange(of: scenePhase) { phase in

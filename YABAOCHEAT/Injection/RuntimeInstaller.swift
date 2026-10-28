@@ -237,13 +237,13 @@ public actor RuntimeInstaller {
         try await uninject(game: game)
     }
     // MARK: - real patch
-    /// A staged blob larger than the neutral manifest is the vendor's real IFix
-    /// patch. Nil when only neutral copies (or nothing) are present.
+    /// A staged blob at least as large as the shipped patch is the vendor's
+    /// real IFix patch. Nil when only neutral copies (or nothing) are present.
     private static func adoptablePatch(in urls: [URL]) -> Data? {
         let fm = FileManager.default
         for url in urls {
             guard let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
-                  size.int64Value > Int64(PatchPayload.expectedLength),
+                  size.int64Value >= Int64(PatchPayload.expectedLength),
                   let blob = try? Data(contentsOf: url) else { continue }
             return blob
         }
@@ -282,7 +282,7 @@ public actor RuntimeInstaller {
                 // Only stat and read plausible blobs: nothing as small as the
                 // neutral manifest, nothing past the patch size band.
                 let size = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
-                guard size > PatchPayload.expectedLength, size <= 262_144,
+                guard size >= PatchPayload.expectedLength, size <= 262_144,
                       let data = try? Data(contentsOf: url),
                       PatchPayload.digest(of: data).caseInsensitiveCompare(sha) == .orderedSame
                 else { continue }

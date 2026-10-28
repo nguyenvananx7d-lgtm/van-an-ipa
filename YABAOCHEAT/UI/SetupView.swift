@@ -2,20 +2,18 @@ import SwiftUI
 import UIKit
 import Foundation
 
-/// The post-activation screen, modelled on the MIZZE 4.0 install video:
+/// The only screen the operator needs: activate, read the two-minute guide,
+/// then play. The ESP/Aim switches live inside the game now — the floating
+/// icon menu — so this app is a launcher, not a control panel.
 ///
-///   1. install the relay certificate and trust it;
-///   2. start Super Proxy with the relay as an HTTP proxy;
-///   3. launch Free Fire and open the control menu from this app or Safari.
-///
-/// The old container-injection flow still exists under "Công cụ nâng cao", but
-/// it is deliberately one tap away: on a sealed iOS 18 container it fails with
-/// `container access denied`, while the relay does not touch the game at all.
+/// The relay section below stays for the `.hotfix` route (iOS that denies the
+/// task port); on the Ghost route it is advisory only.
 struct SetupView: View {
     @EnvironmentObject var auth: AuthorizationStore
     @EnvironmentObject var language: LanguageStore
+    @EnvironmentObject var inject: InjectStore
 
-    let onOpenTools: () -> Void
+    let onOpenSettings: () -> Void
 
     @AppStorage("relay.host") private var storedHost: String = ""
     @AppStorage("setup.cert") private var certificateDone: Bool = false
@@ -29,6 +27,7 @@ struct SetupView: View {
     @State private var resetBusy: Bool = false
     @State private var showCertificateHelp: Bool = false
     @State private var showProxyHelp: Bool = false
+    @State private var runningTask: Task<Void, Never>?
 
     private let superProxyURL = URL(
         string: "https://apps.apple.com/vn/app/super-proxy-tunnel-your-apps/id6478274781?l=vi"
@@ -55,13 +54,12 @@ struct SetupView: View {
                     if let notice = auth.noticeMessage {
                         Banner(kind: .info, message: notice)
                     }
+                    injectCard
+                    guideCard
                     sessionCard
-                    hostCard
-                    certificateStep
-                    proxyStep
-                    menuStep
+                    relayGroup
                     resetCard
-                    advanced
+                    footer
                 }
                 .padding(.horizontal, Metrics.gutter)
                 .padding(.top, 12)
@@ -74,6 +72,7 @@ struct SetupView: View {
             if host.isEmpty {
                 host = storedHost.isEmpty ? RelayActivationClient.configuredHost : storedHost
             }
+            inject.evaluate()
         }
         .fullScreenCover(isPresented: $showMenu) {
             RelayMenuView(host: host)
@@ -109,22 +108,187 @@ struct SetupView: View {
         HStack(alignment: .center, spacing: 12) {
             Mark(size: 44)
             VStack(alignment: .leading, spacing: 3) {
+                Text("VORTEX ARENA")
+                    .font(.brand(23))
+                    .tracking(1.2)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Palette.accentHi, Palette.accent],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 HStack(spacing: 7) {
-                    Text("VORTEX ARENA")
-                        .font(.headline.weight(.heavy))
-                        .tracking(0.5)
-                        .foregroundStyle(Palette.text)
-                    Text(verbatim: "v4.0")
-                        .font(.caption2.monospacedDigit())
+                    Text("v4.0")
+                        .font(.ui(11))
                         .foregroundStyle(Palette.textFaint)
+                    Text("·")
+                        .foregroundStyle(Palette.textFaint)
+                    Text(InjectPlan.route().displayName)
+                        .font(.ui(11, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .lineLimit(1)
                 }
-                Text("Cài đặt relay")
-                    .font(.caption)
-                    .foregroundStyle(Palette.textDim)
             }
             Spacer(minLength: 8)
-            StateBadge(text: "ĐÃ XÁC THỰC", tone: .good)
+            VStack(alignment: .trailing, spacing: 8) {
+                statusBadge
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Palette.textDim)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Palette.surface))
+                        .overlay(Circle().strokeBorder(Palette.hairline, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cài đặt")
+            }
         }
+    }
+
+    private var statusBadge: some View {
+        let s = auth.status
+        if s.isOnline {
+            return StateBadge(text: "ĐÃ XÁC THỰC", tone: .good)
+        }
+        if case .checking = s {
+            return StateBadge(text: "ĐANG KIỂM TRA", tone: .busy)
+        }
+        return StateBadge(text: "NGOẠI TUYẾN", tone: .bad)
+    }
+
+    // MARK: - inject
+
+    private var injectCard: some View {
+        SectionGroup(title: "Kích hoạt", symbol: "bolt.fill") {
+            VStack(alignment: .leading, spacing: 12) {
+                let route = InjectPlan.route()
+                HStack(spacing: 8) {
+                    Image(systemName: route == .ghost ? "sparkles" : "waveform.path.ecg")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.accentHi)
+                    Text(route.displayName)
+                        .font(.ui(13, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                    Spacer(minLength: 8)
+                    Text(InjectPlan.readiness(for: route))
+                        .font(.ui(11))
+                        .foregroundStyle(Palette.textFaint)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Button {
+                    runningTask = Task {
+                        await inject.install(
+                            expectedDigest: auth.expectedPatchSHA256,
+                            monitorMs: auth.patchOpenMonitorMs
+                        )
+                    }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("KÍCH HOẠT")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(AccentButtonStyle())
+                .disabled(!auth.status.isOnline || runningTask != nil)
+
+                if let status = inject.status {
+                    HStack(spacing: 8) {
+                        Image(systemName: inject.isActive ? "checkmark.circle.fill" : "info.circle")
+                            .foregroundStyle(inject.isActive ? Palette.good : Palette.textFaint)
+                        Text(status)
+                            .font(.ui(13))
+                            .foregroundStyle(Palette.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                if inject.isActive && InjectPlan.route() == .ghost {
+                    HStack(spacing: 8) {
+                        Image(systemName: "hand.tap.fill")
+                            .foregroundStyle(Palette.accent)
+                        Text("Biểu tượng vàng đã nổi trong game — chạm để mở menu.")
+                            .font(.ui(12, weight: .semibold))
+                            .foregroundStyle(Palette.accent)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        runningTask = Task { await inject.keepFeatures() }
+                    } label: {
+                        Text("Giữ tính năng, gỡ app")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(AccentButtonStyle(prominent: false))
+                    .disabled(runningTask != nil)
+
+                    Button {
+                        runningTask = Task { await inject.uninject() }
+                    } label: {
+                        Text("Gỡ hoàn toàn")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(AccentButtonStyle(prominent: false, destructive: true))
+                    .disabled(runningTask != nil)
+                }
+            }
+            .padding(Metrics.rowPaddingH)
+        }
+    }
+
+    // MARK: - guide
+
+    private var guideCard: some View {
+        SectionGroup(title: "Cách dùng", symbol: "book") {
+            VStack(alignment: .leading, spacing: 0) {
+                guideStep(1, "Bấm Kích hoạt — game tự khởi động, hack đã nằm trong tiến trình trước cả frame đầu tiên.")
+                guideStep(2, "Trong game, biểu tượng logo nổi ở mép phải màn hình. Chạm một lần để mở menu.")
+                guideStep(3, "Menu có 11 công tắc: ESP, khung, tên, khoảng cách, máu, tracer, vòng FOV, aim, chỉ mục tiêu nhìn thấy, bỏ qua kẻ gục, aim theo chạm.")
+                guideStep(4, "Chạm từng dòng để bật/tắt ngay lập tức — không cần quay lại app.")
+                guideStep(5, "Đổi cấu hình trong app sẽ ghi đè công tắc đang bật trong game.")
+
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.info)
+                    Text("\"Aim touch\" bật sẵn: aim chỉ kéo khi có ngón tay chạm màn hình — vết aim giống tay người hơn.")
+                        .font(.ui(12))
+                        .foregroundStyle(Palette.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Metrics.rowPaddingH)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func guideStep(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.ui(12, weight: .bold))
+                .foregroundStyle(Palette.void)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Palette.accent))
+            Text(text)
+                .font(.ui(14))
+                .foregroundStyle(Palette.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Metrics.rowPaddingH)
+        .padding(.vertical, 11)
+        .rowDivider()
     }
 
     // MARK: - session
@@ -133,31 +297,31 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("THỜI HẠN")
-                    .font(.caption2.weight(.bold))
+                    .font(.ui(11, weight: .bold))
                     .tracking(1.2)
                     .foregroundStyle(Palette.textFaint)
                 Spacer()
                 Text(auth.status.displayKey ?? "—")
-                    .font(.caption.monospaced())
+                    .font(.ui(12))
                     .foregroundStyle(Palette.textDim)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 Text(remaining(at: context.date))
-                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                    .font(.ui(26, weight: .bold))
                     .foregroundStyle(Palette.text)
             }
             HStack(spacing: 7) {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.caption)
+                    .font(.ui(12))
                     .foregroundStyle(Palette.good)
                 Text(auth.status.plan ?? "Premium")
-                    .font(.caption.weight(.semibold))
+                    .font(.ui(12, weight: .semibold))
                     .foregroundStyle(Palette.accent)
                 Spacer()
                 Text("ID \(device.activationId.prefix(8))…")
-                    .font(.caption2.monospaced())
+                    .font(.ui(11))
                     .foregroundStyle(Palette.textFaint)
             }
         }
@@ -185,16 +349,38 @@ struct SetupView: View {
         return "\(minutes) phút còn lại"
     }
 
-    // MARK: - relay host
+    // MARK: - relay (hotfix route only)
+
+    private var relayGroup: some View {
+        VStack(alignment: .leading, spacing: Metrics.stack) {
+            HStack(spacing: 8) {
+                Image(systemName: "network")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.accent.opacity(0.8))
+                Text("RELAY — CHỈ CẦN KHI ROUTE LÀ HOTFIX")
+                    .font(.ui(12, weight: .semibold))
+                    .foregroundStyle(Palette.textDim)
+                    .textCase(.uppercase)
+                    .tracking(0.9)
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+            }
+            .padding(.horizontal, 2)
+
+            hostCard
+            certificateStep
+            proxyStep
+            menuStep
+        }
+    }
 
     private var hostCard: some View {
-        SectionGroup(title: "Máy chủ relay", symbol: "network") {
+        SectionGroup(title: "Máy chủ relay", symbol: "server.rack") {
             HStack(spacing: 10) {
                 TextField("relay.example.com", text: $host)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.ui(15))
                     .onChange(of: host) { new in
                         storedHost = new.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
@@ -215,7 +401,7 @@ struct SetupView: View {
 
             HStack(spacing: 10) {
                 Text(proxyEndpoint ?? "Chưa có địa chỉ proxy")
-                    .font(.system(.footnote, design: .monospaced))
+                    .font(.ui(13))
                     .foregroundStyle(proxyEndpoint == nil ? Palette.textFaint : Palette.text)
                 Spacer(minLength: 8)
                 if let proxyEndpoint {
@@ -235,7 +421,7 @@ struct SetupView: View {
 
             HStack(spacing: 10) {
                 Text(probeText)
-                    .font(.footnote)
+                    .font(.ui(13))
                     .foregroundStyle(probeTint)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -277,7 +463,7 @@ struct SetupView: View {
         }
     }
 
-    // MARK: - steps
+    // MARK: - relay steps
 
     private var certificateStep: some View {
         stepCard(
@@ -287,7 +473,7 @@ struct SetupView: View {
             done: certificateDone
         ) {
             Text("Tải chứng chỉ của relay, cài profile rồi bật tin cậy đầy đủ. Bước này bắt buộc: không có nó, iOS sẽ không cho relay đọc lưu lượng HTTPS.")
-                .font(.footnote)
+                .font(.ui(13))
                 .foregroundStyle(Palette.textDim)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -327,19 +513,19 @@ struct SetupView: View {
             done: proxyDone
         ) {
             Text("Mở Super Proxy, chọn giao thức HTTP, nhập địa chỉ relay bên dưới rồi bấm Start. Giữ ứng dụng chạy nền trong lúc chơi.")
-                .font(.footnote)
+                .font(.ui(13))
                 .foregroundStyle(Palette.textDim)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 Text(proxyEndpoint ?? "—")
-                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                    .font(.ui(13, weight: .semibold))
                     .foregroundStyle(Palette.accent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Spacer(minLength: 6)
                 Text("HTTP")
-                    .font(.caption2.weight(.bold))
+                    .font(.ui(11, weight: .bold))
                     .foregroundStyle(Palette.textFaint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -383,7 +569,7 @@ struct SetupView: View {
             done: false
         ) {
             Text("Sau khi Super Proxy báo Started, mở Free Fire rồi quay lại đây. Menu chạy trên relay nên không cần cài thêm gì vào game.")
-                .font(.footnote)
+                .font(.ui(13))
                 .foregroundStyle(Palette.textDim)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -414,7 +600,7 @@ struct SetupView: View {
         }
     }
 
-    // MARK: - reset / advanced
+    // MARK: - device / footer
 
     private var resetCard: some View {
         SectionGroup(title: "Thiết bị", symbol: "iphone") {
@@ -422,10 +608,10 @@ struct SetupView: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Reset thiết bị")
-                        .font(.body.weight(.medium))
+                        .font(.ui(15, weight: .medium))
                         .foregroundStyle(Palette.text)
                     Text("Gỡ máy này khỏi key · 2 lần mỗi ngày")
-                        .font(.caption)
+                        .font(.ui(12))
                         .foregroundStyle(Palette.textFaint)
                 }
                 Spacer(minLength: 8)
@@ -446,51 +632,25 @@ struct SetupView: View {
         }
     }
 
-    private var advanced: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button(action: onOpenTools) {
-                HStack(spacing: 10) {
-                    Image(systemName: "wrench.and.screwdriver")
-                        .foregroundStyle(Palette.textDim)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Công cụ nâng cao")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(Palette.text)
-                        Text("Luồng inject cũ, cấu hình ESP/Aim và nhật ký")
-                            .font(.caption)
-                            .foregroundStyle(Palette.textFaint)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Palette.textFaint)
-                }
-                .padding(.vertical, 13)
-                .padding(.horizontal, Metrics.rowPaddingH)
-                .contentShape(Rectangle())
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Button {
+                language.hasChosen = false
+            } label: {
+                Label(language.selected.displayName, systemImage: "globe")
             }
-            .buttonStyle(.plain)
-            .machined(radius: 14)
+            .buttonStyle(ChipButtonStyle())
 
-            HStack(spacing: 10) {
-                Button {
-                    language.hasChosen = false
-                } label: {
-                    Label(language.selected.displayName, systemImage: "globe")
-                }
-                .buttonStyle(ChipButtonStyle())
+            Spacer()
 
-                Spacer()
-
-                Button(role: .destructive) {
-                    auth.logout()
-                } label: {
-                    Text("Đăng xuất")
-                }
-                .buttonStyle(ChipButtonStyle())
+            Button(role: .destructive) {
+                auth.logout()
+            } label: {
+                Text("Đăng xuất")
             }
-            .padding(.top, 2)
+            .buttonStyle(ChipButtonStyle())
         }
+        .padding(.top, 2)
     }
 
     // MARK: - step chrome
@@ -513,7 +673,7 @@ struct SetupView: View {
                             .foregroundStyle(Palette.good)
                     } else {
                         Text("\(number)")
-                            .font(.caption.weight(.bold).monospacedDigit())
+                            .font(.ui(12, weight: .bold))
                             .foregroundStyle(Palette.accent)
                     }
                 }
@@ -524,13 +684,13 @@ struct SetupView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Palette.textDim)
                     Text(title)
-                        .font(.body.weight(.semibold))
+                        .font(.ui(15, weight: .semibold))
                         .foregroundStyle(Palette.text)
                 }
                 Spacer()
                 if done {
                     Text("XONG")
-                        .font(.caption2.weight(.bold))
+                        .font(.ui(11, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(Palette.good)
                 }

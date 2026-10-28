@@ -2,44 +2,39 @@ import SwiftUI
 
 // MARK: - design tokens
 //
-// Electric night: near-black canvas with a deep violet underglow and a single
-// charged accent for the one action that matters. Quiet surfaces, hairline
-// edges — hierarchy from light, not decoration.
+// Deep night: near-black canvas, warm graphite surfaces and one muted antique
+// gold accent — the same metal as the in-game mark. Quiet, dense, deliberate.
 
 enum Palette {
-    // Near-black surfaces over a violet underglow; accent is one charged hue.
-    static let void       = Color(hex: 0x07060D)
-    static let base       = Color(hex: 0x0B0A14)
-    static let surface    = Color(hex: 0x131120)
-    static let surfaceHi  = Color(hex: 0x1A172B)
-    static let well       = Color(hex: 0x090812)
+    static let void       = Color(hex: 0x030303)
+    static let base       = Color(hex: 0x080807)
+    static let surface    = Color(hex: 0x0F0E0B)
+    static let surfaceHi  = Color(hex: 0x17150F)
+    static let well       = Color(hex: 0x060605)
 
     // edges
-    static let hairline   = Color.white.opacity(0.09)
-    static let edgeTop    = Color.white.opacity(0.12)
-    static let edgeBottom = Color.black.opacity(0.45)
+    static let hairline   = Color.white.opacity(0.07)
+    static let edgeTop    = Color.white.opacity(0.10)
+    static let edgeBottom = Color.black.opacity(0.55)
 
     // type
-    static let text      = Color(hex: 0xF2F1F8)
-    static let textDim   = Color(hex: 0xAFAEC2)
-    static let textFaint = Color(hex: 0x7E7C95)
+    static let text      = Color(hex: 0xEAE6DC)
+    static let textDim   = Color(hex: 0xA8A294)
+    static let textFaint = Color(hex: 0x6C675B)
 
-    // signal — the one live accent
-    static let accent     = Color(hex: 0x7C5CFF)
-    static let accentHi   = Color(hex: 0xA88BFF)
-    static let accentDeep = Color(hex: 0x2A1B63)
+    // signal — antique gold, kept muted so it reads as metal, not neon
+    static let accent     = Color(hex: 0xC9A54B)
+    static let accentHi   = Color(hex: 0xE4C87E)
+    static let accentDeep = Color(hex: 0x241C09)
 
     // states
-    static let good = Color(hex: 0x3DD68C)
-    static let warn = Color(hex: 0xE8A75B)
-    static let bad  = Color(hex: 0xEF6A63)
-    static let info = Color(hex: 0x8FA6F0)
+    static let good = Color(hex: 0x4FBF8F)
+    static let warn = Color(hex: 0xC99A5B)
+    static let bad  = Color(hex: 0xC96A5E)
+    static let info = Color(hex: 0x7E93C9)
 }
 
 // MARK: - metrics
-//
-// One spacing and radius scale, so padding does not drift row to row. The
-// numbers are small on purpose: a panel that is dense reads as a tool.
 
 enum Metrics {
     static let gutter: CGFloat       = 18
@@ -63,17 +58,44 @@ extension Color {
     }
 }
 
+// MARK: - fonts
+//
+// Rajdhani for everything functional — squared, condensed, nothing like the
+// system font. Cinzel (engraved Roman capitals) for the brand line only.
+
+extension Font {
+    /// The brand face: engraved capitals, the logo's own letterform.
+    static func brand(_ size: CGFloat) -> Font {
+        .custom("Cinzel-Regular", size: size)
+    }
+
+    /// The UI face. Every weight maps to a real Rajdhani file, never a
+    /// synthetic slant or stroke.
+    static func ui(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        switch weight {
+        case .bold, .heavy, .black:
+            return .custom("Rajdhani-Bold", size: size)
+        case .semibold:
+            return .custom("Rajdhani-SemiBold", size: size)
+        case .medium:
+            return .custom("Rajdhani-Medium", size: size)
+        default:
+            return .custom("Rajdhani-Regular", size: size)
+        }
+    }
+}
+
 // MARK: - background
 
-/// A violet underglow rising from the bottom keeps the canvas alive without
-/// competing with the controls on top.
+/// A black canvas with a faint gold ember rising from the bottom — the glow is
+/// a texture, not a light source.
 struct ThemeBackground: View {
     var body: some View {
         LinearGradient(
             colors: [
                 Palette.void,
                 Palette.base,
-                Palette.accentDeep.opacity(0.55),
+                Palette.accentDeep.opacity(0.35),
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -85,8 +107,6 @@ struct ThemeBackground: View {
 
 // MARK: - plate
 
-/// The house surface: flat fill, a restrained edge and soft separation.
-/// `glow` tints the border for the selected state.
 struct PlateSurface: ViewModifier {
     var radius: CGFloat = Metrics.cardRadius
     var elevated: Bool = false
@@ -99,7 +119,7 @@ struct PlateSurface: ViewModifier {
                     .fill(elevated ? Palette.surfaceHi : Palette.surface)
                     .overlay(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.035), .clear],
+                            colors: [Color.white.opacity(0.03), .clear],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -110,13 +130,10 @@ struct PlateSurface: ViewModifier {
                     .strokeBorder(glow ?? Palette.edgeTop, lineWidth: glow == nil ? 1 : 1.2)
             )
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.20), radius: 8, y: 3)
+            .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
     }
 }
 
-/// The recessed counterpart to `machined`: a dark well, a shadow under the top
-/// edge and a hairline along the bottom, so tracks and text fields read as cut
-/// into the plate rather than laid on top of it.
 struct InsetSurface: ViewModifier {
     var radius: CGFloat = Metrics.controlRadius
 
@@ -130,7 +147,7 @@ struct InsetSurface: ViewModifier {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [Color.black.opacity(0.55), Palette.hairline],
+                            colors: [Color.black.opacity(0.6), Palette.hairline],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
@@ -150,7 +167,6 @@ extension View {
         modifier(InsetSurface(radius: radius))
     }
 
-    /// Inset hairline under a list-style row.
     func rowDivider() -> some View {
         overlay(alignment: .bottom) {
             Rectangle()
@@ -163,9 +179,6 @@ extension View {
 
 // MARK: - buttons
 
-/// Primary = flat accent with dark ink. Secondary = raised graphite plate.
-/// Destructive = the same ink plate, but with a bad-tinted edge and ink so a
-/// removal action is read before it is pressed.
 struct AccentButtonStyle: ButtonStyle {
     var prominent: Bool = true
     var destructive: Bool = false
@@ -183,6 +196,7 @@ private struct AccentButtonBody: View {
 
     var body: some View {
         configuration.label
+            .font(.ui(17, weight: .semibold))
             .foregroundStyle(prominent ? Palette.void : (destructive ? Palette.bad : Palette.text))
             .background {
                 if prominent {
@@ -190,15 +204,15 @@ private struct AccentButtonBody: View {
                         .fill(Palette.accent)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(Palette.accentHi.opacity(0.35), lineWidth: 0.5)
+                                .strokeBorder(Palette.accentHi.opacity(0.3), lineWidth: 0.5)
                         )
-                        .shadow(color: Palette.accent.opacity(isEnabled ? 0.12 : 0), radius: 6, y: 2)
+                        .shadow(color: Palette.accent.opacity(isEnabled ? 0.10 : 0), radius: 6, y: 2)
                 } else if destructive {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Palette.surfaceHi)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(Palette.bad.opacity(0.45), lineWidth: 1)
+                                .strokeBorder(Palette.bad.opacity(0.4), lineWidth: 1)
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -215,8 +229,6 @@ private struct AccentButtonBody: View {
     }
 }
 
-/// Small inline action: a capsule chip, accent ink on a faint accent wash, or
-/// solid accent when it is the primary affordance in a row.
 struct ChipButtonStyle: ButtonStyle {
     var filled: Bool = false
 
@@ -232,12 +244,12 @@ private struct ChipButtonBody: View {
 
     var body: some View {
         configuration.label
-            .font(.caption.weight(.semibold))
+            .font(.ui(12, weight: .semibold))
             .foregroundStyle(filled ? Palette.void : Palette.accent)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(Capsule().fill(filled ? Palette.accent : Palette.accent.opacity(0.12)))
-            .overlay(Capsule().strokeBorder(Palette.accent.opacity(filled ? 0 : 0.35), lineWidth: 1))
+            .background(Capsule().fill(filled ? Palette.accent : Palette.accent.opacity(0.10)))
+            .overlay(Capsule().strokeBorder(Palette.accent.opacity(filled ? 0 : 0.3), lineWidth: 1))
             .opacity(isEnabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -246,8 +258,6 @@ private struct ChipButtonBody: View {
 
 // MARK: - toggle
 
-/// Capsule track, accent when armed, graphite when not, with a knob that carries
-/// the whole motion. Reads like a physical switch rather than the iOS pill.
 struct MachinedToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 12) {
@@ -258,7 +268,7 @@ struct MachinedToggleStyle: ToggleStyle {
                     .fill(configuration.isOn ? Palette.accent : Palette.well)
                     .overlay(
                         Capsule().strokeBorder(
-                            configuration.isOn ? Palette.accentHi.opacity(0.45) : Palette.hairline,
+                            configuration.isOn ? Palette.accentHi.opacity(0.35) : Palette.hairline,
                             lineWidth: 1
                         )
                     )
@@ -266,7 +276,7 @@ struct MachinedToggleStyle: ToggleStyle {
                     .fill(configuration.isOn ? Palette.void : Palette.textDim)
                     .padding(3)
                     .offset(x: configuration.isOn ? 9 : -9)
-                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
             }
             .frame(width: 46, height: 28)
             .animation(.spring(response: 0.28, dampingFraction: 0.75), value: configuration.isOn)
@@ -283,8 +293,6 @@ struct SegItem<Value: Hashable>: Identifiable {
     var id: Value { value }
 }
 
-/// Flat segmented control: a raised plate slides under the active segment. Used
-/// for in-row choice groups; the screen-level navigation is `BottomTabBar`.
 struct SegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let items: [SegItem<Value>]
@@ -309,7 +317,7 @@ struct SegmentedControl<Value: Hashable>: View {
             }
         } label: {
             Text(item.title)
-                .font(.footnote.weight(active ? .semibold : .medium))
+                .font(.ui(13, weight: active ? .semibold : .medium))
                 .foregroundStyle(active ? Palette.text : Palette.textFaint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -331,78 +339,9 @@ struct SegmentedControl<Value: Hashable>: View {
     }
 }
 
-// MARK: - screen-level tabs
-
-/// One entry in the bottom bar: an index, a label, and a line-art glyph.
-struct TabItem: Identifiable {
-    let index: Int
-    let title: String
-    let symbol: String
-
-    var id: Int { index }
-}
-
-/// Bottom navigation for the four screens. Flat ink bar with a single top
-/// hairline; the active tab switches glyph and label to the accent and nothing
-/// else moves. Reads as navigation chrome, not a widget.
-struct BottomTabBar: View {
-    @Binding var selection: Int
-    let items: [TabItem]
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(items) { item in
-                tab(item)
-            }
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Palette.hairline)
-                .frame(height: 1)
-        }
-        // Solid, not translucent: the bar is chrome, and a hard edge keeps it
-        // from blurring into the scrolling content above it. The fill bleeds
-        // into the home-indicator strip so the bar reads full-height.
-        .background(Palette.void.opacity(0.96), ignoresSafeAreaEdges: .bottom)
-    }
-
-    private func tab(_ item: TabItem) -> some View {
-        let active = selection == item.index
-        return Button {
-            guard item.index != selection else { return }
-            withAnimation(.easeOut(duration: 0.15)) {
-                selection = item.index
-            }
-        } label: {
-            VStack(spacing: 5) {
-                Image(systemName: item.symbol)
-                    .font(.system(size: 17, weight: active ? .semibold : .regular))
-                    .frame(height: 21)
-                Text(item.title)
-                    .font(.caption2.weight(active ? .semibold : .medium))
-            }
-            .foregroundStyle(active ? Palette.text : Palette.textFaint)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 5)
-            .overlay(alignment: .top) {
-                Capsule()
-                    .fill(active ? Palette.accent : .clear)
-                    .frame(width: 20, height: 2)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(active ? [.isSelected] : [])
-    }
-}
-
 // MARK: - mark
 
 /// The mark: a dark tile with a reticle glyph — ring, centre pip, four ticks.
-/// Thematic without being decorative.
 struct Mark: View {
     var size: CGFloat = 72
 
@@ -418,7 +357,6 @@ struct Mark: View {
     }
 }
 
-/// Minimal reticle: outer ring, centre pip, four ticks.
 struct ReticleGlyph: View {
     let size: CGFloat
 
@@ -430,14 +368,10 @@ struct ReticleGlyph: View {
             Circle()
                 .fill(Palette.accent)
                 .frame(width: size * 0.12, height: size * 0.12)
-            tick
-                .rotationEffect(.degrees(0))
-            tick
-                .rotationEffect(.degrees(90))
-            tick
-                .rotationEffect(.degrees(180))
-            tick
-                .rotationEffect(.degrees(270))
+            tick.rotationEffect(.degrees(0))
+            tick.rotationEffect(.degrees(90))
+            tick.rotationEffect(.degrees(180))
+            tick.rotationEffect(.degrees(270))
         }
     }
 

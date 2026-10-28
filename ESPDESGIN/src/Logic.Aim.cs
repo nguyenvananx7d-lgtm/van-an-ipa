@@ -90,11 +90,15 @@ namespace ProjectEspPatch
             {
                 return;
             }
-            if ((mask & AimTouchGate) != 0 && Input.touchCount == 0)
+            if ((mask & AimTouchGate) != 0)
             {
-                holdValid = false;
-                ResetAim();
-                return;
+                int touchCount = SafeTouchCount();
+                if (touchCount == 0)
+                {
+                    holdValid = false;
+                    ResetAim();
+                    return;
+                }
             }
             if (now - holdLastSolveAt < SolveFloor)
             {

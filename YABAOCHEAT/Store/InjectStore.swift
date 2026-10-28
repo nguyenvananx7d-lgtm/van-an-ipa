@@ -43,6 +43,11 @@ public final class InjectStore: ObservableObject {
     /// Where the last install put its files, so the log screen can show them.
     @Published public var lastInstall: RuntimeInstaller.Result?
 
+    /// Route the current session is using. `nil` until the first modern inject;
+    /// the panel sink uses it to choose between a container rewrite (legacy /
+    /// hotfix) and a loopback settings push (Ghost).
+    @Published public private(set) var activeRoute: InjectRoute?
+
     @Published public var wipeReport: WipeRoutine.Report?
 
     /// Outcome of the most recent anti-ban sweep, shown in the Setting tab.
@@ -121,6 +126,13 @@ public final class InjectStore: ObservableObject {
                 let game = self.menu.selectedGame
                 let controls = self.menu.controls
                 Task {
+                    if self.activeRoute == .ghost {
+                        // Ghost reads a packed struct over loopback; writing a
+                        // container file would create exactly the artefact the
+                        // route exists to avoid.
+                        GhostRuntime.push(controls)
+                        return
+                    }
                     await self.installer.restageConfig(game: game, controls: controls)
                     // The rewrite just bumped the config's mtime; re-mask it so
                     // a live panel change does not leave a freshly-dated file
@@ -284,10 +296,31 @@ public final class InjectStore: ObservableObject {
     /// `FeatureControls.preferModernInjection = false` and nothing else.
     private func modernInject() async {
         let route = InjectPlan.route()
+        activeRoute = route
         log.log(.launch, "modern inject: \(route.displayName) — \(InjectPlan.readiness(for: route))")
-        await ensureExploitBeforeInject()
         switch route {
+        case .ghost:
+            // No exploit, no staging, no container. The injector maps the
+            // payload while the game is still in UIApplicationMain.
+            status = "Ghost: mapping payload…"
+            let result = await GhostRuntime.install(game: game, controls: menu.controls) { line in
+                AppLog.shared.log(.launch, line)
+            }
+            switch result {
+            case .success:
+                isActive = true
+                menu.injected.insert(game)
+                menu.injectStates[game] = .ready
+                status = "Ghost mapped — ESP + aim live"
+                log.log(.launch, "ghost: payload mapped; settings pushed over loopback")
+            case .failure(let error):
+                isActive = false
+                menu.injectStates[game] = .failed
+                status = "Ghost failed — \(error.localizedDescription)"
+                log.log(.launch, "ghost failed: \(error.localizedDescription)")
+            }
         case .nativeHook:
+            await ensureExploitBeforeInject()
             guard KernelExploit.kernelRWReady else {
                 status = "Kernel stage lost — retry, or enable legacy staging"
                 log.log(.kernelRW, "modern inject: kernel r/w not established, nothing planted")
@@ -300,6 +333,7 @@ public final class InjectStore: ObservableObject {
             // No file is ever planted: the game pulls the patch through its
             // own CodePatchUrl, which the relay rewrites. Native-assist rides
             // alongside as the game's own second aim layer.
+            await ensureExploitBeforeInject()
             runTrafficCheck()
             try? launcher.launch(game: game)
             status = "ESP + aim via relay — game pulls the patch itself"
@@ -484,11 +518,24 @@ public final class InjectStore: ObservableObject {
     /// cannot be reached — the caller must tell the user which one happened.
     @discardableResult
     public func stageProfile(_ controls: FeatureControls) async -> Int? {
+        if activeRoute == .ghost {
+            GhostRuntime.push(controls)
+            return 0
+        }
         guard case .resolved = bridge.resolve(game: game) else { return nil }
         return await installer.restageConfig(game: game, controls: controls)
     }
 
     public func uninject() async {
+        if activeRoute == .ghost {
+            GhostRuntime.detach(game: game)
+            activeRoute = nil
+            isActive = false
+            lastInstall = nil
+            menu.injected.remove(game)
+            set(.ready, "Removed — Ghost unmapped")
+            return
+        }
         await stopAntiBanGuard()
         do {
             try await installer.uninject(game: game)
@@ -506,6 +553,13 @@ public final class InjectStore: ObservableObject {
     /// staged patch and config exactly where they are, so aim / ESP keep
     /// working on the next launch. Never throws — it only detaches state.
     public func keepFeatures() async {
+        if activeRoute == .ghost {
+            isActive = false
+            lastInstall = nil
+            menu.injected.remove(game)
+            set(.ready, "Removed — Ghost keeps running")
+            return
+        }
         await stopAntiBanGuard()
         await installer.keepFeatures(game: game)
         isActive = false

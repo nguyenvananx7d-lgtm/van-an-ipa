@@ -54,7 +54,7 @@ struct StateBadge: View {
                 .fill(tone.color)
                 .frame(width: 6, height: 6)
             Text(text)
-                .font(.caption2.weight(.semibold))
+                .font(.ui(11, weight: .semibold))
                 .foregroundStyle(tone.color)
         }
         .padding(.horizontal, 9)
@@ -96,7 +96,7 @@ struct Banner: View {
                 .foregroundStyle(kind.color)
                 .padding(.top, 1)
             Text(message)
-                .font(.footnote)
+                .font(.ui(13))
                 .foregroundStyle(Palette.text)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -136,11 +136,11 @@ struct SectionGroup<Content: View>: View {
             HStack(spacing: 7) {
                 if let symbol {
                     Image(systemName: symbol)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.ui(12, weight: .semibold))
                         .foregroundStyle(Palette.accent.opacity(0.8))
                 }
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.ui(12, weight: .semibold))
                     .foregroundStyle(Palette.textDim)
                     .textCase(.uppercase)
                     .tracking(0.9)
@@ -172,11 +172,11 @@ struct ToggleRow: View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.body.weight(.medium))
+                    .font(.ui(15, weight: .medium))
                     .foregroundStyle(Palette.text)
                 if let detail {
                     Text(detail)
-                        .font(.caption)
+                        .font(.ui(12))
                         .foregroundStyle(Palette.textFaint)
                 }
             }
@@ -200,11 +200,11 @@ struct SliderRow: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text(label)
-                    .font(.body.weight(.medium))
+                    .font(.ui(15, weight: .medium))
                     .foregroundStyle(Palette.text)
                 Spacer(minLength: 8)
                 Text("\(Int(value.rounded()))\(unit)")
-                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .font(.ui(12, weight: .semibold))
                     .foregroundStyle(Palette.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -219,7 +219,7 @@ struct SliderRow: View {
                     Spacer(minLength: 8)
                     Text("\(Int(range.upperBound))")
                 }
-                .font(.caption2.monospacedDigit())
+                .font(.ui(11))
                 .foregroundStyle(Palette.textFaint)
             }
         }
@@ -243,7 +243,7 @@ struct SegmentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.body.weight(.medium))
+                .font(.ui(15, weight: .medium))
                 .foregroundStyle(Palette.text)
             SegmentedControl(
                 selection: $selection,
@@ -277,18 +277,18 @@ struct ActionRow: View {
                         .frame(width: 20, alignment: .center)
                 }
                 Text(label)
-                    .font(.body.weight(.medium))
+                    .font(.ui(15, weight: .medium))
                     .foregroundStyle(tint)
                 Spacer(minLength: 8)
                 if let value {
                     Text(value)
-                        .font(.caption)
+                        .font(.ui(12))
                         .foregroundStyle(Palette.textDim)
                         .lineLimit(1)
                 }
                 if showsChevron {
                     Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
+                        .font(.ui(11, weight: .bold))
                         .foregroundStyle(Palette.textFaint)
                 }
             }
@@ -305,11 +305,11 @@ struct InfoRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(label)
-                .font(.body.weight(.medium))
+                .font(.ui(15, weight: .medium))
                 .foregroundStyle(Palette.text)
             Spacer(minLength: 8)
             Text(value)
-                .font(.caption)
+                .font(.ui(12))
                 .foregroundStyle(Palette.textDim)
                 .lineLimit(1)
         }
@@ -343,7 +343,7 @@ struct SwatchRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(label)
-                .font(.body.weight(.medium))
+                .font(.ui(15, weight: .medium))
                 .foregroundStyle(Palette.text)
             HStack(spacing: 12) {
                 ForEach(swatches) { swatch in
@@ -407,7 +407,7 @@ struct PaletteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(label)
-                .font(.body.weight(.medium))
+                .font(.ui(15, weight: .medium))
                 .foregroundStyle(Palette.text)
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(options) { option in
@@ -434,7 +434,7 @@ struct PaletteRow: View {
                             .shadow(color: active ? Palette.accent.opacity(0.45) : .clear, radius: 7)
                             .scaleEffect(active ? 1.06 : 1)
                             Text(option.title)
-                                .font(.caption2.weight(active ? .semibold : .regular))
+                                .font(.ui(11, weight: active ? .semibold : .regular))
                                 .foregroundStyle(active ? Palette.text : Palette.textFaint)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)

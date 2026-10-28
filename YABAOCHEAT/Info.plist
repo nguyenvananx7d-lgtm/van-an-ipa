@@ -24,6 +24,14 @@
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>16.0</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Rajdhani-Bold.ttf</string>
+		<string>Rajdhani-SemiBold.ttf</string>
+		<string>Rajdhani-Medium.ttf</string>
+		<string>Rajdhani-Regular.ttf</string>
+		<string>Cinzel.ttf</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Used only to hand the DNS profile to Safari over a loopback connection.</string>
 	<key>UILaunchScreen</key>

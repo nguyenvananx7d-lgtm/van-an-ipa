@@ -5,6 +5,15 @@ import tls from "node:tls";
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type Authority, leafFor } from "./pki.js";
+import {
+  type BodyEncoding,
+  type JsonPathOp,
+  type ProtoPathOp,
+  decodeBody,
+  describeBody,
+  encodeBody,
+  rewriteBody,
+} from "./arsenal.js";
 
 /**
  * Transparent TLS relay for the device.
@@ -25,7 +34,13 @@ import { type Authority, leafFor } from "./pki.js";
  * before any rewrite can be written.
  */
 
-export type RuleAction = "block" | "json-merge" | "text-replace" | "respond";
+export type RuleAction =
+  | "block"
+  | "json-merge"
+  | "json-set"
+  | "proto-set"
+  | "text-replace"
+  | "respond";
 
 export interface Rule {
   /** Exact host or suffix (`.example.com`). Omitted matches every host. */
@@ -33,8 +48,16 @@ export interface Rule {
   /** Regular expression source matched against the request path. */
   pathPattern: string;
   action: RuleAction;
-  /** For `json-merge`: shallow merge into a JSON response body. */
+  /** For `json-merge`: deep merge into a JSON response body. */
   merge?: Record<string, unknown>;
+  /**
+   * For `json-set`: paths into a nested JSON body. `**.Key` updates every
+   * object that already carries `Key`, which is how the var table is addressed
+   * without pinning its nesting.
+   */
+  jsonOps?: JsonPathOp[];
+  /** For `proto-set`: numeric field paths inside a protobuf body. */
+  protoOps?: ProtoPathOp[];
   /** For `text-replace`: literal needle and replacement in the response body. */
   find?: string;
   replace?: string;
@@ -328,7 +351,15 @@ export function createRelay(config: RelayConfig): RelayHandle {
       },
       (upstreamRes) => {
         const contentType = String(upstreamRes.headers["content-type"] ?? "");
-        const worth = /json|text|javascript|xml/i.test(contentType);
+        // Any body-editing rule makes the body worth buffering even when the
+        // origin labels it octet-stream: the settings document is exactly that.
+        const bodyRules = rulesHit.filter((rule) =>
+          rule.action === "json-merge"
+          || rule.action === "json-set"
+          || rule.action === "proto-set"
+          || rule.action === "text-replace");
+        const worth = bodyRules.length > 0
+          || /json|text|javascript|xml|protobuf/i.test(contentType);
         const chunks: Buffer[] = [];
         let buffered = 0;
         let streamed = 0;
@@ -368,28 +399,36 @@ export function createRelay(config: RelayConfig): RelayHandle {
         upstreamRes.on("end", () => {
           const body = overflow ? Buffer.alloc(0) : Buffer.concat(chunks);
           const applied: string[] = [];
-          let out = body;
+          let out: Buffer = body;
 
-          if (!overflow) {
-            for (const rule of rulesHit) {
-              if (rule.action === "json-merge" && rule.merge) {
-                try {
-                  const parsed = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
-                  Object.assign(parsed, rule.merge);
-                  out = Buffer.from(JSON.stringify(parsed), "utf8");
-                  applied.push(`json-merge(${rule.note ?? rule.pathPattern})`);
-                } catch {
-                  log(`relay: json-merge skipped for ${host}${path} — body is not JSON`);
-                }
+          // Decode, patch, re-encode. `decoded` is also what the capture keeps,
+          // so the var table is readable in the log even when the wire body was
+          // brotli-compressed.
+          let decoded: Buffer = body;
+          let encoding: BodyEncoding = "";
+          let format = "";
+          let keys: string[] = [];
+          let fields: number[] = [];
+
+          if (!overflow && bodyRules.length > 0) {
+            const transport = decodeBody(body, String(upstreamRes.headers["content-encoding"] ?? ""));
+            encoding = transport.encoding;
+            decoded = transport.data;
+            try {
+              const result = rewriteBody(decoded, contentType, bodyRules, log);
+              if (result.changed || encoding !== "") {
+                out = encodeBody(result.body, encoding);
+                applied.push(...result.applied);
               }
-              if (rule.action === "text-replace" && rule.find) {
-                const text = out.toString("utf8");
-                if (text.includes(rule.find)) {
-                  out = Buffer.from(text.split(rule.find).join(rule.replace ?? ""), "utf8");
-                  applied.push(`text-replace(${rule.note ?? rule.find})`);
-                }
-              }
+              format = result.format;
+            } catch (error) {
+              log(`relay: body rewrite failed for ${host}${path}: ${(error as Error).message}`);
+              out = body;
             }
+            const description = describeBody(transport.data, contentType);
+            format = description.format;
+            keys = description.keys;
+            fields = description.fields;
           }
 
           if (overflow) {
@@ -398,10 +437,12 @@ export function createRelay(config: RelayConfig): RelayHandle {
           } else {
             const responseHeaders: http.OutgoingHttpHeaders = { ...upstreamRes.headers };
             delete responseHeaders["transfer-encoding"];
-            delete responseHeaders["content-encoding"];
-            if (out !== body) {
+            if (bodyRules.length > 0) {
+              // The rewritten bytes use the same encoding the origin chose.
+              if (encoding === "") delete responseHeaders["content-encoding"];
+              else responseHeaders["content-encoding"] = encoding;
               responseHeaders["content-length"] = out.length;
-              applied.push("length-fixed");
+              if (out !== body) applied.push("length-fixed");
             }
             res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
             res.end(out);
@@ -416,10 +457,15 @@ export function createRelay(config: RelayConfig): RelayHandle {
             contentType,
             reqBytes: requestBody.length,
             resBytes: overflow ? streamed : body.length,
+            decodedBytes: overflow ? undefined : decoded.length,
+            encoding: encoding || undefined,
+            resFormat: format || undefined,
+            resKeys: keys.length > 0 ? keys : undefined,
+            resFields: fields.length > 0 ? fields : undefined,
             applied,
             features: appliedFeatures(rulesHit),
             reqPreview: requestBody.length ? preview(requestBody, previewBytes) : undefined,
-            resPreview: !overflow && body.length ? preview(body, previewBytes) : undefined,
+            resPreview: !overflow && decoded.length ? preview(decoded, previewBytes) : undefined,
           });
         });
 

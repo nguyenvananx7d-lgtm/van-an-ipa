@@ -1,4 +1,5 @@
 import { type Rule } from "./mitm.js";
+import { type JsonPathOp } from "./arsenal.js";
 
 /**
  * Turn a capture into candidate rules.
@@ -31,6 +32,14 @@ export interface CaptureRecord {
   features?: string[];
   /** Host was spliced as raw TCP instead of intercepted. */
   passthrough?: boolean;
+  /** Body format the relay detected after decoding. */
+  resFormat?: string;
+  /** Top-level JSON keys or protobuf field numbers, whichever the body had. */
+  resKeys?: string[];
+  resFields?: number[];
+  /** Size after content-encoding was removed. */
+  decodedBytes?: number;
+  encoding?: string;
 }
 
 export interface Suggestion {
@@ -199,6 +208,76 @@ export function suggestPatchRules(
     });
   }
   return out;
+}
+
+/**
+ * Config-plane rules: find the var table in a capture and turn on the native
+ * engine features that already exist in the client.
+ *
+ * The point is that nothing is injected. The table is the same document the
+ * game's own live-ops server sends; `**.Key` only updates objects that already
+ * carry the key, so an unrelated JSON body with a similar name is left alone.
+ * This is why the miner can propose a rule before the schema is known: it does
+ * not need the nesting, only the field name.
+ */
+const OUTLINE_OPS: JsonPathOp[] = [
+  { path: "**.EnableShowPlayerOutline", value: true },
+  { path: "**.ShowPlayerOutlineMinDistance", value: 0 },
+  { path: "**.ShowPlayerOutlineMaxDistance", value: 400 },
+  { path: "**.ShowPlayerOutlineMinAlpha", value: 0.35 },
+  { path: "**.ShowPlayerOutlineMaxAlpha", value: 1 },
+  { path: "**.ShowPlayerOutlineWidth", value: 2 },
+  { path: "**.ShowPlayerOutlineMinWidth", value: 1 },
+  { path: "**.ShowPlayerOutlineMaxWidth", value: 4 },
+];
+
+const AIM_ASSIST_OPS: JsonPathOp[] = [
+  { path: "**.EnableStropAimAssist", value: true },
+  { path: "**.EnableBeAimAssistWhenStropDash", value: true },
+  { path: "**.EnableShowTeamOutline", value: false },
+];
+
+export function suggestArsenalRules(records: CaptureRecord[]): Suggestion[] {
+  const out: Suggestion[] = [];
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (!record.host || !record.path || record.error) continue;
+    const preview = record.resPreview ?? "";
+    if (!preview.includes("{")) continue;
+
+    const outline = OUTLINE_OPS.filter((op) => preview.includes(op.path.slice(3)));
+    const assist = AIM_ASSIST_OPS.filter((op) => preview.includes(op.path.slice(3)));
+    if (outline.length === 0 && assist.length === 0) continue;
+
+    const key = `${record.host}${record.path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const ops = [...outline, ...assist];
+    const rule: Rule = {
+      host: record.host,
+      pathPattern: `^${escapeRegExp(record.path)}$`,
+      action: "json-set",
+      jsonOps: ops,
+      note: `native engine config from ${key}`,
+    };
+
+    out.push({
+      host: record.host,
+      path: record.path,
+      action: "json-set",
+      score: 12 + outline.length,
+      reasons: [
+        "var table captured",
+        ...(outline.length > 0 ? ["native player outline (no injection)"] : []),
+        ...(assist.length > 0 ? ["native aim assist switches"] : []),
+        `encoded=${record.encoding ?? "none"}`,
+      ],
+      calls: 1,
+      rule,
+    });
+  }
+  return out.sort((a, b) => b.score - a.score);
 }
 
 /**

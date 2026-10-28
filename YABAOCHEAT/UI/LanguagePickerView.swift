@@ -17,7 +17,7 @@ struct LanguagePickerView: View {
                             .font(.largeTitle.bold())
                             .foregroundStyle(Palette.text)
                         Text("select_your_language")
-                            .font(.subheadline)
+                            .font(.ui(14))
                             .foregroundStyle(Palette.textDim)
                     }
                     .padding(.top, 8)
@@ -30,7 +30,7 @@ struct LanguagePickerView: View {
                         if let selection { store.choose(selection) }
                     } label: {
                         Text("confirm")
-                            .font(.headline)
+                            .font(.ui(17, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
@@ -51,9 +51,9 @@ struct LanguagePickerView: View {
             }
         } label: {
             HStack(spacing: 14) {
-                Text(language.flag).font(.title2)
+                Text(language.flag).font(.ui(22, weight: .semibold))
                 Text(language.displayName)
-                    .font(.body.weight(.medium))
+                    .font(.ui(15, weight: .medium))
                     .foregroundStyle(Palette.text)
                     .environment(\.layoutDirection,
                                  language.isRightToLeft ? .rightToLeft : .leftToRight)

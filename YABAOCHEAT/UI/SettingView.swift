@@ -114,7 +114,7 @@ struct SettingView: View {
             )
             HStack(spacing: 10) {
                 Text(String(localized: "safe_profile_caption"))
-                    .font(.footnote)
+                    .font(.ui(13))
                     .foregroundStyle(Palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -133,11 +133,11 @@ struct SettingView: View {
                     ProgressView()
                         .tint(Palette.accent)
                     Text("anti_ban_running")
-                        .font(.footnote)
+                        .font(.ui(13))
                         .foregroundStyle(Palette.textDim)
                 } else {
                     Text(lastAntiBanText)
-                        .font(.footnote)
+                        .font(.ui(13))
                         .foregroundStyle(Palette.textDim)
                 }
                 Spacer(minLength: 8)
@@ -152,10 +152,10 @@ struct SettingView: View {
             if inject.isGuardingAntiBan {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform.path.ecg")
-                        .font(.caption)
+                        .font(.ui(12))
                         .foregroundStyle(Palette.good)
                     Text("anti_ban_live_guard")
-                        .font(.footnote)
+                        .font(.ui(13))
                         .foregroundStyle(Palette.textDim)
                     Spacer(minLength: 8)
                 }
@@ -235,7 +235,7 @@ struct SettingView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.ui(15))
                 if !relayHost.isEmpty {
                     Button {
                         relayHost = ""
@@ -282,7 +282,7 @@ struct SettingView: View {
             .rowDivider()
 
             Text("Cài chứng chỉ, bật Super Proxy với địa chỉ bên dưới, rồi đăng nhập portal bằng Key, Mật khẩu và ID máy. Tin cậy chứng chỉ trong Settings → General → About → Certificate Trust Settings. Profile chỉ cần khi bạn muốn cấu hình proxy/tunnel tự động.")
-                .font(.caption)
+                .font(.ui(12))
                 .foregroundStyle(Palette.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Metrics.rowPaddingH)
@@ -291,7 +291,7 @@ struct SettingView: View {
 
             HStack(spacing: 10) {
                 Text(RelayActivationClient.proxyEndpoint(from: relayHost) ?? String(localized: "relay_check_caption"))
-                    .font(.system(.footnote, design: .monospaced))
+                    .font(.ui(13))
                     .foregroundStyle(Palette.textDim)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -310,7 +310,7 @@ struct SettingView: View {
 
             HStack(spacing: 10) {
                 Text(relayProbe.isEmpty ? String(localized: "relay_check_caption") : relayProbe)
-                    .font(.footnote)
+                    .font(.ui(13))
                     .foregroundStyle(relayProbe.isEmpty ? Palette.textDim : Palette.text)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -351,7 +351,7 @@ struct SettingView: View {
             HStack(spacing: 10) {
                 ProgressView()
                 Text("exploit_status_running")
-                    .font(.footnote)
+                    .font(.ui(13))
                     .foregroundStyle(Palette.textDim)
                 Spacer(minLength: 0)
             }
@@ -380,9 +380,9 @@ struct SettingView: View {
                         .foregroundStyle(inject.requiresSandboxEscape ? Palette.warn : Palette.textFaint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("exploit_status_not_started")
-                            .font(.footnote.weight(.semibold))
+                            .font(.ui(13, weight: .semibold))
                         Text(NSLocalizedString(inject.exploitHintKey, comment: ""))
-                            .font(.caption2)
+                            .font(.ui(11))
                             .foregroundStyle(Palette.textFaint)
                     }
                     Spacer(minLength: 0)
@@ -406,7 +406,7 @@ struct SettingView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(titleKey)
-                .font(.footnote)
+                .font(.ui(13))
             Spacer(minLength: 0)
             Button(buttonKey) { inject.runExploit() }
                 .buttonStyle(ChipButtonStyle())
@@ -424,9 +424,9 @@ struct SettingView: View {
                 .foregroundStyle(inject.kernelReady ? Palette.good : Palette.textFaint)
             VStack(alignment: .leading, spacing: 2) {
                 Text("native_hook_title")
-                    .font(.footnote.weight(.semibold))
+                    .font(.ui(13, weight: .semibold))
                 Text("native_hook_caption")
-                    .font(.caption2)
+                    .font(.ui(11))
                     .foregroundStyle(Palette.textFaint)
             }
             Spacer(minLength: 0)
@@ -449,9 +449,9 @@ struct SettingView: View {
                                      ? Palette.good : Palette.textFaint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("hotfix_title")
-                        .font(.footnote.weight(.semibold))
+                        .font(.ui(13, weight: .semibold))
                     Text("hotfix_caption")
-                        .font(.caption2)
+                        .font(.ui(11))
                         .foregroundStyle(Palette.textFaint)
                 }
                 Spacer(minLength: 0)
@@ -461,7 +461,7 @@ struct SettingView: View {
             }
             if !inject.trafficReport.isEmpty {
                 Text(inject.trafficReport)
-                    .font(.caption2)
+                    .font(.ui(11))
                     .foregroundStyle(Palette.textDim)
             }
         }
@@ -477,10 +477,10 @@ struct SettingView: View {
 
             HStack(spacing: 10) {
                 Text(String(localized: "uuid_label"))
-                    .font(.body.weight(.medium))
+                    .font(.ui(15, weight: .medium))
                 Spacer(minLength: 8)
                 Text(device.credentialId)
-                    .font(.caption.monospaced())
+                    .font(.ui(12))
                     .foregroundStyle(Palette.textDim)
                     .lineLimit(1)
                     .truncationMode(.middle)

@@ -601,6 +601,12 @@ namespace ProjectEspPatch
             if (CfgBool(configJson, "EspVisibleOnly", true)) loaded |= EspVisibleOnly;
             if (CfgBool(configJson, "AimSystemEnabled", true)) loaded |= AimMaster;
             if (CfgBool(configJson, "LegitAimbot", true)) loaded |= AimMaster;
+            // The panel has two more masters: `AimEnabled` (its own aim toggle,
+            // also armed by silent aim) and `SilentAim`. Neither was read here,
+            // so a profile with silent aim on and the legacy master off loaded
+            // with AimMaster cleared and the assist never ran.
+            if (CfgBool(configJson, "AimEnabled", false)) loaded |= AimMaster;
+            if (CfgBool(configJson, "SilentAim", false)) loaded |= AimMaster;
             if (CfgBool(configJson, "AimVisibleOnly", true)) loaded |= AimVisibleOnly;
             if (CfgBool(configJson, "IgnoreKnocked", true)) loaded |= AimIgnoreKnocked;
             if (CfgBool(configJson, "AimTouchGate", true)) loaded |= AimTouchGate;
@@ -769,6 +775,24 @@ namespace ProjectEspPatch
         {
             return new Color(color.r, color.g, color.b, alpha);
         }
+
+        // The game can be built with the new Input System, where every legacy
+        // `UnityEngine.Input` getter throws. Both the touch gate in AimFrame and
+        // the three-finger gesture used to read `Input.touchCount` directly, so
+        // one exception aborted the whole OnGUI/aim path. -1 means "unknown":
+        // the aim gate treats it as allowed, the gesture as no fingers down.
+        private static int SafeTouchCount()
+        {
+            try
+            {
+                return Input.touchCount;
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
         private static float Noise01(float seed)
         {
             float value = Mathf.Sin(seed * 12.9898f) * 43758.5453f;
@@ -1404,7 +1428,9 @@ namespace ProjectEspPatch
             Color accent = BaseColor();
             if (downed)
             {
-                accent = new Color(0.98f, 0.36f, 0.34f, 1f);
+                // Downed is state, not danger: a muted slate reads as "out of
+                // the fight" without competing with the health track.
+                accent = new Color(0.62f, 0.66f, 0.72f, 1f);
             }
             else if (rainbow)
             {
@@ -1419,29 +1445,29 @@ namespace ProjectEspPatch
                 fade = Mathf.Clamp(1f - distance / espMaxDistance * 0.62f, 0.38f, 1f);
             }
 
+            // One pixel unit that follows the screen, so the same preset looks
+            // the same on a phone and on a tablet.
+            float ui = Mathf.Clamp((float)screenHeight / 900f, 0.8f, 1.6f);
+
             if ((currentMask & EspBoxFill) != 0)
             {
-                // A flat tint, not a gradient. Seven bands of lerped alpha read
-                // as a coloured blob at the sizes these boxes actually are; one
-                // translucent pass keeps the body legible and lets the brackets
-                // do the work.
-                Fill(bounds, WithAlpha(accent, espFillAlpha * 0.55f * fade), pixel);
+                // A flat tint, not a gradient: at these box sizes a gradient is
+                // just a coloured blob, and the brackets should carry the shape.
+                Fill(bounds, WithAlpha(accent, espFillAlpha * 0.34f * fade), pixel);
             }
 
             if ((currentMask & EspBox) != 0)
             {
-                // One line weight, one colour, no outer halo and no second
-                // inset frame. The halo was the loudest element on screen and
-                // it carried no information.
-                float thickness = 1.5f;
-                Color line = WithAlpha(accent, 0.92f * fade);
+                float thickness = Mathf.Max(1.1f, 1.45f * ui);
+                Color line = WithAlpha(accent, 0.94f * fade);
                 if (boxStyle == 1)
                 {
                     Stroke(bounds, thickness, line, pixel);
                 }
                 else
                 {
-                    float corner = Mathf.Clamp(Mathf.Min(width, height) * 0.22f, 6f, 18f);
+                    float corner = Mathf.Clamp(Mathf.Min(width, height) * 0.24f,
+                        7f * ui, 20f * ui);
                     Fill(new Rect(bounds.xMin, bounds.yMin, corner, thickness), line, pixel);
                     Fill(new Rect(bounds.xMin, bounds.yMin, thickness, corner), line, pixel);
                     Fill(new Rect(bounds.xMax - corner, bounds.yMin, corner, thickness), line, pixel);
@@ -1452,13 +1478,12 @@ namespace ProjectEspPatch
                     Fill(new Rect(bounds.xMax - thickness, bounds.yMax - corner, thickness, corner), line, pixel);
                 }
                 // `EspGlow` stays a working switch, but as one faint outline
-                // rather than four halo slabs: the toggle should add presence,
-                // not a second box.
+                // rather than four halo slabs.
                 if (espGlow)
                 {
                     Stroke(new Rect(bounds.x - 2f, bounds.y - 2f,
                         bounds.width + 4f, bounds.height + 4f), 1f,
-                        WithAlpha(accent, 0.22f * fade), pixel);
+                        WithAlpha(accent, 0.16f * fade), pixel);
                 }
             }
 
@@ -1469,99 +1494,120 @@ namespace ProjectEspPatch
             {
                 Stroke(new Rect(bounds.x - 2f, bounds.y - 2f,
                     bounds.width + 4f, bounds.height + 4f), 1f,
-                    new Color(1f, 1f, 1f, 0.55f * fade), pixel);
+                    new Color(1f, 1f, 1f, 0.42f * fade), pixel);
             }
 
             float healthRatio = 0f;
+            float trackH = Mathf.Max(2f, 3f * ui);
+            float trackY = bounds.yMax + 3f * ui;
             if ((currentMask & EspHealth) != 0)
             {
                 healthRatio = maximumHealth > 0
                     ? Mathf.Clamp01((float)currentHealth / (float)maximumHealth) : 0f;
-                float barWidth = 3f;
-                float barX = healthSide == 0 ? bounds.x - 6f : bounds.xMax + 3f;
-                // Track, fill, done. The segmented version coloured each band
-                // from the ratio at its own bottom, so a half-dead enemy looked
-                // green at the top of the green band and yellow below it — three
-                // colours where one belongs.
-                Fill(new Rect(barX, bounds.y, barWidth, height),
-                    new Color(0f, 0f, 0f, 0.55f * fade), pixel);
-                float filled = height * healthRatio;
-                Fill(new Rect(barX, bounds.yMax - filled, barWidth, filled),
-                    WithAlpha(HealthColor(healthRatio), fade), pixel);
-
-                if (espHealthText && !downed && distance <= 120f)
+                // One thin track under the box, filled from the side the panel
+                // picked. The old rail ran the full height beside the brackets
+                // and read as a second frame.
+                Fill(new Rect(bounds.x, trackY, width, trackH),
+                    new Color(0.02f, 0.03f, 0.04f, 0.62f * fade), pixel);
+                float filled = width * healthRatio;
+                if (filled > 0f)
                 {
-                    // Sits under the distance line: the name plate owns the
-                    // space above the box, and stacking both there collides on
-                    // a wide nickname.
-                    ShadowLabel(new Rect(bounds.center.x - width,
-                        bounds.yMax + 16f * espTextScale, width * 2f, 12f * espTextScale),
-                        currentHealth + " HP", smallStyle, HealthColor(healthRatio),
-                        espTextScale);
+                    float fillX = healthSide == 0 ? bounds.xMax - filled : bounds.x;
+                    Fill(new Rect(fillX, trackY, filled, trackH),
+                        WithAlpha(HealthColor(healthRatio), fade), pixel);
+                }
+
+                if (espHealthText && !downed)
+                {
+                    ShadowLabel(new Rect(bounds.x, trackY + trackH + 1f * ui,
+                        width, 11f * espTextScale), currentHealth + " hp", smallStyle,
+                        WithAlpha(HealthColor(healthRatio), 0.92f * fade), espTextScale);
                 }
             }
 
             if ((currentMask & EspSkeleton) != 0)
             {
-                DrawSkeleton(player, camera, bounds, WithAlpha(accent, 0.80f * fade), pixel,
+                DrawSkeleton(player, camera, bounds, WithAlpha(accent, 0.72f * fade), pixel,
                     screenWidth, screenHeight);
             }
 
             if ((currentMask & EspHeadDot) != 0)
             {
-                DrawCircle(new Vector2(headPoint.x, headPoint.y), 2.4f, 12,
-                    new Color(1f, 1f, 1f, 0.90f * fade), screenWidth, screenHeight);
+                // A filled square, not a ring: at three pixels a ring is a
+                // smudge, and a dot is all the head marker needs to be.
+                float dot = Mathf.Max(2.4f, 2.6f * ui);
+                Fill(new Rect(headPoint.x - dot * 0.5f, headPoint.y - dot * 0.5f,
+                    dot, dot), new Color(1f, 1f, 1f, 0.88f * fade), pixel);
             }
 
+            // One plate above the box carries everything textual: name,
+            // distance and the downed tag. Stacking three labels under the box
+            // was the busiest part of the old overlay.
+            string nickname = null;
             if ((currentMask & EspName) != 0)
             {
-                string nickname = player.NickName;
+                nickname = player.NickName;
                 if (nickname == null || nickname.Length == 0)
                 {
                     nickname = "?";
                 }
-                if (nickname.Length > 15)
+                if (nickname.Length > 14)
                 {
-                    nickname = nickname.Substring(0, 13) + "..";
+                    nickname = nickname.Substring(0, 12) + "..";
                 }
-                // A plate behind the name: outlined text over a bright wall is
-                // unreadable no matter how thick the outline is.
-                float textWidth = (float)nickname.Length * 6.2f * espTextScale + 14f;
-                float plateWidth = Mathf.Clamp(textWidth, 44f, width * 3f);
-                Rect plate = new Rect(bounds.center.x - plateWidth * 0.5f,
-                    bounds.y - 19f * espTextScale, plateWidth, 14f * espTextScale);
-                if (espNameChip)
-                {
-                    RoundedFill(plate, new Color(0.02f, 0.03f, 0.03f, 0.70f * fade), pixel,
-                        7f * espTextScale);
-                }
-                ShadowLabel(plate, nickname, smallStyle,
-                    downed ? new Color(1f, 0.62f, 0.58f, 1f)
-                        : new Color(0.96f, 0.98f, 0.97f, 1f), espTextScale);
             }
 
-            if (downed)
+            int meters = (int)(distance + 0.5f);
+            if (meters < 0) meters = 0;
+
+            string chipText = "";
+            if (nickname != null)
             {
-                ShadowLabel(new Rect(bounds.center.x - width, bounds.yMax + 16f,
-                    width * 2f, 14f * espTextScale), "DOWNED", smallStyle,
-                    new Color(1f, 0.44f, 0.40f, 1f), espTextScale);
+                chipText = nickname;
             }
-
             if ((currentMask & EspDistance) != 0)
             {
-                int meters = (int)distance;
-                if (meters < 0) meters = 0;
-                ShadowLabel(new Rect(bounds.center.x - width, bounds.yMax + 3f,
-                    width * 2f, 13f * espTextScale), meters + "m", smallStyle,
-                    WithAlpha(new Color(0.80f, 0.88f, 0.85f, 1f), fade), espTextScale);
+                if (chipText.Length > 0)
+                {
+                    chipText = chipText + "  |  " + meters + "m";
+                }
+                else
+                {
+                    chipText = meters + "m";
+                }
+            }
+            if (downed)
+            {
+                chipText = chipText.Length > 0 ? chipText + "  |  DOWN" : "DOWN";
+            }
+
+            if (chipText.Length > 0)
+            {
+                float chipH = 16f * espTextScale;
+                float chipWidth = (float)chipText.Length * 6.4f * espTextScale + 16f;
+                float maxChip = Mathf.Max(width * 3.2f, 56f);
+                chipWidth = Mathf.Clamp(chipWidth, 42f, maxChip);
+                Rect chip = new Rect(bounds.center.x - chipWidth * 0.5f,
+                    bounds.y - chipH - 5f * ui, chipWidth, chipH);
+                if (espNameChip)
+                {
+                    Fill(chip, new Color(0.02f, 0.03f, 0.04f, 0.66f * fade), pixel);
+                }
+                // A single accent hairline ties the plate to the box; no border,
+                // no second fill.
+                Fill(new Rect(chip.x, chip.y, chip.width, Mathf.Max(1f, 1.2f * ui)),
+                    WithAlpha(accent, 0.92f * fade), pixel);
+                ShadowLabel(chip, chipText, smallStyle,
+                    downed ? new Color(0.92f, 0.94f, 0.96f, 0.95f)
+                        : new Color(0.96f, 0.98f, 0.97f, 0.96f), espTextScale);
             }
 
             if ((currentMask & EspTracer) != 0)
             {
                 DrawGlowLine(
-                    new Vector2((float)screenWidth * 0.5f, (float)screenHeight - 4f),
+                    new Vector2((float)screenWidth * 0.5f, (float)screenHeight),
                     new Vector2(bounds.center.x, bounds.yMax + 2f),
-                    WithAlpha(accent, 0.85f * fade), 1.4f, screenWidth, screenHeight);
+                    WithAlpha(accent, 0.34f * fade), 0f, screenWidth, screenHeight);
             }
 
             if ((currentMask & EspLine) != 0)
@@ -1578,7 +1624,7 @@ namespace ProjectEspPatch
                             from.y + (to.y - from.y) * t0),
                         new Vector2(from.x + (to.x - from.x) * t1,
                             from.y + (to.y - from.y) * t1),
-                        WithAlpha(accent, 0.42f * fade), 0f, screenWidth, screenHeight);
+                        WithAlpha(accent, 0.26f * fade), 0f, screenWidth, screenHeight);
                 }
             }
 
@@ -2677,7 +2723,8 @@ namespace ProjectEspPatch
             }
 
             bool threeFingerActive = (state & StateThreeFinger) != 0;
-            bool threeFingersDown = Input.touchCount >= 3;
+            int touchCount = SafeTouchCount();
+            bool threeFingersDown = touchCount >= 3;
             if (threeFingersDown && !threeFingerActive)
             {
                 state |= StateThreeFinger;
