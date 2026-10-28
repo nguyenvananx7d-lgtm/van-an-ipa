@@ -7,6 +7,7 @@ import { buildMobileConfig } from "./profile.js";
 import { type CaptureRecord, suggestRules, suggestPatchRules } from "./suggest.js";
 import { renderDashboard } from "./dashboard.js";
 import { renderMenu } from "./menu.js";
+import { renderDevice, renderLogin } from "./portal.js";
 import { type VpnPayload } from "./profile.js";
 import { FEATURES, featureById, featureHits, rulesForFeatures } from "./features.js";
 
@@ -60,6 +61,21 @@ const authApiUrl = process.env.AUTH_URL ?? "http://127.0.0.1:8787/api";
 const authAdminUrl = process.env.AUTH_ADMIN_URL ?? "http://127.0.0.1:8787";
 const authAdminToken = process.env.AUTH_ADMIN_TOKEN ?? process.env.ADMIN_TOKEN ?? "";
 
+/**
+ * The path prefix the public reverse proxy mounts this listener under.
+ *
+ * Caddy's `handle_path /relay/*` strips `/relay` before the request reaches the
+ * relay, so `req.url` alone cannot tell the page which prefix its links and
+ * form actions need. Set `RELAY_BASE_PATH=/relay` in that deployment; leave it
+ * empty when port 8080 is reached directly.
+ */
+const basePath = (() => {
+  const raw = (process.env.RELAY_BASE_PATH ?? "").trim();
+  if (!raw) return "";
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  return withSlash.replace(/\/+$/, "");
+})();
+
 const version = (() => {
   try {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version?: string };
@@ -68,6 +84,104 @@ const version = (() => {
     return "0.0.0";
   }
 })();
+
+/**
+ * Sessions issued by the portal, keyed by the opaque token the auth backend
+ * returned. The map exists so `/device` can show the plan, expiry and reset
+ * budget without asking the phone to hand its key back to the page. It is
+ * intentionally in-memory: after a relay restart the user signs in again.
+ */
+interface PortalSession {
+  key: string;
+  deviceId: string;
+  plan: string;
+  expiresAt?: string;
+  resetRemaining: number;
+  expiresAtMs: number;
+}
+
+const portalSessions = new Map<string, PortalSession>();
+
+function cookieValue(req: http.IncomingMessage, name: string): string {
+  const header = req.headers.cookie ?? "";
+  for (const part of header.split(";")) {
+    const cut = part.indexOf("=");
+    if (cut === -1) continue;
+    if (part.slice(0, cut).trim() === name) {
+      return decodeURIComponent(part.slice(cut + 1).trim());
+    }
+  }
+  return "";
+}
+
+function decodeEnvelope(text: string): Record<string, unknown> | null {
+  try {
+    const envelope = JSON.parse(text) as { data?: unknown };
+    if (typeof envelope.data !== "string") return null;
+    return JSON.parse(Buffer.from(envelope.data, "base64").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function stringField(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  return typeof value === "string" ? value : "";
+}
+
+function numberField(source: Record<string, unknown>, key: string): number | undefined {
+  const value = source[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+async function callAuth(body: Record<string, unknown>): Promise<{ status: number; text: string }> {
+  const upstream = await httpFetch(authApiUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: upstream.status, text: await upstream.text() };
+}
+
+function renderLoginError(
+  res: http.ServerResponse,
+  values: { key: string; deviceKey: string; error?: string; notice?: string },
+): void {
+  res
+    .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    .end(
+      renderLogin({
+        name: profileName,
+        publicHost,
+        proxyPort,
+        basePath,
+        key: values.key,
+        deviceKey: values.deviceKey,
+        version,
+        error: values.error,
+        notice: values.notice,
+      }),
+    );
+}
+
+function setPortalCookies(
+  res: http.ServerResponse,
+  token: string,
+  deviceId: string,
+  maxAge: number,
+): void {
+  res.setHeader("Set-Cookie", [
+    `relay_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+    `relay_device=${encodeURIComponent(deviceId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
+  ]);
+}
+
+function clearPortalCookies(res: http.ServerResponse): void {
+  res.setHeader("Set-Cookie", [
+    "relay_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+    "relay_device=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+  ]);
+}
 
 function readBody(req: http.IncomingMessage, limit = 8 * 1024): Promise<string | null> {
   return new Promise((resolve) => {
@@ -458,7 +572,231 @@ const profile = buildMobileConfig({
 });
 
 const admin = http.createServer(async (req, res) => {
-  const path = (req.url ?? "/").split("?")[0];
+  const path = (req.url ?? "/").split("?")[0] ?? "/";
+
+  // --- MIZZE-style activation portal ---------------------------------------
+
+  if (path === "/login") {
+    const params = new URL(req.url ?? "/", "http://x").searchParams;
+    renderLoginError(res, {
+      key: params.get("key") ?? "",
+      deviceKey: params.get("k") ?? "",
+      error: params.get("error") ?? undefined,
+      notice: params.get("notice") ?? undefined,
+    });
+    return;
+  }
+
+  if (path === "/auth/enter") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json" }).end('{"error":"method_not_allowed"}');
+      return;
+    }
+    const raw = await readBody(req);
+    const form = new URLSearchParams(raw ?? "");
+    const key = (form.get("key") ?? "").trim().toUpperCase();
+    const password = form.get("password") ?? "";
+    const deviceId = (form.get("deviceId") ?? "").trim().toLowerCase();
+
+    if (key.length < 8 || key.length > 128) {
+      renderLoginError(res, { key, deviceKey: deviceId, error: "Key phải từ 8 đến 128 ký tự." });
+      return;
+    }
+    if (password.length < 8 || password.length > 128) {
+      renderLoginError(res, { key, deviceKey: deviceId, error: "Mật khẩu phải từ 8 đến 128 ký tự." });
+      return;
+    }
+    if (!/^[a-f0-9]{64}$/.test(deviceId)) {
+      renderLoginError(res, { key, deviceKey: deviceId, error: "ID máy phải đúng 64 ký tự hex." });
+      return;
+    }
+
+    try {
+      const result = await callAuth({
+        ...(process.env.PRODUCT_ID ? { product: process.env.PRODUCT_ID } : {}),
+        key,
+        password,
+        hwid: deviceId,
+        device_name: "Web portal",
+        ios_version: "Web",
+        model: "Safari",
+        protocol_version: 3,
+      });
+      const payload = decodeEnvelope(result.text);
+      if (result.status !== 200 || !payload) {
+        renderLoginError(res, { key, deviceKey: deviceId, error: "Máy chủ bản quyền không phản hồi đúng." });
+        return;
+      }
+      if (stringField(payload, "status") !== "valid") {
+        renderLoginError(res, {
+          key,
+          deviceKey: deviceId,
+          error: stringField(payload, "message") || "Key hoặc mật khẩu không đúng.",
+        });
+        return;
+      }
+
+      const session = stringField(payload, "session");
+      if (!session) {
+        renderLoginError(res, { key, deviceKey: deviceId, error: "Máy chủ không trả phiên." });
+        return;
+      }
+      const ttl = Math.max(60, Math.min(86_400, numberField(payload, "sessionTtl") ?? 3600));
+      const expiresAt = stringField(payload, "expiresAt") || undefined;
+      portalSessions.set(session, {
+        key: stringField(payload, "licenseLabel") || key,
+        deviceId,
+        plan: stringField(payload, "plan") || "PRO",
+        expiresAt,
+        resetRemaining: numberField(payload, "resetRemaining") ?? 2,
+        expiresAtMs: Date.now() + ttl * 1000,
+      });
+      setPortalCookies(res, session, deviceId, ttl);
+      res.writeHead(303, { location: `${basePath}/device` }).end();
+    } catch (error) {
+      renderLoginError(res, {
+        key,
+        deviceKey: deviceId,
+        error: `Không kết nối được máy chủ bản quyền: ${String(error)}`,
+      });
+    }
+    return;
+  }
+
+  if (path === "/device") {
+    const token = cookieValue(req, "relay_session");
+    const session = portalSessions.get(token);
+    if (!token || !session || session.expiresAtMs < Date.now()) {
+      if (token) portalSessions.delete(token);
+      clearPortalCookies(res);
+      res.writeHead(303, { location: `${basePath}/login?notice=Phiên%20đã%20hết%20hạn%2C%20đăng%20nhập%20lại.` }).end();
+      return;
+    }
+    const params = new URL(req.url ?? "/", "http://x").searchParams;
+    res
+      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      .end(
+        renderDevice({
+          name: profileName,
+          publicHost,
+          proxyPort,
+          basePath,
+          key: session.key,
+          deviceId: session.deviceId,
+          plan: session.plan,
+          expiresAt: session.expiresAt,
+          resetRemaining: session.resetRemaining,
+          session: token,
+          version,
+          message: params.get("message") ?? undefined,
+          error: params.get("error") ?? undefined,
+        }),
+      );
+    return;
+  }
+
+  if (path === "/device/reset") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json" }).end('{"error":"method_not_allowed"}');
+      return;
+    }
+    const raw = await readBody(req);
+    const form = new URLSearchParams(raw ?? "");
+    const token = form.get("session") || cookieValue(req, "relay_session");
+    const session = portalSessions.get(token);
+    if (!session) {
+      clearPortalCookies(res);
+      res.writeHead(303, { location: `${basePath}/login?notice=Phiên%20đã%20hết%20hạn.` }).end();
+      return;
+    }
+    try {
+      const result = await callAuth({ action: "resetDevice", session: token });
+      const payload = decodeEnvelope(result.text);
+      if (result.status === 200 && payload && stringField(payload, "status") === "valid") {
+        portalSessions.delete(token);
+        clearPortalCookies(res);
+        const message = stringField(payload, "message") || "Đã reset thiết bị.";
+        res.writeHead(303, { location: `${basePath}/login?notice=${encodeURIComponent(message)}` }).end();
+        return;
+      }
+      const message = payload
+        ? stringField(payload, "message") || "Không reset được thiết bị."
+        : "Máy chủ bản quyền không phản hồi đúng.";
+      const remaining = payload ? numberField(payload, "resetRemaining") : undefined;
+      if (remaining !== undefined) session.resetRemaining = remaining;
+      res
+        .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+        .end(
+          renderDevice({
+            name: profileName,
+            publicHost,
+            proxyPort,
+            basePath,
+            key: session.key,
+            deviceId: session.deviceId,
+            plan: session.plan,
+            expiresAt: session.expiresAt,
+            resetRemaining: session.resetRemaining,
+            session: token,
+            version,
+            error: message,
+          }),
+        );
+    } catch (error) {
+      res
+        .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+        .end(
+          renderDevice({
+            name: profileName,
+            publicHost,
+            proxyPort,
+            basePath,
+            key: session.key,
+            deviceId: session.deviceId,
+            plan: session.plan,
+            expiresAt: session.expiresAt,
+            resetRemaining: session.resetRemaining,
+            session: token,
+            version,
+            error: `Không kết nối được máy chủ bản quyền: ${String(error)}`,
+          }),
+        );
+    }
+    return;
+  }
+
+  if (path === "/menu/reset") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json" }).end('{"error":"method_not_allowed"}');
+      return;
+    }
+    const raw = await readBody(req) ?? "";
+    let body: Record<string, unknown> = {};
+    try {
+      body = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      const form = new URLSearchParams(raw);
+      body = { session: form.get("session") ?? "" };
+    }
+    const token = stringField(body, "session");
+    if (!token) {
+      res.writeHead(400, { "content-type": "application/json" }).end('{"error":"missing_session"}');
+      return;
+    }
+    try {
+      const result = await callAuth({ action: "resetDevice", session: token });
+      const payload = decodeEnvelope(result.text);
+      if (payload && stringField(payload, "status") === "valid") {
+        portalSessions.delete(token);
+      }
+      res.writeHead(result.status, { "content-type": "application/json" }).end(result.text);
+    } catch (error) {
+      res.writeHead(502, { "content-type": "application/json" }).end(
+        JSON.stringify({ error: `auth backend unreachable: ${String(error)}` }),
+      );
+    }
+    return;
+  }
 
   if (path === "/menu/login") {
     if (req.method !== "POST") {
@@ -488,6 +826,64 @@ const admin = http.createServer(async (req, res) => {
       res
         .writeHead(upstream.status, { "content-type": "application/json" })
         .end(await upstream.text());
+    } catch (error) {
+      res.writeHead(502, { "content-type": "application/json" }).end(
+        JSON.stringify({ error: `auth backend unreachable: ${String(error)}` }),
+      );
+    }
+    return;
+  }
+
+  if (path === "/menu/session") {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "content-type": "application/json" }).end('{"error":"method_not_allowed"}');
+      return;
+    }
+    if (!authAdminToken) {
+      res.writeHead(503, { "content-type": "application/json" }).end(
+        JSON.stringify({ error: "auth backend not configured (AUTH_ADMIN_TOKEN)" }),
+      );
+      return;
+    }
+    const params = new URL(req.url ?? "/", "http://x").searchParams;
+    const header = req.headers["x-menu-session"];
+    const token = (params.get("session") ?? (Array.isArray(header) ? header[0] : header) ?? "").trim();
+    if (!token) {
+      res.writeHead(400, { "content-type": "application/json" }).end('{"error":"missing_session"}');
+      return;
+    }
+    try {
+      const upstream = await httpFetch(`${authAdminUrl}/admin/api/sessions`, {
+        headers: { "x-admin-token": authAdminToken },
+      });
+      if (upstream.status !== 200) {
+        res.writeHead(502, { "content-type": "application/json" }).end('{"error":"auth backend unavailable"}');
+        return;
+      }
+      const data = JSON.parse(await upstream.text()) as {
+        sessions?: Array<{
+          token: string;
+          key: string;
+          expired?: boolean;
+          plan?: string | null;
+          expiresAtISO?: string | null;
+          resetRemaining?: number;
+        }>;
+      };
+      const match = data.sessions?.find((session) => session.token === token && !session.expired);
+      if (!match) {
+        res.writeHead(401, { "content-type": "application/json" }).end('{"valid":false}');
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" }).end(
+        JSON.stringify({
+          valid: true,
+          key: match.key,
+          plan: match.plan ?? null,
+          expiresAt: match.expiresAtISO ?? null,
+          resetRemaining: match.resetRemaining ?? null,
+        }),
+      );
     } catch (error) {
       res.writeHead(502, { "content-type": "application/json" }).end(
         JSON.stringify({ error: `auth backend unreachable: ${String(error)}` }),
@@ -717,7 +1113,8 @@ const admin = http.createServer(async (req, res) => {
   }
 
   if (path === "/menu") {
-    const deviceKey = new URL(req.url ?? "/", "http://x").searchParams.get("k") ?? "";
+    const params = new URL(req.url ?? "/", "http://x").searchParams;
+    const deviceKey = params.get("k") ?? "";
     const records = readCaptures(4000);
     res
       .writeHead(200, { "content-type": "text/html; charset=utf-8" })
@@ -726,7 +1123,10 @@ const admin = http.createServer(async (req, res) => {
           name: profileName,
           publicHost,
           proxyPort,
+          basePath,
           deviceKey,
+          key: params.get("key") ?? "",
+          sessionKey: params.get("session") ?? "",
           rules,
           captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
           suggestions: [...suggestRules(records), ...suggestPatchRules(records)],
@@ -767,6 +1167,7 @@ const admin = http.createServer(async (req, res) => {
           publicHost,
           proxyPort,
           adminPort,
+          basePath,
           rules,
           captures: { total: countCaptures(), recent: records.slice(-15).reverse() },
           suggestions: [...suggestRules(records), ...suggestPatchRules(records)],

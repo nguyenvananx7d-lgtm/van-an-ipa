@@ -31,7 +31,13 @@ export interface MenuView {
   name: string;
   publicHost: string;
   proxyPort: number;
+  /** Mount prefix when a reverse proxy strips `/relay`; empty at the root. */
+  basePath: string;
   deviceKey: string;
+  /** Prefill key from the app / portal deep link, if it sent one. */
+  key: string;
+  /** Session handed over by the app so the web menu opens signed in. */
+  sessionKey: string;
   rules: Rule[];
   features: FeatureState[];
   captures: { total: number; recent: CaptureRecord[] };
@@ -47,6 +53,14 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** JSON that is safe to place inside a <script> block. */
+function jsonEmbed(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
 }
 
 export function renderMenu(view: MenuView): string {
@@ -112,12 +126,14 @@ export function renderMenu(view: MenuView): string {
     display: flex; justify-content: space-between; gap: 8px;
   }
   label.lbl { display: block; color: var(--muted); font-size: 11px; letter-spacing: .04em; margin-bottom: 6px; }
-  input[type=text] {
+  input[type=text], input[type=password], textarea {
     width: 100%; padding: 13px 14px; border-radius: 11px; border: 1px solid var(--edge);
     background: #0f1213; color: var(--text); font-family: ui-monospace, Menlo, monospace;
-    font-size: 14px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px;
+    font-size: 14px; letter-spacing: .08em; margin-bottom: 12px;
   }
-  input[type=text]:focus { outline: none; border-color: var(--green); }
+  input[type=text] { text-transform: uppercase; }
+  textarea { resize: none; min-height: 64px; line-height: 1.45; letter-spacing: .04em; }
+  input:focus, textarea:focus { outline: none; border-color: var(--green); }
   h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
        margin: 18px 0 8px; font-weight: 700; }
   .rule, .feat { border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin: 7px 0;
@@ -159,11 +175,15 @@ export function renderMenu(view: MenuView): string {
       <div class="brand"><span class="dot"></span><b>${escapeHtml(view.name.toUpperCase())}</b><span class="sub">CONTROL</span></div>
       <span class="pill" id="loginPill">Sign in</span>
     </div>
-    <label class="lbl" for="key">KEY BẢN QUYỀN</label>
-    <input id="key" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="VT-XXXX-XXXX">
-    <button id="loginBtn" class="primary">ĐĂNG NHẬP</button>
+    <label class="lbl" for="key">KEY</label>
+    <input id="key" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="VT-XXXX-XXXX" value="${escapeHtml(view.key)}">
+    <label class="lbl" for="password">MẬT KHẨU</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="Mật khẩu đi kèm key">
+    <label class="lbl" for="deviceId">ID MÁY</label>
+    <textarea id="deviceId" rows="3" maxlength="64" spellcheck="false" placeholder="64 ký tự">${escapeHtml(view.deviceKey)}</textarea>
+    <button id="loginBtn" class="primary">Enter</button>
     <div id="loginNote" class="note"></div>
-    <div class="foot"><span>${escapeHtml(view.publicHost)}:${view.proxyPort}</span><span>v${escapeHtml(view.version)}</span></div>
+    <div class="foot"><span>${escapeHtml(view.publicHost)}:${view.proxyPort}</span><span>Reset thiết bị · 2 lần mỗi ngày</span></div>
   </div>
 </section>
 
@@ -184,6 +204,10 @@ export function renderMenu(view: MenuView): string {
           <span class="k">Device key <i>(phone ID)</i></span>
           <span class="v" id="deviceKey">—</span>
         </div>
+        <div class="field">
+          <span class="k">Thời hạn</span>
+          <span class="v" id="expiryLine">—</span>
+        </div>
       </div>
       <div class="right">
         <div class="field"><span class="k">iOS</span><span class="v plain" id="ios">—</span></div>
@@ -192,6 +216,7 @@ export function renderMenu(view: MenuView): string {
       </div>
     </div>
     <button id="openMenu" class="primary">MỞ WEB MENU</button>
+    <button id="resetDevice" class="danger">RESET THIẾT BỊ · <span id="resetCount">2</span>/2</button>
     <button id="logout" class="danger">ĐĂNG XUẤT</button>
     <div class="foot">
       <span id="planLine">—</span>
@@ -223,26 +248,93 @@ export function renderMenu(view: MenuView): string {
 </section>
 
 <script>
-const NAME = ${JSON.stringify(view.name)};
+const NAME = ${jsonEmbed(view.name)};
+/* The document may be mounted under /relay by Caddy, which strips the prefix
+   before the relay sees the request. Every API call is built from this value so
+   the page works both at the root and behind the prefix. */
+const BASE = ${jsonEmbed(view.basePath)};
 const LOGIN_ENABLED = ${view.loginEnabled ? "true" : "false"};
+const BOOT = {
+  session: ${jsonEmbed(view.sessionKey)},
+  key: ${jsonEmbed(view.key)},
+  device: ${jsonEmbed(view.deviceKey)}
+};
 const note = document.getElementById('note');
 const fields = {
-  session: 'nimbus.session', key: 'nimbus.key', device: 'nimbus.device'
+  session: 'nimbus.session', key: 'nimbus.key', device: 'nimbus.device',
+  plan: 'nimbus.plan', expires: 'nimbus.expires', reset: 'nimbus.reset'
 };
 
 let state = { rules: [], features: [], suggestions: [], captures: { total: 0, recent: [] } };
-let session = localStorage.getItem(fields.session) || '';
-let savedKey = localStorage.getItem(fields.key) || '';
+/* The app hands over the session it just minted in the URL. That value must
+   win over an older copy in localStorage, otherwise a re-activation would keep
+   using the session the reset just invalidated. */
+let session = BOOT.session || localStorage.getItem(fields.session) || '';
+let savedKey = BOOT.key || localStorage.getItem(fields.key) || '';
+if (BOOT.session) localStorage.setItem(fields.session, BOOT.session);
+if (BOOT.key) localStorage.setItem(fields.key, BOOT.key);
 
 /* A phone ID that survives a re-install of the web clip is impossible; this is
    a per-browser handle, and it is what the auth backend binds the key to. */
 function deviceId() {
   let id = localStorage.getItem(fields.device);
-  if (id) return id;
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  if (id && id.length === 64) return id;
+  if (BOOT.device && BOOT.device.length === 64) {
+    localStorage.setItem(fields.device, BOOT.device);
+    return BOOT.device;
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
   id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
   localStorage.setItem(fields.device, id);
   return id;
+}
+
+function paintExpiry(raw) {
+  const line = document.getElementById('expiryLine');
+  if (!line) return;
+  if (!raw) { line.textContent = 'Không giới hạn'; return; }
+  const ms = new Date(raw).getTime() - Date.now();
+  if (!isFinite(ms) || ms <= 0) { line.textContent = 'Đã hết hạn'; return; }
+  const total = Math.floor(ms / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  line.textContent = days > 0
+    ? days + ' ngày ' + hours + ' giờ ' + minutes + ' phút còn lại'
+    : (hours > 0 ? hours + ' giờ ' + minutes + ' phút còn lại' : minutes + ' phút còn lại');
+}
+
+function paintExpiryFromStore() {
+  paintExpiry(localStorage.getItem(fields.expires) || '');
+  const count = document.getElementById('resetCount');
+  if (count) count.textContent = localStorage.getItem(fields.reset) || '2';
+}
+
+/* The app and the portal can open the menu with only a session token in the
+   URL. Ask the relay what that token is actually worth before the card claims
+   ACTIVE: the auth backend knows the plan, the key expiry and how many resets
+   are left. Returns 'valid', 'invalid' (401: dead token) or 'error' (relay
+   unreachable), so a network failure does not sign the user out. */
+async function hydrateSession() {
+  if (!session) return 'invalid';
+  try {
+    const response = await fetch(BASE + '/menu/session?session=' + encodeURIComponent(session), { cache: 'no-store' });
+    if (response.status === 401) return 'invalid';
+    if (!response.ok) return 'error';
+    const meta = await response.json();
+    if (!meta || !meta.valid) return 'invalid';
+    if (meta.key) {
+      savedKey = meta.key;
+      localStorage.setItem(fields.key, meta.key);
+    }
+    if (meta.plan) localStorage.setItem(fields.plan, meta.plan);
+    if (meta.expiresAt) localStorage.setItem(fields.expires, meta.expiresAt);
+    localStorage.setItem(fields.reset, String(meta.resetRemaining == null ? 2 : meta.resetRemaining));
+    paintPanel(meta);
+    return 'valid';
+  } catch (error) {
+    return 'error';
+  }
 }
 
 function iosVersion() {
@@ -265,19 +357,29 @@ function decodeEnvelope(envelope) {
 
 async function login() {
   const input = document.getElementById('key');
+  const passwordInput = document.getElementById('password');
+  const deviceInput = document.getElementById('deviceId');
   const key = (input.value || '').trim();
+  const password = passwordInput.value || '';
+  const hwid = (deviceInput.value || '').trim().toLowerCase();
   const pill = document.getElementById('loginPill');
   const line = document.getElementById('loginNote');
   if (!key) { line.textContent = 'Nhập key trước.'; line.className = 'note bad'; return; }
+  if (!password) { line.textContent = 'Nhập mật khẩu.'; line.className = 'note bad'; return; }
+  if (hwid.length !== 64) { line.textContent = 'ID máy phải đúng 64 ký tự.'; line.className = 'note bad'; return; }
+  localStorage.setItem(fields.device, hwid);
 
   pill.textContent = 'Đang kiểm';
   line.className = 'note';
   line.textContent = '';
   try {
-    const response = await fetch('/menu/login', {
+    const response = await fetch(BASE + '/menu/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key, hwid: deviceId(), device_name: 'Web menu', ios_version: iosVersion() })
+      body: JSON.stringify({
+        key, password, hwid,
+        device_name: 'Web menu', ios_version: iosVersion()
+      })
     });
     const envelope = await response.json();
     if (!response.ok || !envelope.data) {
@@ -290,6 +392,9 @@ async function login() {
     session = payload.session || '';
     localStorage.setItem(fields.session, session);
     localStorage.setItem(fields.key, key);
+    localStorage.setItem(fields.plan, payload.plan || '');
+    localStorage.setItem(fields.expires, payload.expiresAt || '');
+    localStorage.setItem(fields.reset, String(payload.resetRemaining == null ? 2 : payload.resetRemaining));
     savedKey = key;
     paintPanel(payload);
     show('panel');
@@ -307,9 +412,12 @@ function paintPanel(payload) {
   const plan = [payload.plan, payload.expiresAt ? 'hết hạn ' + payload.expiresAt.slice(0, 10) : 'không giới hạn']
     .filter(Boolean).join(' · ');
   document.getElementById('planLine').textContent = plan || savedKey;
+  paintExpiry(payload.expiresAt || localStorage.getItem(fields.expires) || '');
+  document.getElementById('resetCount').textContent =
+    payload.resetRemaining == null ? (localStorage.getItem(fields.reset) || '2') : String(payload.resetRemaining);
 
   const started = performance.now();
-  fetch('/state', { cache: 'no-store' })
+  fetch(BASE + '/state', { cache: 'no-store' })
     .then((r) => r.json())
     .then((data) => {
       document.getElementById('ping').textContent = Math.round(performance.now() - started) + 'ms';
@@ -325,17 +433,46 @@ async function logout() {
   session = '';
   localStorage.removeItem(fields.session);
   localStorage.removeItem(fields.key);
+  localStorage.removeItem(fields.plan);
+  localStorage.removeItem(fields.expires);
+  localStorage.removeItem(fields.reset);
   savedKey = '';
   show('login');
   document.getElementById('loginPill').textContent = 'Sign in';
   document.getElementById('loginNote').textContent = '';
-  document.getElementById('key').value = '';
+  document.getElementById('password').value = '';
+  document.getElementById('deviceId').value = deviceId();
+}
+
+async function resetDevice() {
+  if (!session) { show('login'); return; }
+  if (!window.confirm('Reset thiết bị này khỏi key? Bạn còn tối đa 2 lần mỗi ngày.')) return;
+  const button = document.getElementById('resetDevice');
+  button.disabled = true;
+  note.className = 'note';
+  note.textContent = 'Đang reset…';
+  try {
+    const response = await post('/menu/reset', { session });
+    const envelope = await response.json();
+    const payload = envelope && envelope.data ? decodeEnvelope(envelope) : null;
+    if (response.ok && payload && payload.status === 'valid') {
+      window.alert(payload.message || 'Đã reset thiết bị.');
+      logout();
+      return;
+    }
+    throw new Error(payload && payload.message ? payload.message : 'Không reset được (' + response.status + ')');
+  } catch (error) {
+    note.className = 'note bad';
+    note.textContent = String(error.message || error);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function post(path, body) {
   const headers = { 'content-type': 'application/json' };
   if (session) headers['x-menu-session'] = session;
-  return fetch(path, { method: 'POST', headers, body: JSON.stringify(body === undefined ? {} : body) });
+  return fetch(BASE + path, { method: 'POST', headers, body: JSON.stringify(body === undefined ? {} : body) });
 }
 
 function ruleRow(title, sub, buttonLabel, buttonClass, onClick) {
@@ -470,7 +607,7 @@ function renderSuggestions(list) {
 
 async function refresh() {
   try {
-    const response = await fetch('/state', { cache: 'no-store' });
+    const response = await fetch(BASE + '/state', { cache: 'no-store' });
     const data = await response.json();
     document.getElementById('capTotal').textContent = data.captures.total;
     document.getElementById('menuPill').textContent = 'Active';
@@ -488,19 +625,38 @@ async function refresh() {
 
 document.getElementById('deviceKey').textContent = deviceId();
 document.getElementById('ios').textContent = iosVersion();
+document.getElementById('deviceId').value = deviceId();
 document.getElementById('loginBtn').onclick = login;
-document.getElementById('key').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') login();
+['key', 'password', 'deviceId'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && id !== 'deviceId') login();
+  });
 });
 document.getElementById('openMenu').onclick = () => show('menu');
 document.getElementById('back').onclick = () => { show('panel'); };
 document.getElementById('logout').onclick = logout;
+document.getElementById('resetDevice').onclick = resetDevice;
+setInterval(paintExpiryFromStore, 30000);
 
 if (LOGIN_ENABLED && session) {
   show('panel');
   document.getElementById('sessionKey').textContent = session;
   document.getElementById('planLine').textContent = savedKey || '—';
   document.getElementById('deviceKey').textContent = deviceId();
+  paintExpiryFromStore();
+  hydrateSession().then((result) => {
+    if (result === 'valid') return;
+    if (result === 'invalid') {
+      session = '';
+      savedKey = '';
+      localStorage.removeItem(fields.session);
+      localStorage.removeItem(fields.key);
+      show('login');
+      return;
+    }
+    document.getElementById('statePill').textContent = 'Offline';
+    document.getElementById('statePill').className = 'pill off';
+  });
 } else if (LOGIN_ENABLED) {
   show('login');
 } else {
@@ -511,8 +667,9 @@ if (LOGIN_ENABLED && session) {
   document.getElementById('sessionKey').textContent = 'không bật đăng nhập';
   document.getElementById('sessionKey').style.color = 'var(--muted)';
   document.getElementById('logout').hidden = true;
+  document.getElementById('resetDevice').hidden = true;
   show('panel');
-  fetch('/state', { cache: 'no-store' })
+  fetch(BASE + '/state', { cache: 'no-store' })
     .then((r) => r.json())
     .then((data) => {
       document.getElementById('ruleCount').textContent = data.rules.length;

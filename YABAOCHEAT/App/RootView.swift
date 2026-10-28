@@ -15,9 +15,6 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: language.hasChosen)
-
         .tint(Palette.accent)
-
-        .tint(.purple)
     }
 }

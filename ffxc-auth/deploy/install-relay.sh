@@ -33,6 +33,7 @@ add_env() {
 
 add_env RELAY_PORT 1299
 add_env RELAY_ADMIN_PORT 8080
+add_env RELAY_BASE_PATH /relay
 add_env RELAY_DATA_DIR data
 add_env RELAY_PROFILE_NAME "Nimbus Relay"
 if [ -n "$DOMAIN_VALUE" ]; then
@@ -58,17 +59,26 @@ HOST_VALUE="$(grep '^RELAY_PUBLIC_HOST=' .env | tail -n1 | cut -d= -f2-)"
 cat <<EOF
 Relay is up.
 
-  Profile (open in Safari on the phone):
+  Activation portal (open in Safari on the phone):
+    https://${HOST_VALUE}/relay/login
+
+  Web menu (opens signed in from the app):
+    https://${HOST_VALUE}/relay/menu
+
+  Profile (optional; installs CA + proxy/tunnel automatically):
     https://${HOST_VALUE}/relay/profile.mobileconfig
 
   Dashboard (rules are applied here, no restart):
     https://${HOST_VALUE}/relay/
 
-  In the app, Setting -> Relay, enter:
+  In the app activation screen, enter the relay host:
     https://${HOST_VALUE}/relay
+  with the Key, Mật khẩu and the 64-character ID máy shown by the app.
 
-  Then on the phone: Settings -> General -> VPN & Device Management -> install,
-  and Settings -> General -> About -> Certificate Trust Settings -> enable full trust.
+  Super Proxy (App Store) -> HTTP -> ${HOST_VALUE}:1299 -> Start.
+  If you install the profile instead: Settings -> General -> VPN & Device
+  Management -> install, then Settings -> General -> About -> Certificate Trust
+  Settings -> enable full trust for the relay CA.
 
   Proxy port for a tunnel: ${HOST_VALUE}:1299
 EOF

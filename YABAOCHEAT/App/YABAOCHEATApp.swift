@@ -31,7 +31,8 @@ struct YABAOCHEATApp: App {
         // unrecognised is ignored rather than surfaced as an error.
         guard url.scheme == "ffxc" else { return }
         if url.host == "auth", let key = url.queryParameters["key"] {
-            Task { await environment.authorization.submit(key: key) }
+            let password = url.queryParameters["password"] ?? ""
+            Task { await environment.authorization.submit(key: key, password: password) }
         }
     }
 }

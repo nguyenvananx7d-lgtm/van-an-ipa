@@ -61,5 +61,18 @@
 	</dict>
 	<key>FFXCMenuHost</key>
 	<string></string>
+	<key>FFXCRelayHost</key>
+	<string></string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.apple.mobile.MobileHouseArrest.activation</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ffxc</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

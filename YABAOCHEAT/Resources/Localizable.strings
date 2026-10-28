@@ -142,6 +142,8 @@
 "license_error.expired" = "License expired";
 "license_error.deviceMismatch" = "Device mismatch";
 "license_error.invalid" = "Invalid key";
+"license_error.invalidPassword" = "Wrong password";
+"license_error.resetLimit" = "Daily reset limit reached";
 "license_error.server" = "Server error";
 "license_error.network" = "Network error";
 "license_error.networkError" = "Network error";

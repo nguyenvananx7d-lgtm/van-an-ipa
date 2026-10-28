@@ -11,6 +11,9 @@ public final class AuthorizationStore: ObservableObject {
     /// Set when the server takes the session away; shown as a banner until the
     /// user acts on it.
     @Published public var revocationMessage: String?
+    /// Non-error feedback, such as the reset confirmation. Kept separate so
+    /// the gate can show it as information rather than as a failure.
+    @Published public var noticeMessage: String?
     /// Consecutive transport failures. Reset by any successful check.
     public private(set) var networkErrorCount: Int = 0
     /// Set when a launch-time integrity check fails. Sticky for the run: it is
@@ -37,15 +40,59 @@ public final class AuthorizationStore: ObservableObject {
     }
     // MARK: - entry points
     /// Validate a key the user typed. On success the key is persisted and the
-    /// session starts.
-    ///
-    /// This build answers locally: no round trip, no server-pinned digests. The
-    /// pins therefore come from the bundle itself, and the heartbeat stays off —
-    /// polling the real endpoint with a session the server never issued would
-    /// only get the session dropped a few heartbeats in.
-    public func submit(key: String) async {
+    /// session starts. With a relay configured the exchange happens at
+    /// `<host>/menu/login`; the relay is the authority on devices and resets.
+    /// Only when no relay is configured does the local adoption path below run,
+    /// and that path never starts a heartbeat.
+    public func submit(key: String, password: String = "") async {
         isRefreshing = true
         defer { isRefreshing = false }
+        noticeMessage = nil
+
+        // Relay-first: when a relay host is configured, the portal at
+        // `<host>/menu/login` is the authority. It binds this device, issues the
+        // session the menu uses and returns the same signed envelope as the
+        // desktop endpoint. Only with no relay configured does the build fall
+        // back to the local adoption path below.
+        let host = Self.relayHost
+        if !host.isEmpty {
+            do {
+                let activation = try await RelayActivationClient.activate(
+                    host: host,
+                    key: key,
+                    password: password,
+                    deviceKey: DeviceIdentityProvider.shared.activationId
+                )
+                try? SecureStore.storeLicenseKey(activation.key)
+                try? SecureStore.storePassword(password)
+                sessionToken = activation.session
+                let pins = PatchPayload.localPins()
+                expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
+                expectedNeutralSHA256 = pins.neutral
+                revocationMessage = nil
+                networkErrorCount = 0
+                apply(.valid(
+                    plan: activation.plan,
+                    displayKey: activation.key,
+                    expiresAt: activation.expiresAt ?? .distantFuture
+                ))
+                log.log(.auth, "authorized through relay \(host)")
+                return
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription
+                    ?? error.localizedDescription
+                revocationMessage = message
+                if let relay = error as? RelayActivationError,
+                   case let .rejected(code, _) = relay {
+                    apply(.invalid(code))
+                } else {
+                    apply(.invalid(.invalid))
+                }
+                log.log(.auth, "relay activation refused: \(message)")
+                return
+            }
+        }
+
         let pins = PatchPayload.localPins()
         expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
         expectedNeutralSHA256 = pins.neutral
@@ -80,7 +127,46 @@ public final class AuthorizationStore: ObservableObject {
             apply(.unknown)
             return
         }
-        await submit(key: key)
+        let password = (try? SecureStore.password()) ?? ""
+        await submit(key: key, password: password)
+    }
+
+    /// The relay host the portal lives on. Read from the same `UserDefaults`
+    /// key the Setup screen writes, so there is one value, not a copy per view,
+    /// with the build-time `FFXCRelayHost` as the fallback.
+    public static var relayHost: String {
+        RelayActivationClient.configuredHost
+    }
+
+    /// Release this device from the key at the portal. The relay enforces the
+    /// two-per-day limit; a refusal is surfaced verbatim because only the
+    /// server knows how many are left.
+    @discardableResult
+    public func resetDevice() async -> Bool {
+        guard let session = sessionToken, !session.isEmpty,
+              !Self.relayHost.isEmpty else {
+            revocationMessage = "Chưa có phiên relay để reset."
+            return false
+        }
+        do {
+            let message = try await RelayActivationClient.resetDevice(
+                host: Self.relayHost,
+                session: session
+            )
+            sessionToken = nil
+            SecureStore.clearLicenseKey()
+            SecureStore.clearPassword()
+            revocationMessage = nil
+            noticeMessage = message
+            apply(.unknown)
+            log.log(.auth, "relay device reset: \(message)")
+            return true
+        } catch {
+            revocationMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
+            log.log(.auth, "relay device reset refused")
+            return false
+        }
     }
     /// End the session locally and drop the stored key.
     public func logout() {
@@ -88,12 +174,14 @@ public final class AuthorizationStore: ObservableObject {
         revalidationTask = nil
         Task { await self.live.stop() }
         SecureStore.clearLicenseKey()
+        SecureStore.clearPassword()
         sessionToken = nil
         catalog = []
         expectedPatchSHA256 = nil
         expectedNeutralSHA256 = nil
         menu.apply(catalog: [], sections: [])
         revocationMessage = nil
+        noticeMessage = nil
         networkErrorCount = 0
         apply(.unknown)
         log.log(.auth, "logged out")
@@ -215,7 +303,7 @@ public final class AuthorizationStore: ObservableObject {
     // MARK: - dates
     /// The server sends ISO-8601 with or without fractional seconds; both are
     /// accepted, and a malformed date is treated as absent rather than fatal.
-    static func parseDate(_ raw: String?) -> Date? {
+    nonisolated static func parseDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

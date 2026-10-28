@@ -41,27 +41,34 @@ Kiểm tra nhanh: mở `https://<domain>/relay/` trên điện thoại, phải t
 
 ---
 
-## 2. Cài profile trên điện thoại (2 lần chạm + 1 công tắc)
+## 2. Kích hoạt trên điện thoại (theo MIZZE 4.0)
 
-1. Mở app Nimbus → **Setting** → mục **Relay**.
-2. Dán `https://<domain>/relay` vào ô, bấm **Install**.
-   Safari mở ra → **Allow** → thông báo *Profile Downloaded*.
-3. **Settings → General → VPN & Device Management** → bấm profile → **Install**.
-4. **Settings → General → About → Certificate Trust Settings** → bật công tắc
-   cho *Nimbus Relay CA*.
+1. Mở app → màn hình kích hoạt → nhập **Key**, **Mật khẩu**, **ID máy**
+   (64 ký tự, bấm nút sao chép) và **máy chủ relay** (`game.tenmien.com` hoặc
+   `https://game.tenmien.com/relay`). Bấm **Enter**.
+2. App mở màn hình **Cài đặt relay**. Bấm **Tải chứng chỉ** → Safari mở
+   `https://<domain>/relay/ca.cer` → **Cho phép**.
+3. **Settings → General → VPN & Device Management** → cài profile chứng chỉ.
+4. **Settings → General → About → Certificate Trust Settings** → bật tin cậy
+   đầy đủ cho chứng chỉ relay. Bước này bắt buộc và **không app nào làm hộ được**.
+5. Cài **Super Proxy** từ App Store (nút trong app), chọn **HTTP**, nhập
+   `<domain>:1299` (đúng host/cổng app hiển thị), bấm **Start**. Giữ app chạy nền.
+6. Quay lại app → **Mở menu**, hoặc mở `https://<domain>/relay/menu` bằng Safari.
+   Portal đăng nhập là `https://<domain>/relay/login` — cùng ba ô Key / Mật khẩu /
+   ID máy. Mỗi thiết bị được **reset 2 lần mỗi ngày** ở `/relay/device` hoặc trong menu.
 
-Bước 4 là bắt buộc và **không app nào làm hộ được** (iOS chặn). Không bật thì
-relay không đọc được gì cả.
+Không cần cài profile VPN nếu bạn chỉ dùng Super Proxy. Profile
+`/relay/profile.mobileconfig` vẫn dùng được khi muốn proxy/tunnel tự động cho cả 4G.
 
 ---
 
 ## 3. Kiểm tra đường truyền
 
-Trong app, mục **Relay**, bấm **Check**:
+Trong màn hình **Cài đặt relay**, bấm **Kiểm tra**:
 
-- `Relay OK — N capture(s)` → traffic đã về relay.
-- `Relay unreachable: ...` → chưa vào được (xem bảng lỗi bên dưới).
-- `Relay answered HTTP 404` → sai đường dẫn, nhớ hậu tố `/relay`.
+- `Relay OK — N request đã bắt` → traffic đã về relay.
+- `Không kết nối được: ...` → chưa vào được (xem bảng lỗi bên dưới).
+- `HTTP 404` → sai đường dẫn, nhớ hậu tố `/relay` nếu Caddy có tiền tố đó.
 
 Nếu dùng 4G (không phải Wi-Fi đã cấu hình proxy), cần bật tunnel IKEv2 — xem mục 6.
 

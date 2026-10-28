@@ -124,6 +124,11 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
     public func deviceSigningKey() throws -> Curve25519.Signing.PrivateKey {
         if let existing = try? SecureStore.readData(account: DeviceIdentityProvider.signingHandleKey),
            let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: existing) {
+            // The key survives an app update; the handle may not. Re-create the
+            // handle so the activation ID does not fall back to "unbound".
+            if UserDefaults.standard.string(forKey: DeviceIdentityProvider.credentialKey) == nil {
+                UserDefaults.standard.set(UUID().uuidString, forKey: DeviceIdentityProvider.credentialKey)
+            }
             return key
         }
         let key = Curve25519.Signing.PrivateKey()
@@ -138,6 +143,22 @@ public final class DeviceIdentityProvider: @unchecked Sendable {
 
     public var devicePublicKey: String {
         (try? deviceSigningKey().publicKey.rawRepresentation.base64EncodedString()) ?? ""
+    }
+
+    /// The 64-character handle the activation portal shows as `ID máy`.
+    ///
+    /// It is a SHA-256 over the install credential and the hardware id: stable
+    /// across launches, different after a reinstall, and never the raw UDID.
+    /// The relay binds the key to this string, the same way the web portal binds
+    /// its own per-browser key.
+    public var activationId: String {
+        // `credentialId` is written when the signing key is generated. Make
+        // sure that has happened before hashing, otherwise the first launch
+        // would publish the literal "unbound" seed and change after a restart.
+        _ = try? deviceSigningKey()
+        let seed = "\(credentialId)|\(hwid)|\(mac)"
+        let digest = SHA256.hash(data: Data(seed.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - simulator / hardware gate
@@ -225,5 +246,24 @@ public enum SecureStore {
 
     public static func clearLicenseKey() {
         delete(account: "license")
+    }
+
+    /// Second factor for relay activation, kept beside the key so a relaunch can
+    /// revalidate without asking the user to type it again.
+    public static func storePassword(_ password: String) throws {
+        guard !password.isEmpty else {
+            delete(account: "license-password")
+            return
+        }
+        try write(Data(password.utf8), account: "license-password")
+    }
+
+    public static func password() throws -> String? {
+        guard let data = try readData(account: "license-password") else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    public static func clearPassword() {
+        delete(account: "license-password")
     }
 }

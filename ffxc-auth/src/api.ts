@@ -3,7 +3,13 @@ import { config } from "./config.js";
 import { signPayload } from "./crypto.js";
 import { asNumber, asString, readJson, sendJson } from "./http.js";
 import type { DeviceRecord, LicenseRecord, Store } from "./store.js";
-import { normalizeKey } from "./store.js";
+import {
+  MAX_DEVICE_RESETS_PER_DAY,
+  normalizeKey,
+  resetsUsedToday,
+  utcDay,
+  verifyPassword,
+} from "./store.js";
 import type { DeploymentBlock, Envelope, LicensePayload } from "./protocol.js";
 import type { KeyObject } from "node:crypto";
 
@@ -77,6 +83,12 @@ export class Api {
       return;
     }
 
+    const action = asString(body.action);
+    if (action === "resetDevice") {
+      await this.resetDevice(res, body);
+      return;
+    }
+
     const key = asString(body.key);
     if (key) {
       this.authorize(res, body, key);
@@ -107,6 +119,9 @@ export class Api {
     if (license.expiresAt !== null && license.expiresAt < now) {
       return this.deny(res, "expired", `This key expired on ${iso(license.expiresAt)}.`);
     }
+    if (!verifyPassword(license, asString(body.password))) {
+      return this.deny(res, "invalidPassword", "Mật khẩu không đúng.");
+    }
 
     const hwid = this.deviceHandle(body);
     if (!hwid) return this.deny(res, "invalid", "Device could not be identified.");
@@ -131,6 +146,7 @@ export class Api {
         sessionTtl: config.sessionTtl,
         sessionExpiresAt: iso(session.expiresAt),
         ...(license.expiresAt !== null ? { expiresAt: iso(license.expiresAt) } : {}),
+        resetRemaining: Math.max(0, MAX_DEVICE_RESETS_PER_DAY - resetsUsedToday(license, now * 1000)),
         ...this.digestMetadata(),
         deployment: deploymentBlock(now),
       },
@@ -183,6 +199,74 @@ export class Api {
     return { metadata: { digests: { patch: config.patchDigest, neutral: config.neutralDigest } } };
   }
 
+  // MARK: - device reset
+
+  /**
+   * Unbind the device that owns a live menu session and spend one of the two
+   * daily resets. The reference portal exposes the same action as
+   * "Reset thiết bị · 2 lần mỗi ngày"; counting is key-wide, not per device,
+   * because the limit protects the key from being passed around.
+   */
+  private async resetDevice(res: ServerResponse, body: Record<string, unknown>): Promise<void> {
+    const now = nowSec();
+    const token = asString(body.session);
+    const session = token ? this.store.getSession(token) : undefined;
+
+    if (!session || session.expiresAt < now) {
+      if (session) await this.store.removeSession(token);
+      return this.deny(res, "sessionInvalid", "Phiên đã hết hạn; đăng nhập lại.", asString(body.mac) || null);
+    }
+
+    const license = this.store.getLicense(session.key);
+    if (!license || license.status !== "active") {
+      const status = license?.status === "deleted" ? "deleted" : "revoked";
+      return this.deny(res, status, "Key không còn hoạt động.", asString(body.mac) || null);
+    }
+    if (license.expiresAt !== null && license.expiresAt < now) {
+      return this.deny(res, "expired", `Key hết hạn ngày ${iso(license.expiresAt)}.`, asString(body.mac) || null);
+    }
+
+    const used = resetsUsedToday(license, now * 1000);
+    if (used >= MAX_DEVICE_RESETS_PER_DAY) {
+      return this.deny(
+        res,
+        "resetLimit",
+        `Đã dùng hết ${MAX_DEVICE_RESETS_PER_DAY} lần reset hôm nay.`,
+        asString(body.mac) || null,
+      );
+    }
+
+    // Only the device behind this session is released. Other devices on the
+    // same key keep their bindings; the admin console can clear them all.
+    delete license.devices[session.hwid];
+    for (const other of this.store.allSessions()) {
+      if (other.key === license.key && other.hwid === session.hwid) {
+        await this.store.removeSession(other.token);
+      }
+    }
+
+    const nextCount = used + 1;
+    license.resetDay = utcDay(now * 1000);
+    license.resetCount = nextCount;
+    await this.store.saveLicense(license);
+
+    const remaining = MAX_DEVICE_RESETS_PER_DAY - nextCount;
+    this.sendEnvelope(
+      res,
+      {
+        status: "valid",
+        plan: license.plan,
+        licenseLabel: license.key,
+        ...(license.expiresAt !== null ? { expiresAt: iso(license.expiresAt) } : {}),
+        message: `Đã reset thiết bị · còn ${remaining} lần hôm nay.`,
+        resetRemaining: remaining,
+        deployment: deploymentBlock(now),
+      },
+      asString(body.mac) || null,
+      0,
+    );
+  }
+
   // MARK: - heartbeat
 
   private heartbeat(res: ServerResponse, body: Record<string, unknown>, token: string): void {
@@ -223,6 +307,7 @@ export class Api {
         sessionTtl: config.sessionTtl,
         sessionExpiresAt: iso(session.expiresAt),
         ...(license.expiresAt !== null ? { expiresAt: iso(license.expiresAt) } : {}),
+        resetRemaining: Math.max(0, MAX_DEVICE_RESETS_PER_DAY - resetsUsedToday(license, now * 1000)),
         deployment: deploymentBlock(now),
       },
       device?.mac || mac,

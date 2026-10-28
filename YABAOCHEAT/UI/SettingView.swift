@@ -172,21 +172,33 @@ struct SettingView: View {
     /// The relay (`ffxc-auth/src/proxy`) is the model that leaves the game binary
     /// alone: the device trusts one certificate, its traffic goes through the
     /// relay, and the anti-cheat report is edited in transit instead of the
-    /// client being patched. Everything is a link and a field here — the only
-    /// step an app is not allowed to do for the user is the certificate trust
-    /// toggle, so the note says exactly where it lives.
-    /// Builds a relay URL from whatever the user typed: `host`, `host:port`,
-    /// `https://host`, or `https://host/relay` when Caddy fronts the relay.
-    private func relayURL(_ suffix: String) -> URL? {
-        RelayEndpoint(host: relayHost)?.url(suffix)
+    /// client being patched. The MIZZE flow lives on the Setup screen; this
+    /// section is the shortcut for the same endpoints while the advanced tools
+    /// are open.
+    private var relayCertificateURL: URL? {
+        RelayActivationClient.certificateURL(host: relayHost)
     }
 
-    private var relayProfileURL: URL? { relayURL("profile.mobileconfig") }
+    private var relayProfileURL: URL? {
+        RelayActivationClient.profileURL(host: relayHost)
+    }
+
+    private var relayPortalURL: URL? {
+        RelayActivationClient.loginURL(
+            host: relayHost,
+            key: auth.status.displayKey ?? "",
+            deviceKey: device.activationId
+        )
+    }
+
+    private var relayProbeURL: URL? {
+        RelayActivationClient.baseURL(from: relayHost)?.appendingPathComponent("state")
+    }
 
     /// One round of truth from the relay: it answers with the capture count, so
     /// "did my traffic reach it?" is a button instead of a guess.
     private func probeRelay() {
-        guard let url = relayURL("captures?limit=1") else { return }
+        guard let url = relayProbeURL else { return }
         relayProbe = String(localized: "relay_checking")
         Task {
             var request = URLRequest(url: url)
@@ -196,7 +208,8 @@ struct SettingView: View {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                let count = object?["count"] as? Int
+                let captures = object?["captures"] as? [String: Any]
+                let count = captures?["total"] as? Int
                 await MainActor.run {
                     if code == 200, let count {
                         relayProbe = String(format: String(localized: "relay_probe_ok"), count)
@@ -237,38 +250,63 @@ struct SettingView: View {
             .padding(.horizontal, Metrics.rowPaddingH)
             .rowDivider()
 
-            Text(String(localized: "relay_host_hint"))
-                .font(.caption.monospaced())
-                .foregroundStyle(Palette.textFaint)
-                .padding(.horizontal, Metrics.rowPaddingH)
-                .padding(.vertical, 8)
-                .rowDivider()
+            HStack(spacing: 8) {
+                Button {
+                    if let url = relayCertificateURL { UIApplication.shared.open(url) }
+                } label: {
+                    Label("Chứng chỉ", systemImage: "checkmark.shield")
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(relayCertificateURL == nil)
 
-            HStack(spacing: 10) {
-                Text(String(localized: "relay_install_caption"))
-                    .font(.footnote)
-                    .foregroundStyle(Palette.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
+                Button {
+                    if let url = relayPortalURL { UIApplication.shared.open(url) }
+                } label: {
+                    Label("Portal", systemImage: "person.badge.key")
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(relayPortalURL == nil)
+
                 Button {
                     if let url = relayProfileURL { UIApplication.shared.open(url) }
                 } label: {
-                    Text(String(localized: "relay_install"))
+                    Label("Profile", systemImage: "arrow.down.circle")
                 }
                 .buttonStyle(ChipButtonStyle())
                 .disabled(relayProfileURL == nil)
+
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, Metrics.rowPaddingH)
             .padding(.vertical, 11)
             .rowDivider()
 
-            Text(String(localized: "relay_trust_note"))
+            Text("Cài chứng chỉ, bật Super Proxy với địa chỉ bên dưới, rồi đăng nhập portal bằng Key, Mật khẩu và ID máy. Tin cậy chứng chỉ trong Settings → General → About → Certificate Trust Settings. Profile chỉ cần khi bạn muốn cấu hình proxy/tunnel tự động.")
                 .font(.caption)
                 .foregroundStyle(Palette.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Metrics.rowPaddingH)
                 .padding(.vertical, 11)
                 .rowDivider()
+
+            HStack(spacing: 10) {
+                Text(RelayActivationClient.proxyEndpoint(from: relayHost) ?? String(localized: "relay_check_caption"))
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(Palette.textDim)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let endpoint = RelayActivationClient.proxyEndpoint(from: relayHost) {
+                    Button {
+                        UIPasteboard.general.string = endpoint
+                    } label: {
+                        Label("Chép", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(ChipButtonStyle())
+                }
+            }
+            .padding(.horizontal, Metrics.rowPaddingH)
+            .padding(.vertical, 11)
+            .rowDivider()
 
             HStack(spacing: 10) {
                 Text(relayProbe.isEmpty ? String(localized: "relay_check_caption") : relayProbe)
@@ -282,7 +320,7 @@ struct SettingView: View {
                     Text(String(localized: "relay_check"))
                 }
                 .buttonStyle(ChipButtonStyle())
-                .disabled(relayURL("captures?limit=1") == nil)
+                .disabled(relayProbeURL == nil)
             }
             .padding(.horizontal, Metrics.rowPaddingH)
             .padding(.vertical, 11)

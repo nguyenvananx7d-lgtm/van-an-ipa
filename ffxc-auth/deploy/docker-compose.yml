@@ -21,11 +21,19 @@ services:
       dockerfile: deploy/Dockerfile
     image: ffxc-auth:latest
     restart: unless-stopped
+    depends_on:
+      - auth
     # Same image, second entry point: the TLS relay the device's profile points
     # at. Capture and rules live under the shared data volume.
     command: ["node", "dist/src/proxy/server.js"]
     env_file:
       - ../.env
+    # The relay talks to the auth service by its compose name. These two
+    # override the localhost defaults in .env, which are for running the relay
+    # directly on the host outside Docker.
+    environment:
+      AUTH_URL: http://auth:8787/api
+      AUTH_ADMIN_URL: http://auth:8787
     volumes:
       - ../data:/app/data
     ports:

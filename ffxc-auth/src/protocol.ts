@@ -7,6 +7,7 @@
 export interface AuthorizationRequest {
   product?: string;
   key?: string;
+  password?: string;
   device_credential_id?: string;
   device_public_key?: string;
   hwid?: string;
@@ -59,6 +60,8 @@ export interface LicensePayload {
   command?: unknown;
   credential?: CredentialBlock;
   licenseLabel?: string;
+  /** Device resets left today; also shown by the portal's device page. */
+  resetRemaining?: number;
 }
 
 export interface Envelope {

@@ -16,6 +16,8 @@ export interface DashboardView {
   publicHost: string;
   proxyPort: number;
   adminPort: number;
+  /** Mount prefix when a reverse proxy strips `/relay`; empty at the root. */
+  basePath: string;
   rules: Rule[];
   captures: { total: number; recent: CaptureRecord[] };
   suggestions: Suggestion[];
@@ -34,6 +36,8 @@ function escapeHtml(value: string): string {
 
 /** The server-rendered shell; everything dynamic arrives from `/state`. */
 export function renderDashboard(view: DashboardView): string {
+  const base = escapeHtml(view.basePath);
+  const baseJson = JSON.stringify(view.basePath).replace(/</g, "\\u003c");
   const routeStep = view.transport
     ? {
         title: `Bật ${view.name} VPN`,
@@ -133,10 +137,10 @@ export function renderDashboard(view: DashboardView): string {
   <ol style="list-style:none;margin:0;padding:0">${stepHtml}</ol>
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px">
-    <a href="/profile.mobileconfig" style="background:#7dd3c0;color:#06110f;text-decoration:none;
+    <a href="${base}/profile.mobileconfig" style="background:#7dd3c0;color:#06110f;text-decoration:none;
        border-radius:10px;padding:10px 16px;font-weight:700">Cài profile</a>
     ${view.menuUrl
-      ? `<a href="/menu" style="background:#161c1b;color:#cfe0db;text-decoration:none;
+      ? `<a href="${base}/menu" style="background:#161c1b;color:#cfe0db;text-decoration:none;
            border:1px solid #24302e;border-radius:10px;padding:10px 16px;font-weight:600">Mở menu</a>`
       : ""}
     <button id="clear" style="background:#161c1b;color:#cfe0db;border:1px solid #24302e;
@@ -163,6 +167,7 @@ export function renderDashboard(view: DashboardView): string {
 </div>
 
 <script>
+const BASE = ${baseJson};
 const note = document.getElementById('note');
 let rules = [];
 
@@ -175,7 +180,7 @@ if (adminToken) sessionStorage.setItem('nimbus.admin', adminToken);
 async function post(path, body) {
   const headers = { 'content-type': 'application/json' };
   if (adminToken) headers['x-admin-token'] = adminToken;
-  const response = await fetch(path, {
+  const response = await fetch(BASE + path, {
     method: 'POST',
     headers,
     body: body === undefined ? '{}' : JSON.stringify(body)
@@ -303,7 +308,7 @@ function renderSuggestions(list) {
 
 async function refresh() {
   try {
-    const response = await fetch('/state', { cache: 'no-store' });
+    const response = await fetch(BASE + '/state', { cache: 'no-store' });
     const state = await response.json();
     document.getElementById('dot').style.background = '#7dd3c0';
     document.getElementById('meta').textContent =

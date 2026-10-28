@@ -56,6 +56,7 @@ Environment:
 | `RELAY_PASSTHROUGH` | — | comma-separated hosts spliced as raw TCP instead of intercepted |
 | `RELAY_FEATURES` | `data/features.json` | which feature switches are on |
 | `RELAY_PUBLIC_HOST` | `127.0.0.1` | host printed in the profile/dashboard |
+| `RELAY_BASE_PATH` | — | mount prefix when Caddy strips `/relay` before forwarding; set to `/relay` with the bundled Caddyfile |
 | `RELAY_WIFI_SSID` | — | when set, the profile also configures that network's HTTP proxy |
 | `RELAY_VPN_SERVER` | — | public address of the tunnel endpoint; absent = Wi-Fi-only relay |
 | `RELAY_VPN_MODE` | `l2tp` | `l2tp` (shared secret) or `ikev2` (username/password) |
@@ -67,8 +68,62 @@ Environment:
 | `AUTH_URL` | `http://127.0.0.1:8787/api` | where `/menu/login` forwards the key |
 | `AUTH_ADMIN_URL` / `AUTH_ADMIN_TOKEN` | `http://127.0.0.1:8787` / — | session liveness check + rule-write gate; empty token = open relay |
 
-Admin endpoints: `/` dashboard, `/menu`, `/profile.mobileconfig`, `/ca.cer`,
-`/captures?limit=200`.
+Inside the compose stack the relay service overrides the two URLs to
+`http://auth:8787/api` and `http://auth:8787`; the localhost defaults are for
+running the relay directly on the host. `AUTH_ADMIN_TOKEN` falls back to
+`ADMIN_TOKEN`, which both services already share.
+
+Admin endpoints: `/` dashboard, `/login` + `/auth/enter` (MIZZE-style portal),
+`/device` + `/device/reset` (session and reset budget), `/menu` +
+`/menu/login` + `/menu/session` + `/menu/reset`, `/profile.mobileconfig`,
+`/ca.cer`, `/captures?limit=200`, `/state`.
+
+## Activation portal
+
+The relay serves its own portal so a phone can activate without installing the
+IPA:
+
+| Route | Method | Contract |
+| --- | --- | --- |
+| `/login` | GET | Key, Mật khẩu, ID máy, Enter; prefilled by `?key=&k=` |
+| `/auth/enter` | POST form | `key`, `password`, `deviceId`; device ID must be exactly 64 hex characters |
+| `/device` | GET | Session card: plan, expiry countdown, reset counter |
+| `/device/reset` | POST form | `session`; releases the bound device and spends one reset |
+| `/menu/login` | POST JSON | Same key/password/device exchange for the app and web menu |
+| `/menu/session` | GET | `session`; returns plan, key expiry and resets left for a live token (401 when dead) |
+| `/menu/reset` | POST JSON | `{ session }`; returns the signed envelope verbatim |
+
+The portal calls the auth backend's `/api` with `hwid` set to the 64-character
+device ID. A successful exchange sets an HttpOnly `relay_session` cookie and
+redirects to `/device`; the map behind the cookie is in-memory, so a relay
+restart asks the user to sign in again. Reset accounting is key-wide and
+per-UTC-day (maximum two), enforced in the auth backend, not in the page.
+
+The app and the portal open the menu with `?session=…` in the URL. The page
+does not trust that value for the panel's plan/expiry/reset numbers: it asks
+`/menu/session`, which checks the token against the auth backend's live session
+list and returns the licence facts. A dead token sends the page back to the
+login form; an unreachable relay marks the panel offline instead of signing the
+user out.
+
+The certificate at `/ca.cer` is the relay's own CA. A `.cer` issued elsewhere
+cannot sign for this relay; install the one this endpoint serves.
+
+
+## Why the profile looks like this
+
+One file carries four payloads, in this order, and the order is the install
+order a person actually follows:
+
+| Payload | Why it exists |
+| --- | --- |
+| `com.apple.security.root` | The relay terminates TLS per host; without this certificate trusted, every intercepted connection fails the handshake. |
+| `com.apple.vpn.managed` | A route to the relay that does not depend on which Wi-Fi the phone is on. Cellular matters: a match started on 4G would otherwise bypass the relay entirely. |
+| `Proxies` (inside the VPN payload) | This is the part that is easy to get wrong. A proxy set on the Wi-Fi interface dies the moment the device leaves that network. A proxy **inside the VPN payload** lives exactly as long as the tunnel, on every interface, with no manual entry. |
+| `com.apple.webClip.managed` | A control surface on the home screen without shipping, signing or sideloading an app. It is a bookmarked page, not a binary, so there is nothing to install over. |
+
+The root certificate is the only thing the device has to be told to trust, and
+that toggle is the one step no profile can perform.
 
 ## Why the profile looks like this
 
@@ -97,6 +152,12 @@ that toggle is the one step no profile can perform.
 5. Launch the game. If the home-screen web clip was in the profile, it now
    opens the relay menu.
 
+The MIZZE-style path uses the App Store app **Super Proxy** instead of the
+profile's VPN payload: install only `/ca.cer`, trust it, then add an **HTTP**
+proxy pointing at `<host>:1299` and press Start. The relay listens on `1299` by
+default. This is the path the in-app Setup screen walks through; the profile is
+still useful when a VPN route is wanted for cellular.
+
 ## Tunnel endpoint
 
 `deploy/l2tp/setup.sh` installs and configures strongswan + xl2tpd on the relay
@@ -122,13 +183,16 @@ capture shows it as an upstream error, not as silence.
 
 | Screen | What it shows | Where the values come from |
 | --- | --- | --- |
-| Login | key input | `POST /menu/login` → relay → auth backend `/api` |
-| Panel | session key, device key, iOS, rule count, ping | `payload.session`, a per-browser id, `navigator.userAgent`, `/state` round-trip |
+| Login | Key, Mật khẩu, ID máy | `POST /menu/login` → relay → auth backend `/api` |
+| Panel | session key, device key, iOS, plan, expiry, resets, rule count, ping | `payload.session`, the 64-hex device ID, `navigator.userAgent`, `/state` round-trip |
 | Web menu | rule switches + suggestions | the relay's live rule array |
 
 The panel is the "proof of life" card: the session key is the token the auth
 backend issued, and the three right-hand values are measured in the browser, so
-a broken relay shows as a red ping rather than a green badge.
+a broken relay shows as a red ping rather than a green badge. The reset button
+posts the session to `/menu/reset`, which forwards to the auth backend and
+returns the signed envelope unchanged; the count shown is what the server
+actually has left.
 
 **Session validation never uses the heartbeat endpoint.** Reusing it would push
 the app's sequence forward and the next app poll would come back
@@ -145,10 +209,12 @@ Gating:
   `/?token=<ADMIN_TOKEN>`; it keeps the token in `sessionStorage` and sends it
   on every write.
 
-The device key is a random 128-bit id in `localStorage`, not the phone's UDID —
-a web page cannot read the hardware identifier, and pretending otherwise would
-make the card lie. It is the handle the auth backend binds the licence to, so
-clearing Safari data means a new binding (`reset-devices` on the console).
+The device key is a 256-bit random id rendered as 64 lowercase hex characters,
+not the phone's UDID — a web page cannot read the hardware identifier, and
+pretending otherwise would make the card lie. The app passes its own 64-hex
+`ID máy` through the `?k=` parameter so the portal and the app bind the same
+device. Clearing Safari data means a new binding, which is what the two daily
+resets exist for.
 
 ## Passthrough hosts
 

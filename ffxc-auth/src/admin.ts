@@ -1,9 +1,26 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 import { asNumber, asString, readJson, sendHtml, sendJson } from "./http.js";
-import type { LicenseRecord, Store } from "./store.js";
+import {
+  hashPassword,
+  MAX_DEVICE_RESETS_PER_DAY,
+  resetsUsedToday,
+  utcDay,
+  type LicenseRecord,
+  type Store,
+} from "./store.js";
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
+
+/** 12 characters from an alphabet without look-alikes, easy to read aloud. */
+function generatePassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = randomBytes(12);
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 1) out += alphabet[bytes[i]! % alphabet.length];
+  return out;
+}
 
 interface LicenseView {
   key: string;
@@ -16,6 +33,8 @@ interface LicenseView {
   deviceCount: number;
   note: string;
   createdAt: number;
+  hasPassword: boolean;
+  resetsToday: number;
   devices: Array<{
     hwid: string;
     mac: string;
@@ -50,6 +69,8 @@ function view(license: LicenseRecord, activeHwids: Set<string>): LicenseView {
     deviceCount: devices.length,
     note: license.note,
     createdAt: license.createdAt,
+    hasPassword: Boolean(license.passwordHash),
+    resetsToday: resetsUsedToday(license),
     devices,
   };
 }
@@ -95,15 +116,27 @@ export class Admin {
       if (method === "GET" && parts.length === 3) {
         const now = nowSec();
         sendJson(res, 200, {
-          sessions: this.store.allSessions().map((s) => ({
-            token: s.token,
-            key: s.key,
-            hwid: s.hwid,
-            sequence: s.sequence,
-            lastSeenAt: s.lastSeenAt,
-            expiresAt: s.expiresAt,
-            expired: s.expiresAt < now,
-          })),
+          sessions: this.store.allSessions().map((s) => {
+            const license = this.store.getLicense(s.key);
+            return {
+              token: s.token,
+              key: s.key,
+              hwid: s.hwid,
+              sequence: s.sequence,
+              lastSeenAt: s.lastSeenAt,
+              expiresAt: s.expiresAt,
+              expired: s.expiresAt < now,
+              // Read-only facts the relay's menu panel paints after a boot
+              // session. Kept additive so older admin clients ignore them.
+              plan: license?.plan ?? null,
+              expiresAtISO: license?.expiresAt
+                ? new Date(license.expiresAt * 1000).toISOString()
+                : null,
+              resetRemaining: license
+                ? Math.max(0, MAX_DEVICE_RESETS_PER_DAY - resetsUsedToday(license))
+                : 0,
+            };
+          }),
         });
         return;
       }
@@ -134,6 +167,12 @@ export class Admin {
         const count = Math.min(500, Math.max(1, asNumber(body.count, 1)));
         const days = asNumber(body.expiresInDays, 0);
         const maxDevices = Math.max(1, asNumber(body.maxDevices, 1));
+        const requestedPassword = asString(body.password);
+        if (requestedPassword && (requestedPassword.length < 8 || requestedPassword.length > 128)) {
+          sendJson(res, 400, { error: "invalid_password" });
+          return;
+        }
+        const password = requestedPassword || generatePassword();
         try {
           const made = this.store.createLicenses({
             plan: asString(body.plan) || "pro",
@@ -142,8 +181,9 @@ export class Admin {
             note: asString(body.note),
             count,
             keys: customKeys,
+            password,
           });
-          sendJson(res, 201, { keys: made.map((l) => view(l, new Set())) });
+          sendJson(res, 201, { keys: made.map((l) => view(l, new Set())), password });
         } catch (err) {
           const message = err instanceof Error ? err.message : "error";
           const cut = message.indexOf(":");
@@ -198,8 +238,24 @@ export class Admin {
           if (s.key === license.key) await this.store.removeSession(s.token);
         }
         license.devices = {};
+        license.resetDay = utcDay();
+        license.resetCount = 0;
         await this.store.saveLicense(license);
         sendJson(res, 200, view(license, new Set()));
+        return;
+      }
+      if (method === "POST" && action === "password") {
+        const body = (await readJson(req)) ?? {};
+        const password = asString(body.password);
+        if (password.length < 8 || password.length > 128) {
+          sendJson(res, 400, { error: "invalid_password" });
+          return;
+        }
+        const credential = hashPassword(password);
+        license.passwordHash = credential.hash;
+        license.passwordSalt = credential.salt;
+        await this.store.saveLicense(license);
+        sendJson(res, 200, { ok: true, hasPassword: true });
         return;
       }
     }
@@ -615,6 +671,11 @@ const ADMIN_HTML = `<!doctype html>
         <div><label class="f" for="days">Số ngày</label><input id="days" type="number" value="30" min="0"><div class="field-hint">0 = vĩnh viễn</div></div>
         <div><label class="f" for="maxDevices">Thiết bị tối đa</label><input id="maxDevices" type="number" value="1" min="1"><div class="field-hint">số máy được phép dùng</div></div>
         <div class="full">
+          <label class="f" for="password">Mật khẩu menu</label>
+          <input id="password" placeholder="Để trống = tự tạo 12 ký tự" autocomplete="new-password">
+          <div class="field-hint">Người dùng nhập cùng key khi kích hoạt (8–128 ký tự). Key cũ chưa có mật khẩu vẫn dùng được.</div>
+        </div>
+        <div class="full">
           <div class="f" style="display:flex;align-items:center;justify-content:space-between">
             <span>Ghi chú</span>
             <button type="button" class="btn sm" data-action="auto-note" style="padding:2px 9px">Tự động</button>
@@ -991,7 +1052,8 @@ const ADMIN_HTML = `<!doctype html>
       plan: state.plan,
       expiresInDays: Number(el('days').value),
       maxDevices: Number(el('maxDevices').value),
-      note: el('note').value
+      note: el('note').value,
+      password: el('password').value
     };
     if (state.mode === 'manual') {
       var pieces = el('customKey').value.split(/[,;]/);
@@ -1010,14 +1072,23 @@ const ADMIN_HTML = `<!doctype html>
     }
     api('POST', '/admin/api/keys', body).then(function (r) {
       toast('Đã tạo ' + r.keys.length + ' key', 'ok');
+      if (r.password) {
+        var list = r.keys.map(function (k) { return k.key; }).join(String.fromCharCode(10));
+        window.prompt(
+          'Lưu lại key và mật khẩu (dùng chung). Bấm Ctrl/Cmd+C để sao chép:',
+          list + String.fromCharCode(10, 10) + 'Mật khẩu: ' + r.password
+        );
+      }
       el('note').value = '';
       el('customKey').value = '';
+      el('password').value = '';
       closeMint();
       boot();
     }).catch(function (e) {
       if (e.message === 'unauthorized') return;
       if (e.code === 'key_exists') toast('Key đã tồn tại: ' + e.detail, 'err');
       else if (e.code === 'invalid_key') toast('Key không hợp lệ', 'err');
+      else if (e.code === 'invalid_password') toast('Mật khẩu phải từ 8 đến 128 ký tự', 'err');
       else toast('Lỗi: ' + e.message, 'err');
     });
   }

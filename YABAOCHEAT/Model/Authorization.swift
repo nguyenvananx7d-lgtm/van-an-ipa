@@ -13,6 +13,8 @@ public enum LicenseErrorCode: String, CaseIterable, Sendable {
     case expired
     case deviceMismatch
     case invalid
+    case invalidPassword
+    case resetLimit
 
     // transport / envelope
     case server
@@ -44,7 +46,7 @@ public enum LicenseErrorCode: String, CaseIterable, Sendable {
         switch self {
         case .revoked, .deleted, .expired, .deviceMismatch, .invalid:
             return true
-        case .valid, .server, .network, .networkError, .malformedResponse,
+        case .valid, .invalidPassword, .resetLimit, .server, .network, .networkError, .malformedResponse,
              .invalidSignature, .replayDetected, .sessionInvalid, .secureStorage,
              .integrityFailed, .fileUnavailable, .writeFailed, .containerNotFound,
              .processResetUnavailable, .launchFailed, .supported,

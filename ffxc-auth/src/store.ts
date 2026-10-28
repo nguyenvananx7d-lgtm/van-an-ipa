@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
 
 export type LicenseStatus = "active" | "revoked" | "deleted";
@@ -26,6 +26,44 @@ export interface LicenseRecord {
   note: string;
   createdAt: number;
   devices: Record<string, DeviceRecord>;
+  /** scrypt hash + salt for the second factor the portal asks for. */
+  passwordHash?: string;
+  passwordSalt?: string;
+  /** UTC day (`YYYY-MM-DD`) and count for the two-resets-per-day rule. */
+  resetDay?: string;
+  resetCount?: number;
+}
+
+/** The reference portal allows two device resets per calendar day. */
+export const MAX_DEVICE_RESETS_PER_DAY = 2;
+
+export function utcDay(now: number = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+/** Hash a portal password with a fresh 16-byte salt. */
+export function hashPassword(password: string): { hash: string; salt: string } {
+  const salt = randomBytes(16).toString("hex");
+  return { hash: scryptSync(password, salt, 32).toString("hex"), salt };
+}
+
+/**
+ * Verify the password sent with an activation or reset.
+ *
+ * Keys minted before the password column existed have no hash. They keep
+ * working without a second factor, so an existing deployment is not locked
+ * out by upgrading the backend.
+ */
+export function verifyPassword(license: LicenseRecord, password: string): boolean {
+  if (!license.passwordHash || !license.passwordSalt) return true;
+  const expected = Buffer.from(license.passwordHash, "hex");
+  const actual = scryptSync(password, license.passwordSalt, expected.length);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+/** Resets already spent today, ignoring a counter left over from yesterday. */
+export function resetsUsedToday(license: LicenseRecord, now: number = Date.now()): number {
+  return license.resetDay === utcDay(now) ? (license.resetCount ?? 0) : 0;
 }
 
 export interface SessionRecord {
@@ -134,18 +172,25 @@ export class Store {
     note: string;
     count: number;
     keys?: string[];
+    password?: string;
   }): LicenseRecord[] {
     const made: LicenseRecord[] = [];
-    const build = (key: string): LicenseRecord => ({
-      key,
-      plan: opts.plan,
-      status: "active",
-      expiresAt: opts.expiresAt,
-      maxDevices: opts.maxDevices,
-      note: opts.note,
-      createdAt: Math.floor(Date.now() / 1000),
-      devices: {},
-    });
+    const build = (key: string): LicenseRecord => {
+      const credential = opts.password ? hashPassword(opts.password) : undefined;
+      return {
+        key,
+        plan: opts.plan,
+        status: "active",
+        expiresAt: opts.expiresAt,
+        maxDevices: opts.maxDevices,
+        note: opts.note,
+        createdAt: Math.floor(Date.now() / 1000),
+        devices: {},
+        ...(credential
+          ? { passwordHash: credential.hash, passwordSalt: credential.salt }
+          : {}),
+      };
+    };
 
     // Admin-supplied keys take priority over random ones.
     const wanted = (opts.keys ?? []).map((k) => this.customKey(k)).filter(Boolean);
