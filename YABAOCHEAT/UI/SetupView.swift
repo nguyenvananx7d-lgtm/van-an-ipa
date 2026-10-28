@@ -191,12 +191,8 @@ struct SetupView: View {
                         var controls = menu.controls
                         controls.preferModernInjection = value
                         if !value {
-                            // The container route is the one that leaves files
-                            // behind: force the sweep and the consume-once pass
-                            // on with it, so the staged patch lives on disk
-                            // only long enough for the cold start to read it.
+                            // The sweep is not optional on the container route.
                             controls.antiBan = true
-                            controls.consumePayload = true
                         }
                         menu.controls = controls
                     }
@@ -213,15 +209,29 @@ struct SetupView: View {
                 }
 
                 if !menu.controls.preferModernInjection {
-                    HStack(spacing: 7) {
-                        Image(systemName: "shield.lefthalf.filled")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Palette.good)
-                        Text("Chế độ sạch: anti-ban + consume-once bật cứng — patch bị xoá khỏi container ~15s sau khi game khởi động.")
-                            .font(.ui(11))
-                            .foregroundStyle(Palette.textDim)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
+                    // Persistent staging (the MIZZE behaviour): the patch stays
+                    // in the container, the game loads it on every launch, and
+                    // the player never presses Inject again. Off means the
+                    // consume-once pass deletes the files fifteen seconds after
+                    // the game boots — cleaner on disk, but every session needs
+                    // one Inject press first.
+                    Toggle(isOn: Binding(
+                        get: { !menu.controls.consumePayload },
+                        set: { keep in
+                            var controls = menu.controls
+                            controls.consumePayload = !keep
+                            menu.controls = controls
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Giữ patch trong container")
+                                .font(.ui(14, weight: .medium))
+                                .foregroundStyle(Palette.text)
+                            Text("Bật: stage một lần, mở game là có menu (kiểu MIZZE). Tắt: patch bị xoá sau ~15s, an toàn hơn nhưng mỗi phiên phải Kích hoạt lại.")
+                                .font(.ui(11))
+                                .foregroundStyle(Palette.textFaint)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
 
