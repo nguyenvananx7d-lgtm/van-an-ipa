@@ -11,8 +11,12 @@
 
 #include <stdint.h>
 
-/* One frame: handle taps, draw the icon and the panel. Main thread (Repaint). */
+/* One frame: draw the icon and the panel. Main thread (Repaint). */
 void ghost_menu_frame(void);
+
+/* Handle a tap at the current IMGUI mouse position. Called from the OnGUI
+   replacement on MouseDown events. */
+void ghost_menu_tap(void);
 
 /* Image receiver for the channel's 'GHIM' frames. Safe to call from the poll
    thread; the texture is built on the main queue. */

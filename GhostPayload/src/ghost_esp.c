@@ -399,19 +399,17 @@ void ghost_esp_draw(void) {
 
 static void ongui_replacement(void *self) {
     if (self == driverComponent) {
+        int32_t type = -1;
         if (ghost.event_current != NULL && ghost.event_getType != NULL) {
             Il2CppObject *event = ghost_call_obj(ghost.event_current, NULL, NULL);
-            int32_t type = -1;
             if (event != NULL) ghost_call_i32(ghost.event_getType, event, NULL, &type);
-            if (type == 7) { /* EventType.Repaint */
-                ghost_aim_reassert();
-                ghost_esp_draw();
-                ghost_menu_frame();
-            }
-        } else {
+        }
+        if (type == 7 || type < 0) { /* Repaint (or no event API at all) */
             ghost_aim_reassert();
             ghost_esp_draw();
             ghost_menu_frame();
+        } else if (type == 0) { /* MouseDown — the tap that opens the menu */
+            ghost_menu_tap();
         }
         /* Never run the original on our driver: its private fields are null. */
         return;

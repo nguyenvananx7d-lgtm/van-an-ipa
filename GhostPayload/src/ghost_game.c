@@ -109,6 +109,7 @@ int ghost_game_resolve(void) {
 
     ghost.event_current = methodOf(ghost.eventClass, "get_current", 0);
     ghost.event_getType = methodOf(ghost.eventClass, "get_type", 0);
+    ghost.event_getMousePosition = methodOf(ghost.eventClass, "get_mousePosition", 0);
     ghost.sceneTool_ongui = methodOf(ghost.sceneTool, "OnGUI", 0);
     ghost.screen_width = methodOf(ghost.screenClass, "get_width", 0);
     ghost.screen_height = methodOf(ghost.screenClass, "get_height", 0);

@@ -114,10 +114,20 @@ static int in_rect(float x, float y, GhostRect r) {
     return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
 }
 
-static void handle_taps(void) {
-    if (!ghost_touch_began()) return;
+/* Pointer taps arrive as IMGUI MouseDown events, the same route the managed
+   patch uses. GUI/mouse coordinates are top-left, matching the icon rects. */
+void ghost_menu_tap(void) {
+    if (!ghost.ready) return;
+    if (ghost.event_current == NULL || ghost.event_getMousePosition == NULL ||
+        ghost.vec2_readValue == NULL) {
+        return;
+    }
+    Il2CppObject *event = ghost_call_obj(ghost.event_current, NULL, NULL);
+    if (event == NULL) return;
+    Il2CppObject *position = ghost_call_obj(ghost.event_getMousePosition, event, NULL);
+    if (position == NULL) return;
     float tx = 0.0f, ty = 0.0f;
-    if (!ghost_touch_position(&tx, &ty)) return;
+    if (!ghost_call_vec2(ghost.vec2_readValue, position, NULL, &tx, &ty)) return;
 
     GhostRect icon = icon_rect();
     if (in_rect(tx, ty, icon)) {
@@ -239,7 +249,6 @@ void ghost_menu_frame(void) {
 
     layout((float)width, (float)height);
     ghost_draw_ensure_style();
-    handle_taps();
 
     draw_icon();
     if (menuOpen) draw_panel((float)height);

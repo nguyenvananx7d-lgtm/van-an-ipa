@@ -110,6 +110,7 @@ typedef struct {
 
     const MethodInfo *event_current;
     const MethodInfo *event_getType;
+    const MethodInfo *event_getMousePosition;
     const MethodInfo *sceneTool_ongui;
     const MethodInfo *screen_width;
     const MethodInfo *screen_height;
