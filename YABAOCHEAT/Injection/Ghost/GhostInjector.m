@@ -77,7 +77,10 @@ static pid_t ghost_process_id(CFStringRef bundle) {
    name, and a wrong guess is just an empty scan, not a wrong kill. */
 static int ghost_comm_is_game(const char *comm) {
     if (comm == NULL || comm[0] == '\0') return 0;
-    if (strcasestr(comm, "freefire") != NULL) return 1;
+    /* p_comm is capped at 16 bytes, so "com.dts.freefireth" arrives as
+       "com.dts.freefi" — the match has to work on the truncated spelling. */
+    if (strcasestr(comm, "com.dts") != NULL) return 1;
+    if (strcasestr(comm, "freefi") != NULL) return 1;
     if (strcasestr(comm, "free fire") != NULL) return 1;
     if (strcasestr(comm, "garena") != NULL) return 1;
     if (strcasestr(comm, "gff") != NULL) return 1;
