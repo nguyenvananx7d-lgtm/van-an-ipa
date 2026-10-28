@@ -11,6 +11,8 @@
 #ifndef GHOST_GAME_H
 #define GHOST_GAME_H
 
+#include <stddef.h>
+
 #include "ghost.h"
 #include "ghost_il2cpp.h"
 

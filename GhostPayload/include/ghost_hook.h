@@ -11,6 +11,7 @@
 #ifndef GHOST_HOOK_H
 #define GHOST_HOOK_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Returns 0 on success. `original_out` receives a callable trampoline that
