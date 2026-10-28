@@ -12,6 +12,7 @@ struct SetupView: View {
     @EnvironmentObject var auth: AuthorizationStore
     @EnvironmentObject var language: LanguageStore
     @EnvironmentObject var inject: InjectStore
+    @EnvironmentObject var menu: MenuStore
 
     let onOpenSettings: () -> Void
 
@@ -172,6 +173,14 @@ struct SetupView: View {
     private var injectCard: some View {
         SectionGroup(title: "Kích hoạt", symbol: "bolt.fill") {
             VStack(alignment: .leading, spacing: 12) {
+                // Which title the injector launches. Free Fire and Free Fire Max
+                // are different bundle ids; picking the wrong one fails the
+                // launch before the payload can ever map.
+                SegmentedControl(
+                    selection: $menu.selectedGame,
+                    items: Game.allCases.map { SegItem(value: $0, title: $0.displayName) }
+                )
+
                 let route = InjectPlan.route()
                 HStack(spacing: 8) {
                     Image(systemName: route == .ghost ? "sparkles" : "waveform.path.ecg")

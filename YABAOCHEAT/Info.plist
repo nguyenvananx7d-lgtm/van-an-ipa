@@ -32,6 +32,13 @@
 		<string>Rajdhani-Regular.ttf</string>
 		<string>Cinzel.ttf</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>freefire</string>
+		<string>dtsgff</string>
+		<string>com.dts.freefireth</string>
+		<string>com.dts.freefiremax</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Used only to hand the DNS profile to Safari over a loopback connection.</string>
 	<key>UILaunchScreen</key>

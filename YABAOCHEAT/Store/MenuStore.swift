@@ -56,8 +56,8 @@ public final class MenuStore: ObservableObject {
         // Read the backing store directly: `storedGame` is not reachable from
         // phase-1 init before `selectedGame` has a value.
         let stored = UserDefaults.standard.string(forKey: Game.defaultsKey)
-            ?? Game.freeFireMax.rawValue
-        selectedGame = Game(rawValue: stored) ?? .freeFireMax
+            ?? Game.freeFire.rawValue
+        selectedGame = Game(rawValue: stored) ?? .freeFire
 
         // Every game starts in .checking; the resolution pass fills it in.
         for g in Game.allCases {
