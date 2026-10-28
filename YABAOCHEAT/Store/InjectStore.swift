@@ -187,8 +187,8 @@ public final class InjectStore: ObservableObject {
                     // The selected title may not be the one installed; when the
                     // other title resolves, report that one instead.
                     let other: Game = game == .freeFire ? .freeFireMax : .freeFire
-                    if case .resolved = bridge.resolve(game: other) {
-                        return (other, .resolved)
+                    if case .resolved(let otherData) = bridge.resolve(game: other) {
+                        return (other, .resolved(otherData))
                     }
                 }
                 return (game, primary)
