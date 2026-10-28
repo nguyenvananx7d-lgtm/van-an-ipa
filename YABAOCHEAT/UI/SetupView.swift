@@ -190,6 +190,14 @@ struct SetupView: View {
                     set: { value in
                         var controls = menu.controls
                         controls.preferModernInjection = value
+                        if !value {
+                            // The container route is the one that leaves files
+                            // behind: force the sweep and the consume-once pass
+                            // on with it, so the staged patch lives on disk
+                            // only long enough for the cold start to read it.
+                            controls.antiBan = true
+                            controls.consumePayload = true
+                        }
                         menu.controls = controls
                     }
                 )) {
@@ -201,6 +209,19 @@ struct SetupView: View {
                             .font(.ui(11))
                             .foregroundStyle(Palette.textFaint)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if !menu.controls.preferModernInjection {
+                    HStack(spacing: 7) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Palette.good)
+                        Text("Chế độ sạch: anti-ban + consume-once bật cứng — patch bị xoá khỏi container ~15s sau khi game khởi động.")
+                            .font(.ui(11))
+                            .foregroundStyle(Palette.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
                 }
 
