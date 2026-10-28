@@ -140,13 +140,11 @@ static void handle_taps(void) {
 
 static void draw_icon(void) {
     GhostRect icon = icon_rect();
-    if (iconTexture != NULL) {
-        void *args[2] = { &icon, iconTexture };
-        ghost_call_void(ghost.gui_drawTexture, NULL, args);
-        return;
-    }
-    /* Fallback before the image frame arrives: a dark plate with the accent
-       edge and the initials. */
+
+    /* Plate and frame first, unconditionally. The texture arriving over the
+       channel can still be transparent (a decode hiccup) or a fake-null Unity
+       object; drawing the plate under it keeps the entry point visible in
+       every one of those states. */
     ghost_draw_fill(icon, rgba(0.03f, 0.04f, 0.06f, 0.88f));
     GhostColor edge = accentColor(0.95f);
     ghost_draw_fill((GhostRect){ icon.x, icon.y, icon.width, 2.0f }, edge);
@@ -155,6 +153,22 @@ static void draw_icon(void) {
     ghost_draw_fill((GhostRect){ icon.x, icon.y, 2.0f, icon.height }, edge);
     ghost_draw_fill((GhostRect){ icon.x + icon.width - 2.0f, icon.y,
                                  2.0f, icon.height }, edge);
+
+    /* A single accent pip, always drawn: it marks the tap target even when the
+       texture is still transparent or missing entirely. */
+    float pip = 5.0f * uiScale(lastScreenH);
+    if (pip < 4.0f) pip = 4.0f;
+    ghost_draw_fill((GhostRect){ icon.x + 4.0f, icon.y + 4.0f, pip, pip },
+                    edge);
+
+    if (iconTexture != NULL) {
+        GhostColor white = { 1.0f, 1.0f, 1.0f, 1.0f };
+        void *colorArgs[1] = { &white };
+        ghost_call_void(ghost.gui_setColor, NULL, colorArgs);
+        void *args[2] = { &icon, iconTexture };
+        ghost_call_void(ghost.gui_drawTexture, NULL, args);
+        return;
+    }
     ghost_draw_label(icon, "VA", rgba(0.95f, 0.97f, 1.0f, 0.95f),
                      (int)(iconSize * 0.30f));
 }
