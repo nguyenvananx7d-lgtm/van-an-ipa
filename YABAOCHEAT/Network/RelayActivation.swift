@@ -218,7 +218,12 @@ public enum RelayActivationClient {
         } catch is DecodingError {
             throw RelayActivationError.malformed
         } catch {
-            throw RelayActivationError.unreachable(error.localizedDescription)
+            // Carry the exact URL in the message: "could not connect" without
+            // the scheme and port has cost more debugging time than any other
+            // error in this flow.
+            throw RelayActivationError.unreachable(
+                "\(url.absoluteString) — \(error.localizedDescription)"
+            )
         }
     }
 
