@@ -83,12 +83,12 @@ private enum GhostCRC32 {
 private extension Data {
     mutating func putU16(_ value: UInt16) {
         var little = value.littleEndian
-        withUnsafeBytes(of: &little) { append(contentsOf: $0) }
+        Swift.withUnsafeBytes(of: &little) { append(contentsOf: $0) }
     }
 
     mutating func putU32(_ value: UInt32) {
         var little = value.littleEndian
-        withUnsafeBytes(of: &little) { append(contentsOf: $0) }
+        Swift.withUnsafeBytes(of: &little) { append(contentsOf: $0) }
     }
 
     mutating func putFloat(_ value: Float) {
