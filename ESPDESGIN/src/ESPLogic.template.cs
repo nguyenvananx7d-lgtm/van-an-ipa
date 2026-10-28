@@ -225,6 +225,19 @@ namespace ProjectEspPatch
         // mirrored here, where the bindings are legal.
         private static bool sceneMenuOpen;
 
+        // ---- floating orb: the in-match entry point ----
+        // The panel lives behind this reticle disc at the right edge. One tap
+        // opens the panel, drag moves the orb. Drawn by the patch itself, so
+        // it works on any iOS the IFix patch loads on — no task port, no
+        // injected dylib, no certificate of its own.
+        private static Vector2 orbPosition = new Vector2(-1f, -1f);
+        private static bool orbDragging;
+        private static bool orbMoved;
+        private static float orbGrabDX;
+        private static float orbGrabDY;
+        private static float orbLastTouch = -100f;
+        private const float OrbSize = 48f;
+
         private static IList CurrentPlayers()
         {
             {{MATCH_TYPE}} match = GameFacade.CurrentMatch();
@@ -1992,6 +2005,45 @@ namespace ProjectEspPatch
             return Mathf.Clamp((float)screenWidth * 0.46f, 300f, 430f);
         }
 
+        private static Rect OrbRect(float scale, int screenWidth, int screenHeight)
+        {
+            float size = OrbSize * scale;
+            if (orbPosition.x < 0f || orbPosition.y < 0f)
+            {
+                orbPosition = new Vector2(screenWidth - size - 16f * scale,
+                    (float)screenHeight * 0.45f);
+            }
+            orbPosition = new Vector2(
+                Mathf.Clamp(orbPosition.x, 4f, Mathf.Max(4f, (float)screenWidth - size - 4f)),
+                Mathf.Clamp(orbPosition.y, 4f, Mathf.Max(4f, (float)screenHeight - size - 4f)));
+            return new Rect(orbPosition.x, orbPosition.y, size, size);
+        }
+
+        private static void DrawOrb(float scale, int screenWidth, int screenHeight)
+        {
+            Rect rect = OrbRect(scale, screenWidth, screenHeight);
+            Vector2 center = new Vector2(rect.x + rect.width * 0.5f,
+                rect.y + rect.height * 0.5f);
+            float radius = rect.width * 0.5f;
+            // Idle orb sits quiet: low fill, thin ring. It wakes only under a
+            // recent touch, so a clean screen never carries a bright marker.
+            bool awake = Time.unscaledTime - orbLastTouch < 4f;
+            float ringAlpha = awake ? 0.85f : 0.42f;
+            float fillAlpha = awake ? 0.55f : 0.30f;
+            Color accent = BaseColor();
+            Color fill = new Color(0.02f, 0.03f, 0.04f, fillAlpha);
+            for (float inner = radius - 1f; inner > 1f; inner -= 2f)
+            {
+                DrawCircle(center, inner, 20, fill, screenWidth, screenHeight);
+            }
+            DrawCircle(center, radius, 44, WithAlpha(accent, ringAlpha),
+                screenWidth, screenHeight);
+            DrawCircle(center, radius * 0.66f, 36, WithAlpha(accent, ringAlpha * 0.5f),
+                screenWidth, screenHeight);
+            DrawCircle(center, 2.2f * scale, 10, WithAlpha(accent, ringAlpha),
+                screenWidth, screenHeight);
+        }
+
         private static float HeaderHeight(float scale) { return 58f * scale; }
         private static float HeadingHeight(float scale) { return 50f * scale; }
         private static float FooterHeight(float scale) { return 54f * scale; }
@@ -2741,12 +2793,9 @@ namespace ProjectEspPatch
                 if (menuTapCount >= 5)
                 {
                     menuTapCount = 0;
-                    // The in-game panel is retired. Every control the patch
-                    // reads is owned by the app UI and the web panel, which
-                    // re-stage the config live — a second, in-match menu was
-                    // a redundant interactive surface and an easy signature.
-                    // The gesture stays recognised but opens nothing.
-                    menuOpen = false;
+                    // The gesture stays as a recovery path; the orb is the
+                    // normal entry point.
+                    menuOpen = !menuOpen;
                 }
                 menuLastTapTime = nowTime;
             }
@@ -2890,6 +2939,35 @@ namespace ProjectEspPatch
                 {
                     currentEvent.Use();
                 }
+            }
+            else if (!menuOpen && currentEvent.type == EventType.MouseDown
+                && OrbRect(uiScale, screenWidth, screenHeight).Contains(pointer))
+            {
+                orbDragging = true;
+                orbMoved = false;
+                orbLastTouch = Time.unscaledTime;
+                Rect orb = OrbRect(uiScale, screenWidth, screenHeight);
+                orbGrabDX = pointer.x - orb.x;
+                orbGrabDY = pointer.y - orb.y;
+                currentEvent.Use();
+            }
+            else if (orbDragging && currentEvent.type == EventType.MouseDrag)
+            {
+                orbPosition = new Vector2(pointer.x - orbGrabDX, pointer.y - orbGrabDY);
+                orbMoved = true;
+                orbLastTouch = Time.unscaledTime;
+                currentEvent.Use();
+            }
+            else if (orbDragging && currentEvent.type == EventType.MouseUp)
+            {
+                orbDragging = false;
+                orbLastTouch = Time.unscaledTime;
+                if (!orbMoved)
+                {
+                    menuOpen = true;
+                }
+                orbMoved = false;
+                currentEvent.Use();
             }
 
             state = (state & ~EspMask) | (mask & EspMask);
@@ -3077,6 +3155,14 @@ namespace ProjectEspPatch
                         GUI.matrix = Matrix4x4.identity;
                         DrawMenu(panelX, panelY, panelWidth, panelHeight, uiScale,
                             mask, pixel);
+                    }
+                    else if (mask != 0)
+                    {
+                        // Nothing armed means nothing on screen: the orb only
+                        // exists while at least one feature is live, and it
+                        // dims itself after four idle seconds.
+                        GUI.matrix = Matrix4x4.identity;
+                        DrawOrb(uiScale, screenWidth, screenHeight);
                     }
                 }
             }
