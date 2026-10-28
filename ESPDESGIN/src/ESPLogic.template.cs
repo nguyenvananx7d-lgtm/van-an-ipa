@@ -2019,46 +2019,44 @@ namespace ProjectEspPatch
             return new Rect(orbPosition.x, orbPosition.y, size, size);
         }
 
-        private static void DrawOrb(float scale, int screenWidth, int screenHeight)
+        private static void DrawOrb(float scale, int screenWidth, int screenHeight,
+            Texture2D pixel)
         {
             Rect rect = OrbRect(scale, screenWidth, screenHeight);
-            Vector2 center = new Vector2(rect.x + rect.width * 0.5f,
-                rect.y + rect.height * 0.5f);
-            float radius = rect.width * 0.5f;
-            // Idle orb sits quiet: low fill, thin ring. It wakes under a recent
-            // touch, so a clean screen never carries a bright badge.
             bool awake = Time.unscaledTime - orbLastTouch < 4f;
-            float ringAlpha = awake ? 0.90f : 0.45f;
-            float fillAlpha = awake ? 0.62f : 0.32f;
+            float alpha = awake ? 1f : 0.62f;
             Color accent = BaseColor();
-            Color fill = new Color(0.02f, 0.03f, 0.04f, fillAlpha);
-            for (float inner = radius - 1f; inner > 1f; inner -= 2f)
-            {
-                DrawCircle(center, inner, 22, fill, screenWidth, screenHeight);
-            }
-            DrawCircle(center, radius, 48, WithAlpha(accent, ringAlpha),
-                screenWidth, screenHeight);
-            // Four ticks and a centre pip: the app's mark, so the floating
-            // entry reads as a product icon rather than a bare reticle.
-            float outer = radius * 0.94f;
-            float innerTick = radius * 0.64f;
-            Color tick = WithAlpha(accent, ringAlpha * 0.9f);
-            DrawGlowLine(new Vector2(center.x - outer, center.y),
-                new Vector2(center.x - innerTick, center.y), tick, 0f,
-                screenWidth, screenHeight);
-            DrawGlowLine(new Vector2(center.x + innerTick, center.y),
-                new Vector2(center.x + outer, center.y), tick, 0f,
-                screenWidth, screenHeight);
-            DrawGlowLine(new Vector2(center.x, center.y - outer),
-                new Vector2(center.x, center.y - innerTick), tick, 0f,
-                screenWidth, screenHeight);
-            DrawGlowLine(new Vector2(center.x, center.y + innerTick),
-                new Vector2(center.x, center.y + outer), tick, 0f,
-                screenWidth, screenHeight);
-            DrawCircle(center, radius * 0.26f, 26, WithAlpha(accent, ringAlpha * 0.85f),
-                screenWidth, screenHeight);
-            DrawCircle(center, 2.2f * scale, 10, WithAlpha(accent, ringAlpha),
-                screenWidth, screenHeight);
+            Color edge = WithAlpha(accent, 0.85f * alpha);
+            float r = 12f * scale;
+
+            // Same draw path as the panel: GUI textures, never GL. GL calls in
+            // OnGUI render nothing on this game build, which is how the orb
+            // managed to be invisible while the panel worked.
+            Fill(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height),
+                new Color(0f, 0f, 0f, 0.30f * alpha), pixel);
+            RoundedFill(rect, new Color(0.02f, 0.03f, 0.04f, 0.82f * alpha), pixel, r);
+            RoundedFill(new Rect(rect.x, rect.y, rect.width, 2f), edge, pixel, 1f);
+            RoundedFill(new Rect(rect.x, rect.y + rect.height - 2f, rect.width, 2f),
+                edge, pixel, 1f);
+            RoundedFill(new Rect(rect.x, rect.y, 2f, rect.height), edge, pixel, 1f);
+            RoundedFill(new Rect(rect.x + rect.width - 2f, rect.y, 2f, rect.height),
+                edge, pixel, 1f);
+
+            // Reticle: a thin inner square ring and a centre pip.
+            Rect ring = new Rect(rect.x + rect.width * 0.24f,
+                rect.y + rect.height * 0.24f,
+                rect.width * 0.52f, rect.height * 0.52f);
+            Color ringColor = WithAlpha(accent, 0.75f * alpha);
+            RoundedFill(new Rect(ring.x, ring.y, ring.width, 1.5f), ringColor, pixel, 1f);
+            RoundedFill(new Rect(ring.x, ring.y + ring.height - 1.5f, ring.width, 1.5f),
+                ringColor, pixel, 1f);
+            RoundedFill(new Rect(ring.x, ring.y, 1.5f, ring.height), ringColor, pixel, 1f);
+            RoundedFill(new Rect(ring.x + ring.width - 1.5f, ring.y, 1.5f, ring.height),
+                ringColor, pixel, 1f);
+            float pip = Mathf.Max(3f, 4f * scale);
+            Fill(new Rect(rect.x + rect.width * 0.5f - pip * 0.5f,
+                rect.y + rect.height * 0.5f - pip * 0.5f, pip, pip),
+                WithAlpha(accent, alpha), pixel);
         }
 
         private static float HeaderHeight(float scale) { return 58f * scale; }
@@ -3179,7 +3177,7 @@ namespace ProjectEspPatch
                         // exists while at least one feature is live, and it
                         // dims itself after four idle seconds.
                         GUI.matrix = Matrix4x4.identity;
-                        DrawOrb(uiScale, screenWidth, screenHeight);
+                        DrawOrb(uiScale, screenWidth, screenHeight, pixel);
                     }
                 }
             }
