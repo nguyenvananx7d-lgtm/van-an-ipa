@@ -408,7 +408,11 @@ public final class InjectStore: ObservableObject {
         var controls = menu.controls
         controls.preferModernInjection = false
         menu.controls = controls
-        await install(expectedDigest: nil, monitorMs: 2_000)
+        // The local route has no server pin; the bundled blob's own SHA is the
+        // pin. Passing nil here made PatchPayload.verify() refuse the install
+        // with integrityMismatch (RuntimeInstaller.InstallError 3).
+        let bundledDigest = (try? PatchPayload.bundled())?.sha256
+        await install(expectedDigest: bundledDigest, monitorMs: 2_000)
     }
 
     /// The relay route: no file is ever planted; the game pulls the patch
@@ -545,7 +549,11 @@ public final class InjectStore: ObservableObject {
         _ = NetworkShield.shared.preflightForInject(log: log)
 
         do {
-            log.log(.launch, InjectPlan.decision())
+            if menu.controls.preferModernInjection {
+                log.log(.launch, InjectPlan.decision())
+            } else {
+                log.log(.launch, "local inject: container route (no relay)")
+            }
             if menu.controls.preferModernInjection {
                 await modernInject()
                 return
