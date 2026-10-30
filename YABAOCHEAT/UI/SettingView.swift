@@ -31,10 +31,10 @@ struct SettingView: View {
             // The old network-shield block lived here; it is gone, because the
             // relay owns traffic now and two overlapping network screens made
             // the same settings look like they contradicted each other.
-            relaySection
+            if !LocalMode.enabled { relaySection }
             antiBanSection
             exploit
-            licenseInfo
+            if !LocalMode.enabled { licenseInfo }
             compatibility
             languageSection
             support
@@ -85,7 +85,7 @@ struct SettingView: View {
             SectionGroup(title: String(localized: "section_exploit"), symbol: "cpu") {
                 exploitRow
                 nativeHookRow
-                trafficRow
+                if !LocalMode.enabled { trafficRow }
             }
         }
     }
@@ -522,8 +522,10 @@ struct SettingView: View {
             ActionRow(symbol: "doc.text.magnifyingglass", label: String(localized: "system_log")) {
                 showLog = true
             }
-            ActionRow(symbol: "rectangle.portrait.and.arrow.right", label: String(localized: "logout_account"), tint: Palette.bad) {
-                showLogout = true
+            if !LocalMode.enabled {
+                ActionRow(symbol: "rectangle.portrait.and.arrow.right", label: String(localized: "logout_account"), tint: Palette.bad) {
+                    showLogout = true
+                }
             }
         }
     }

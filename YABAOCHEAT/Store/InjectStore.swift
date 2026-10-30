@@ -363,6 +363,54 @@ public final class InjectStore: ObservableObject {
         }
     }
 
+    /// Local-only delivery — the path the `LocalMode` home uses.
+    ///
+    /// No key, no relay, no CA. Ghost is tried first because it leaves nothing
+    /// on disk; the container is the fallback that still ships ESP/aim on an
+    /// install the task-port route cannot enter. The native-hook row stays a
+    /// manual diagnostic in Settings; it plants a marker, not a feature set.
+    public func localInject() async {
+        guard !isRunningExploit else {
+            status = "Exploit đang chạy — chờ xong rồi bật"
+            return
+        }
+        guard menu.controls.hasAnyPatchFeature else {
+            set(.ready, "Nothing enabled — game left untouched")
+            log.log(.antiBan, "local inject skipped: no patch feature is enabled")
+            return
+        }
+
+        if GhostInjector.payloadAvailable() && GhostInjector.taskPortAllowed() {
+            status = "Ghost: mapping payload…"
+            let result = await GhostRuntime.install(game: game, controls: menu.controls) { line in
+                AppLog.shared.log(.launch, line)
+            }
+            switch result {
+            case .success:
+                isActive = true
+                activeRoute = .ghost
+                menu.injected.insert(game)
+                menu.injectStates[game] = .ready
+                status = "Ghost mapped — ESP + aim live"
+                log.log(.launch, "local inject: ghost mapped")
+                return
+            case .failure(let error):
+                let reason = (error as? GhostRuntime.Failure).map { ghostFailureText($0) }
+                    ?? error.localizedDescription
+                log.log(.launch, "local inject: ghost failed — \(reason); container fallback")
+            }
+        }
+
+        // Container staging is local too: the app writes the patch it already
+        // ships into the game's own Data container, then launches the game.
+        activeRoute = nil
+        log.log(.launch, "local inject: container staging")
+        var controls = menu.controls
+        controls.preferModernInjection = false
+        menu.controls = controls
+        await install(expectedDigest: nil, monitorMs: 2_000)
+    }
+
     /// The relay route: no file is ever planted; the game pulls the patch
     /// through its own CodePatchUrl, which the relay rewrites. Native-assist
     /// rides alongside as the game's own second aim layer.

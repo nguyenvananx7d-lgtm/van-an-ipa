@@ -159,18 +159,18 @@ public enum GhostRuntime {
     }
 
     private static func iconRGBA() -> Data? {
-        let name = "6c89dae3-70e2-4452-8fe9-142574afb2ca_1"
-        let url = Bundle.main.url(forResource: name, withExtension: "jpg",
+        let name = "vortex-icon-128"
+        let url = Bundle.main.url(forResource: name, withExtension: "png",
                                   subdirectory: "icons")
-            ?? Bundle.main.url(forResource: name, withExtension: "jpg")
+            ?? Bundle.main.url(forResource: name, withExtension: "png")
         guard let url, let image = UIImage(contentsOfFile: url.path) else { return nil }
 
         let size = 96
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         let rendered = renderer.image { context in
             let rect = CGRect(x: 0, y: 0, width: size, height: size)
-            context.cgContext.addEllipse(in: rect.insetBy(dx: 2, dy: 2))
-            context.cgContext.clip()
+            // The PNG already carries rounded corners and transparency; keep
+            // them instead of clipping to a circle, so the wings/keys survive.
             image.draw(in: rect)
         }
 

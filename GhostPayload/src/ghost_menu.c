@@ -34,7 +34,7 @@ static const MenuRow rows[] = {
 };
 #define MENU_ROWS ((int)(sizeof(rows) / sizeof(rows[0])))
 
-static int menuOpen;
+static int menuOpen = 1;
 static Il2CppObject *iconTexture;
 static float iconX = -1.0f, iconY = -1.0f;
 static float iconSize, panelW, rowH, titleH;
@@ -80,7 +80,7 @@ static void layout(float screenW, float screenH) {
     iconSize = 58.0f * ui;
     panelW = 196.0f * ui;
     rowH = 29.0f * ui;
-    titleH = 32.0f * ui;
+    titleH = 44.0f * ui;
 
     if (iconX < 0.0f || lastScreenW != screenW || lastScreenH != screenH) {
         iconX = screenW - iconSize - 14.0f * ui;
@@ -205,8 +205,13 @@ static void draw_panel(float screenH) {
                                  bg.width, 1.4f * ui }, edge);
 
     GhostRect title = { bg.x + 6.0f * ui, bg.y + 2.0f * ui,
-                        bg.width - 12.0f * ui, titleH - 4.0f * ui };
-    ghost_draw_label(title, "GHOST", edge, (int)(13.0f * ui));
+                        bg.width - 12.0f * ui, 18.0f * ui };
+    ghost_draw_label(title, "VORTEX ARENA", edge, (int)(13.0f * ui));
+
+    GhostRect dev = { bg.x + 6.0f * ui, bg.y + 19.0f * ui,
+                      bg.width - 12.0f * ui, 13.0f * ui };
+    ghost_draw_label(dev, "dev: ngvanan10",
+                     rgba(0.62f, 0.65f, 0.70f, 0.92f), (int)(8.0f * ui));
 
     const ghost_settings_t *s = ghost_channel_current();
     for (int i = 0; i < MENU_ROWS; i++) {

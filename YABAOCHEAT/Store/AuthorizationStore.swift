@@ -45,6 +45,10 @@ public final class AuthorizationStore: ObservableObject {
     /// Only when no relay is configured does the local adoption path below run,
     /// and that path never starts a heartbeat.
     public func submit(key: String, password: String = "") async {
+        if LocalMode.enabled {
+            enterLocalMode()
+            return
+        }
         isRefreshing = true
         defer { isRefreshing = false }
         noticeMessage = nil
@@ -121,11 +125,36 @@ public final class AuthorizationStore: ObservableObject {
     /// Re-check the stored key, if there is one. Called on launch and whenever
     /// the app returns to the foreground.
     public func revalidate() {
+        if LocalMode.enabled {
+            enterLocalMode()
+            return
+        }
         revalidationTask?.cancel()
         revalidationTask = Task { [weak self] in
             guard let self else { return }
             await self.performRevalidation()
         }
+    }
+
+    /// Local build: no key, no relay, no server. The status is made `valid`
+    /// once so every view that renders the session card keeps working, but
+    /// nothing is stored in the keychain and no heartbeat is started.
+    public func enterLocalMode() {
+        revalidationTask?.cancel()
+        revalidationTask = nil
+        Task { await self.live.stop() }
+        sessionToken = nil
+        let pins = PatchPayload.localPins()
+        expectedPatchSHA256 = pins.patch.isEmpty ? nil : pins.patch
+        expectedNeutralSHA256 = pins.neutral
+        revocationMessage = nil
+        networkErrorCount = 0
+        apply(.valid(
+            plan: "Local",
+            displayKey: "LOCAL",
+            expiresAt: .distantFuture
+        ))
+        log.log(.auth, "local mode: key gate bypassed, no relay")
     }
     private func performRevalidation() async {
         // Keychain is a synchronous XPC to securityd; read it away from the

@@ -74,6 +74,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>FFXCLocalMode</key>
+	<true/>
 	<key>FFXCMenuHost</key>
 	<string></string>
 	<key>FFXCRelayHost</key>

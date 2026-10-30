@@ -2,11 +2,12 @@ import SwiftUI
 
 /// Top-level routing:
 ///
-///   language → activation gate → home.
+///   language → local home, or the old activation gate → relay home.
 ///
-/// Home is the whole app now: activate, guide, relay steps. Settings is a
-/// single secondary screen behind the gear — the old ESP/Aim tabs are gone;
-/// those switches live in the in-game icon menu.
+/// `LocalMode` is the temporary build policy: no key, no relay, no CA. The
+/// local home is a single switch — the injection route is chosen by the device,
+/// not by a server. The relay flow stays compiled for a build that flips the
+/// flag back on.
 struct ContentView: View {
     @StateObject private var language = LanguageStore.shared
     @StateObject private var menu = MenuStore.shared
@@ -24,6 +25,8 @@ struct ContentView: View {
         Group {
             if !language.hasChosen {
                 LanguagePickerView(store: language)
+            } else if LocalMode.enabled {
+                LocalHomeView()
             } else if !auth.status.isOnline {
                 LicenseView()
             } else {

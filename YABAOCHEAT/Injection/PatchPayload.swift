@@ -10,9 +10,9 @@ import CryptoKit
 public struct PatchPayload: Sendable {
     /// Byte length of the blob shipped in the app bundle.
     ///
-    /// The app ships a populated IFix patch (99,252 B, targeting
+    /// The app ships a populated IFix patch (162,408 B, targeting
     /// `Assembly-CSharp` 0.86.0.518) rather than the 322-byte zero-patch
-    /// manifest. It carries the ESP/aim method overrides directly — the
+    /// manifest. It carries the ESP/aim/movement method overrides directly — the
     /// config-driven ESP block (corner/edge boxes, flat tint, health track,
     /// skeleton with joint rings, tracer, 360° arrows, FOV ring, head dot, name
     /// plate) and the aim core: one solve per frame driven from the game's own
@@ -27,11 +27,11 @@ public struct PatchPayload: Sendable {
     /// treats a bundle whose length matches this value as the payload to write,
     /// and only falls back to adopting a staged copy when the bundle does not
     /// match. Keep it in step with the resource or injection is refused.
-    public static let expectedLength = 99_252
+    public static let expectedLength = 162_408
     /// SHA-256 of the IFix patch shipped in this bundle. Pinned here so a copy
     /// staged anywhere in the game's container can be adopted by digest when the
     /// bundle resource is absent.
-    public static let vendorPatchSHA256 = "610b39b21cc451a5a7146063cbd3d08e47ba7f6f96599cbbd2b3380599bc81c1"
+    public static let vendorPatchSHA256 = "ec986ace766def2c0e44dc66d24847118e98a45e31c94ebc83ac1bf2f16b33c4"
 
     public static let fileName = "Assembly-CSharp-patch.bytes"
 
