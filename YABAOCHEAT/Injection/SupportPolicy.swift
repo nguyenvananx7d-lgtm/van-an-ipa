@@ -15,19 +15,32 @@ public enum DeviceOS {
 
     /// `kern.osversion`, e.g. `24A5390f`. The iOS 27 table is keyed on the
     /// trailing beta build marker.
-    public static var build: String {
+    public static var build: String { sysctlString("kern.osversion") }
+
+    /// `hw.machine`, e.g. `iPhone15,2`.
+    public static var machine: String { sysctlString("hw.machine") }
+
+    /// `hw.cpufamily`; the offset tables branch on this value.
+    public static var cpuFamily: UInt32 {
+        var value: UInt32 = 0
+        var size = MemoryLayout<UInt32>.size
+        guard sysctlbyname("hw.cpufamily", &value, &size, nil, 0) == 0 else { return 0 }
+        return value
+    }
+
+    public static var displayString: String { "iOS \(versionString) (\(build))" }
+
+    private static func sysctlString(_ name: String) -> String {
         var size: size_t = 0
-        guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0, size > 0 else {
+        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else {
             return "Unknown"
         }
         var value = [CChar](repeating: 0, count: size)
-        guard sysctlbyname("kern.osversion", &value, &size, nil, 0) == 0 else {
+        guard sysctlbyname(name, &value, &size, nil, 0) == 0 else {
             return "Unknown"
         }
         return String(cString: value)
     }
-
-    public static var displayString: String { "iOS \(versionString) (\(build))" }
 }
 
 /// Support table for the kernel chain:

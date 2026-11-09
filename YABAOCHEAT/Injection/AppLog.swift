@@ -3,7 +3,9 @@ import os
 
 /// Ring buffer for the exploit stages. Safe to call from the background thread
 /// that runs the chain; publishing is marshalled to the main queue because
-/// SwiftUI reads `entries`.
+/// SwiftUI reads `entries`. Every line is also appended to
+/// `Documents/kexploit.log` synchronously so a panic cannot take the tail of
+/// the log with it.
 public final class AppLog: ObservableObject {
     public struct Entry: Identifiable, Sendable {
         public let id: UUID
@@ -12,6 +14,7 @@ public final class AppLog: ObservableObject {
         public let message: String
 
         public enum Subsystem: String, Sendable {
+            case chain = "CHAIN"
             case kernelRW = "KRW"
             case sandbox = "SANDBOX"
         }
@@ -31,7 +34,9 @@ public final class AppLog: ObservableObject {
     @Published public private(set) var entries: [Entry] = []
 
     private let lock = NSLock()
+    private let fileLock = NSLock()
     private var storage: [Entry] = []
+    private var fileHandle: FileHandle?
     private let logger = Logger(subsystem: "com.apple.mobile.MobileHouseArrest", category: "kexploit")
 
     public init() {}
@@ -39,6 +44,7 @@ public final class AppLog: ObservableObject {
     @discardableResult
     public func log(_ subsystem: Entry.Subsystem, _ message: String) -> Entry {
         let entry = Entry(subsystem: subsystem, message: message)
+
         lock.lock()
         storage.append(entry)
         if storage.count > Self.capacity {
@@ -48,10 +54,12 @@ public final class AppLog: ObservableObject {
         lock.unlock()
 
         logger.log("\(subsystem.rawValue, privacy: .public) \(message, privacy: .public)")
+        persist(entry)
         publish(snapshot)
         return entry
     }
 
+    /// Clears the on-screen buffer. The file keeps the full history.
     public func clear() {
         lock.lock()
         storage.removeAll()
@@ -70,18 +78,32 @@ public final class AppLog: ObservableObject {
             .joined(separator: "\n")
     }
 
-    /// Mirror the log into Documents so it can be pulled off the device.
+    /// Push the file buffer to disk. The lines are already written; this only
+    /// forces them out before the process may die.
     public func flush() {
-        let text = plainText
-        DispatchQueue.global(qos: .utility).async {
+        fileLock.lock()
+        fileHandle?.synchronize()
+        fileLock.unlock()
+    }
+
+    private func persist(_ entry: Entry) {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        let line = "\(f.string(from: entry.date)) [\(entry.subsystem.rawValue)] \(entry.message)\n"
+
+        fileLock.lock()
+        defer { fileLock.unlock() }
+        if fileHandle == nil {
             guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             else { return }
-            try? text.write(
-                to: docs.appendingPathComponent(AppLog.fileName),
-                atomically: true,
-                encoding: .utf8
-            )
+            let url = docs.appendingPathComponent(Self.fileName)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            fileHandle = try? FileHandle(forWritingTo: url)
+            fileHandle?.seekToEndOfFile()
         }
+        fileHandle?.write(Data(line.utf8))
     }
 
     private func publish(_ snapshot: [Entry]) {
