@@ -82,7 +82,7 @@ public final class AppLog: ObservableObject {
     /// forces them out before the process may die.
     public func flush() {
         fileLock.lock()
-        fileHandle?.synchronize()
+        try? fileHandle?.synchronize()
         fileLock.unlock()
     }
 
