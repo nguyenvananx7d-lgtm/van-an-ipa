@@ -1,8 +1,7 @@
 import Foundation
 import Darwin
 
-/// iOS version facts read on demand (cheap sysctls), shared by the OS
-/// support gate and the exploit policy.
+/// iOS version facts read on demand (cheap sysctls).
 public enum DeviceOS {
     public static var versionTuple: (major: Int, minor: Int, patch: Int) {
         let v = ProcessInfo.processInfo.operatingSystemVersion
@@ -14,9 +13,8 @@ public enum DeviceOS {
         return "\(v.major).\(v.minor).\(v.patch)"
     }
 
-    /// `kern.osversion`, e.g. `24A5390f`. The iOS 27 support table is keyed on
-    /// the trailing beta build markers, so the build string is read wherever
-    /// the policy is evaluated.
+    /// `kern.osversion`, e.g. `24A5390f`. The iOS 27 table is keyed on the
+    /// trailing beta build marker.
     public static var build: String {
         var size: size_t = 0
         guard sysctlbyname("kern.osversion", nil, &size, nil, 0) == 0, size > 0 else {
@@ -32,8 +30,7 @@ public enum DeviceOS {
     public static var displayString: String { "iOS \(versionString) (\(build))" }
 }
 
-/// Exploit support table, ported from 3105 so Vortex Arena accepts exactly the same
-/// OS range and rejects everything else:
+/// Support table for the kernel chain:
 ///
 /// - iOS 17.0–17.7.x            → kernel exploit
 /// - iOS 18.0–18.7.1            → kernel exploit
@@ -86,15 +83,4 @@ public enum ExploitSupportPolicy {
         guard major == 27, minor == 0, patch == 0 else { return false }
         return iOS27BetaNumber(for: build) != nil
     }
-}
-
-/// Outcome of the kernel-exploit chain, surfaced on the inject screen.
-public enum ExploitStatus: Equatable {
-    case notStarted
-    case success(method: String)
-    case failed(method: String, code: Int64)
-    case unsupported(String)
-
-    public var isSuccess: Bool { if case .success = self { return true }; return false }
-    public var isFailed: Bool { if case .failed = self { return true }; return false }
 }

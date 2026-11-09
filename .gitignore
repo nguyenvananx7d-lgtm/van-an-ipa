@@ -14,28 +14,12 @@ DerivedData/
 xcuserdata/
 *.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
 
-# js tooling (ffxc-auth)
-node_modules/
-
 # swift package
 .build/
 
 # macOS
 .DS_Store
 
-# local drops, not source
-
-VortexArena-FromSources-Repo.zip
-ảnh lỗi/
-image.png
-IMG_*.png
-
-DeltaFromSources-Repo.zip
-
 # editors
 .vscode/
 .idea/
-
-# local tooling trees, not part of the IPA
-ESPDESGIN/
-

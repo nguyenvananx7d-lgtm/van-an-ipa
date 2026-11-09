@@ -1,10 +1,9 @@
 import Foundation
 import os
 
-/// Ring buffer of everything the injector did, shown on the log screen.
-///
-/// Capped so a long session cannot grow without bound; the cap is surfaced in
-/// the UI so a truncated log is never mistaken for a complete one.
+/// Ring buffer for the exploit stages. Safe to call from the background thread
+/// that runs the chain; publishing is marshalled to the main queue because
+/// SwiftUI reads `entries`.
 public final class AppLog: ObservableObject {
     public struct Entry: Identifiable, Sendable {
         public let id: UUID
@@ -12,20 +11,9 @@ public final class AppLog: ObservableObject {
         public let subsystem: Subsystem
         public let message: String
 
-        public enum Subsystem: String, CaseIterable, Sendable {
-            case auth = "AUTH"
+        public enum Subsystem: String, Sendable {
             case kernelRW = "KRW"
             case sandbox = "SANDBOX"
-            case mcm = "MCM"
-            case integrity = "INTEGRITY"
-            case wipe = "WIPE"
-
-            case antiBan = "ANTIBAN"
-            case network = "NETWORK"
-
-            case live = "LIVE"
-            case runtime = "RUNTIME"
-            case launch = "LAUNCH"
         }
 
         public init(id: UUID = UUID(), date: Date = Date(), subsystem: Subsystem, message: String) {
@@ -36,14 +24,15 @@ public final class AppLog: ObservableObject {
         }
     }
 
-
+    public static let shared = AppLog()
     public static let capacity = 1500
-    public static let fileName = "ffxc_debug.log"
+    public static let fileName = "kexploit.log"
 
     @Published public private(set) var entries: [Entry] = []
 
     private let lock = NSLock()
-    private let logger = Logger(subsystem: "com.apple.mobile.MobileHouseArrest", category: "injector")
+    private var storage: [Entry] = []
+    private let logger = Logger(subsystem: "com.apple.mobile.MobileHouseArrest", category: "kexploit")
 
     public init() {}
 
@@ -51,39 +40,57 @@ public final class AppLog: ObservableObject {
     public func log(_ subsystem: Entry.Subsystem, _ message: String) -> Entry {
         let entry = Entry(subsystem: subsystem, message: message)
         lock.lock()
-        entries.append(entry)
-        if entries.count > AppLog.capacity {
-            entries.removeFirst(entries.count - AppLog.capacity)
+        storage.append(entry)
+        if storage.count > Self.capacity {
+            storage.removeFirst(storage.count - Self.capacity)
         }
+        let snapshot = storage
         lock.unlock()
+
         logger.log("\(subsystem.rawValue, privacy: .public) \(message, privacy: .public)")
+        publish(snapshot)
         return entry
     }
 
     public func clear() {
         lock.lock()
-        entries.removeAll()
+        storage.removeAll()
         lock.unlock()
+        publish([])
     }
 
     public var plainText: String {
         lock.lock()
-        defer { lock.unlock() }
+        let snapshot = storage
+        lock.unlock()
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
-        return entries.map { "\(f.string(from: $0.date)) [\($0.subsystem.rawValue)] \($0.message)" }
+        return snapshot
+            .map { "\(f.string(from: $0.date)) [\($0.subsystem.rawValue)] \($0.message)" }
             .joined(separator: "\n")
     }
 
-    /// Mirror the log into the app's Documents directory so it can be pulled off
-    /// the device. Written on a background queue; failures are non-fatal.
+    /// Mirror the log into Documents so it can be pulled off the device.
     public func flush() {
         let text = plainText
         DispatchQueue.global(qos: .utility).async {
             guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             else { return }
-            let url = docs.appendingPathComponent(AppLog.fileName)
-            try? text.write(to: url, atomically: true, encoding: .utf8)
+            try? text.write(
+                to: docs.appendingPathComponent(AppLog.fileName),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+    }
+
+    private func publish(_ snapshot: [Entry]) {
+        if Thread.isMainThread {
+            entries = snapshot
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.entries = snapshot
+            }
         }
     }
 }
